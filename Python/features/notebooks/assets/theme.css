@@ -20,6 +20,8 @@ input[type=checkbox]{accent-color:var(--accent)}
 #warning:not(:empty),#mobileNotice{background:var(--surface);color:var(--destructive);border:1px solid var(--border);border-radius:var(--control-radius)}
 #warning,#templateNotice{background:var(--surface)}
 #paperWrap,#pdfBackground{background:#fff;color-scheme:light}
+.dark-notebook-paper #paperWrap{background:#000}
+.dark-notebook-paper #pdfBackground{filter:invert(1)}
 .muted-paper-preview :is(#paperWrap,#pagePreviews img,.page-previews img){filter:saturate(.55) contrast(.88) brightness(1.03)}
 #paper{background:transparent}
 /* Ink choices retain their real document colors in either appearance. */
@@ -61,12 +63,20 @@ body.tools-hidden .zoom-controls{display:none}
 #undoPageJump svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 
 .layer-rows{display:grid;gap:4px;margin:6px 0 12px}
-.layer-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px}
+.layer-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:4px}
 .layer-row button{display:flex;align-items:center;margin:0;width:auto;min-height:30px}
 .layer-row .layer-choice{text-align:left;overflow-wrap:anywhere}
 .layer-row .layer-choice[aria-pressed=true]{color:var(--text);border-color:var(--accent);font-weight:bold}
 .layer-row .layer-choice[aria-pressed=true]::after{content:'✓';margin-inline-start:auto;padding-inline-start:8px}
-.layer-row .layer-eye{justify-content:center;min-width:32px;padding:4px}
+.layer-row :is(.layer-eye,.layer-grip,.layer-remove){justify-content:center;min-width:32px;padding:4px}
+.layer-grip{touch-action:none;cursor:grab;-webkit-touch-callout:none}
+.layer-dragging{opacity:.65}
+.layer-drop-before{box-shadow:0 -2px var(--accent)}
+.layer-drop-after{box-shadow:0 2px var(--accent)}
+button.layer-remove{color:var(--destructive,#a03626)}
+#deleteLayerDialog{width:min(360px,calc(var(--notebook-safe-width,100vw) - 24px));border:1px solid var(--edge);border-radius:12px;background:var(--paper);color:var(--text);padding:16px;transform:translateX(var(--notebook-tools-shift,0px))}
+#deleteLayerDialog::backdrop{background:#20291d60}
+#deleteLayerDialog h2{font-size:18px;margin:0}
 .layer-eye svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .notebook-mobile .layer-row button{min-height:44px}
-.notebook-mobile .layer-row .layer-eye{min-width:44px}
+.notebook-mobile .layer-row :is(.layer-eye,.layer-grip,.layer-remove){min-width:44px}

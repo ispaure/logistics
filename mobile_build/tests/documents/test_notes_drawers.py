@@ -142,33 +142,30 @@ class NotesDrawerTests(unittest.TestCase):
                 self.assertEqual(owner.sidebar.retiring, [])
         self.run_async(exercise())
 
-    def test_documents_unlock_guidance_wraps_and_refits_after_resize(self):
-        from mobile.notes_discovery import fit_discovery_status
-        from mobile.layout_participants import LayoutFrame
-        async def exercise():
-            self.app.show_documents_hub()
-            self.app.document_view_buttons['Libraries'].on_press()
-            await self.app._notes_discovery_task
-            notes = self.app.document_notes_list
-            self.assertEqual(notes.children[0].text, 'Notes')
-            self.assertEqual(notes.children[1].children[0].text, 'No Notes libraries found.')
-            with patch.object(self.app, 'home_unlock_candidates',
-                              return_value=[('fixture', {'crypt_remotes': ['Encrypted']})]):
-                from mobile.notes_discovery import populate
-                populate(self.app, notes, title='Notes', refresh=False)
-                await self.app._notes_discovery_task
-            status = notes.children[0]
-            self.assertEqual(notes.children[1].text, 'Notes')
-            self.assertEqual(notes.children[2].children[0].text, 'No Notes libraries found.')
-            original = status._settings_source_text
-            self.assertIn('Unlock encrypted copies', original)
-            fit_discovery_status(status, LayoutFrame(300, lambda destination: 240))
-            narrow = status._settings_rendered_text
-            self.assertGreater(len(narrow.splitlines()), 1)
-            self.assertEqual(' '.join(narrow.split()), ' '.join(original.split()))
-            fit_discovery_status(status, LayoutFrame(900, lambda destination: 840))
-            self.assertLess(len(status._settings_rendered_text.splitlines()), len(narrow.splitlines()))
-        self.run_async(exercise())
+    def test_documents_unlock_guidance_follows_the_header_button_above_all_collections(self):
+        from commonUtils.ui.native.forms import fit_text
+        self.app.show_documents_hub()
+        view = self.app.documents_sections
+        hint = view._document_unlock_hint
+        self.assertEqual(hint.style.display, 'none')
+        self.assertLess(list(view.children).index(hint),
+                        list(view.children).index(self.app.hub_controller()._document_collection_body))
+        with patch.object(self.app, 'home_unlock_candidates') as candidates:
+            for collection in ('Libraries', 'Favourites', 'Recent'):
+                self.app.document_view_buttons[collection].on_press()
+                candidates.return_value = [('fixture', {'crypt_remotes': ['Encrypted']})]
+                self.app.adaptive.render()
+                self.assertEqual(hint.style.display, 'pack')
+                self.assertIsNotNone(view._destination_actions[1][0].parent)
+                candidates.return_value = []
+                self.app.adaptive.render()
+                self.assertEqual(hint.style.display, 'none')
+                self.assertIsNone(view._destination_actions[1][0].parent)
+        fit_text(hint, 170)
+        narrow = hint._settings_rendered_text
+        self.assertGreater(len(narrow.splitlines()), 1)
+        fit_text(hint, 820)
+        self.assertEqual(hint._settings_rendered_text, ' '.join(narrow.split()))
 
     def test_links_resolve_aliases_references_and_ignore_code_images_and_hidden_notes(self):
         (self.vault / 'Home.md').write_text('[[Projects/Plan.MD|Plan]] [Plan][p]\n\n[p]: Projects/Plan.MD\n'

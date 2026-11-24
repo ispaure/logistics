@@ -76,7 +76,9 @@ class Probe(LogisticsMobile):
         controls = picker.notebook_templates
         backend = type(controls.template._impl).__module__
         assert backend.startswith(('toga_iOS.', 'toga_android.')), backend
-        assert controls.parent is picker.name_view
+        picker.show_notebook_template_panel()
+        layout = picker.creation_layout
+        assert layout.template_panel is not None and controls.parent is layout.template_fields
         controls.template.value = CATALOG[template]
         controls.paper_format.value = FORMATS[paper_format]
         await asyncio.sleep(.3)
@@ -88,7 +90,8 @@ class Probe(LogisticsMobile):
                     break
                 await asyncio.sleep(.05)
             assert controls.preview.image is not None, 'Template preview did not load'
-        native = controls.template._impl.native
+        template_control = controls.template_list if controls.template_list.parent is controls.choices else controls.template
+        native = template_control._impl.native
         if backend.startswith('toga_iOS.'):
             assert native.window is not None and native.bounds.size.height > 0
             description = controls.description._impl.native
@@ -102,6 +105,7 @@ class Probe(LogisticsMobile):
             await capture_window(self, self.evidence / (title + '-creation.png'))
         else:
             await observe(picker, controls)
+        layout.close_templates(apply=True)
         await picker.choose_creation_location()
         await picker.browser_editor_location(('Local', ''))
         assert picker.picker_primary.enabled, picker.save_as_status.value
@@ -161,7 +165,6 @@ class Probe(LogisticsMobile):
                             (self.evidence / f'{title}-creation-preview.png').write_bytes(image.data)
                         record['creation']['selector_and_preview_layout'] = str(controls.preview_layout.style.direction)
                         if label == 'restaurant' and paper == 'move':
-                            picker.name_form.vertical_position = min(picker.name_form.max_vertical_position, 128)
                             await asyncio.sleep(.2)
                             await capture_window(self, self.evidence / f'{title}-creation.png')
 

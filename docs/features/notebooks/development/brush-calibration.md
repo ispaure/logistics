@@ -28,7 +28,7 @@ PDF writing colors are blue `#304ae0`, red `#c23132`, green `#91da71`, yellow `#
 
 ## App graphite appearance
 
-`assets/drawing.js` anchors deterministic graphite grain to page units across live ink, saved ink and thumbnails. Pencil uses soft variation with visible paper tooth. Mechanical Pencil uses a denser, continuous fine lead. Highlighter multiplies combined same-color coverage once per consecutive run.
+`assets/drawing.js` anchors graphite grain to page units across live ink, saved ink and page thumbnails. Light strokes leave scattered dark flecks. More pressure fills the paper tooth, with broader clusters for Pencil and finer grain for Mechanical Pencil. The renderer uses the first stored pressure sample for the texture and the stored point widths for the outline. File thumbnails approximate the average density at small sizes. Highlighter multiplies combined same-color coverage once per consecutive run on light paper.
 
 ## Canvas probe
 

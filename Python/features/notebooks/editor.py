@@ -41,6 +41,7 @@ class Editor:
         self.checkpoint_unconfirmed = False
         self.index = 0
         self.brush_colors = {}
+        self.brush_intensities = {}
         self.eraser_kind = 'partial'
         self.undo = []
         self.redo = []
@@ -406,6 +407,10 @@ class Editor:
             ink.images = [p for p in ink.images if p.id != action['id']]
         elif op == 'add-layer':
             ink.add_layer(action['name'])
+        elif op == 'move-layer':
+            ink.move_layer(action['layer'], action['target'], after=action['after'])
+        elif op == 'delete-layer':
+            ink.delete_layer(action['layer'])
         elif op == 'layer-visible':
             if ink.warning:
                 raise ValueError(ink.warning)

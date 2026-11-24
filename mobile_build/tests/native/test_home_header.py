@@ -1,9 +1,9 @@
-"""Measured Home header restores the same controls when its free band contracts."""
+"""Shared destination headings and native safe-area placement."""
 
 # AUTHORSHIP INFORMATION
 
 __author__ = "Marc-André Voyer"
-__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-Andre Voyer"
 __license__ = "MIT License"
 __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
@@ -11,21 +11,22 @@ __status__ = "Production"
 
 from types import SimpleNamespace as NS
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-from commonUtils.testing.stages import TestStage
 import toga
 from toga.style import Pack
-from mobile import home_header
+from toga.style.pack import NONE
+from commonUtils.testing.stages import TestStage
+
+from mobile.destination_actions import align_title, compact_content_top, duo_heading_geometry, prepare
+from mobile.fold_layout import Division
+from mobile.ios_destination_rail import clear_landscape_gutters, uses_leading_rail
 
 TEST_STAGE = TestStage.REGRESSION
 
 
 class HomeHeaderTests(TestCase):
     def test_duo_header_uses_the_free_column_with_a_taller_island(self):
-        from mobile.destination_actions import duo_heading_geometry
-        from mobile.fold_layout import Division
-
         for height in (120, 260, 430):
             regions = ((867, 0, 84, height),)
             self.assertEqual(duo_heading_geometry(regions, 24, 0, 867, 304, vertical=True),
@@ -38,261 +39,73 @@ class HomeHeaderTests(TestCase):
                                                vertical=True))
 
     def test_duo_portrait_header_uses_the_strip_beside_status_items(self):
-        from mobile.destination_actions import duo_heading_geometry
-
         regions = ((535, 0, 134, 82),)
         self.assertEqual(duo_heading_geometry(regions, 82, 0, 669, 336, vertical=False), (0, 535, 24, 90))
         self.assertIsNone(duo_heading_geometry(((320, 0, 349, 120),), 82, 0, 669, 336, vertical=False))
 
-    def test_duo_title_centers_over_the_leading_pane_and_expands_in_one_column(self):
-        from mobile.destination_actions import align_duo_heading, prepare_duo_heading
-        from toga.style.pack import NONE
+    def test_centered_title_clamps_to_available_space_and_restores_portrait(self):
+        title = toga.Label('Documents')
+        spacer = toga.Box()
+        header = toga.Box(children=[title, spacer])
+        align_title(header, centered=True, space=(16, 800), center=450)
+        self.assertEqual(16 + title.style.margin_left + title.style.width / 2, 450)
+        align_title(header, centered=True, space=(16, 430), center=450)
+        self.assertEqual(16 + title.style.margin_left + title.style.width, 430)
+        align_title(header, centered=False)
+        self.assertEqual((title.style.text_align, title.style.width, title.style.margin_left,
+                          title.style.flex, spacer.style.width, spacer.style.flex),
+                         ('left', NONE, 0, 1, 0, 0))
 
-        leading = toga.Box(style=Pack(width=320))
-        body = toga.Box(children=[leading, toga.Box()], style=Pack(direction='row'))
-        view = NS(_duo_heading_pane=leading)
-        prepare_duo_heading(view, 'documents')
-        header = view._duo_root_header
-        view._duo_heading_state = dict(header=header, title_space=(16, 800), pane_origin=16)
-        align_duo_heading(view)
-        title, spacer = header.children
-        self.assertEqual(title.style.width, 320)
-        self.assertEqual(spacer.style.flex, 1)
-        body.style.direction = 'column'
-        align_duo_heading(view)
-        self.assertEqual(title.style.width, NONE)
-        self.assertEqual(title.style.flex, 1)
-
-    def test_overview_actions_use_the_selected_tab_navigation_owner(self):
-        from mobile.destination_actions import project_header, sync_native_host
-        child, outer = Mock(), Mock()
-        child.isNavigationBarHidden.return_value = True
-        outer.isNavigationBarHidden.return_value = False
-        view = NS(_destination_actions=(object(), [object(), object()]))
-        adapter = NS(outer_navigation=outer, navigation_for=Mock(return_value=child))
-        app = NS(routes=NS(apple=True, screens={'documents': []}),
-                 native_host=NS(adapter=adapter), home_unlock_candidates=lambda: [])
-        with (patch('mobile.destination_actions.project_header', wraps=project_header) as project,
-              patch('mobile.ios_system_occlusions.reserve_bar_clearance') as configure):
-            sync_native_host(app, view, 'documents')
-        project.assert_called_once_with(app, view, 'documents', controller=None)
-        outer.setNavigationBarHidden.assert_called_once_with(True, animated=False)
-        child.setNavigationBarHidden.assert_called_once_with(False, animated=False)
-        adapter.navigation_for.assert_called_once_with('documents')
-        self.assertEqual([call.args[0] for call in configure.call_args_list], [outer, child])
-
-    def test_cold_duo_projects_new_document_before_gated_unlock(self):
-        from mobile.destination_actions import prepare
-        creator = toga.Button('New Document')
-        row = toga.Box(children=[creator])
-        content = toga.Box(children=[row])
-        content._home_primary_actions = row
-        content._home_primary_buttons = (creator,)
-        app = NS(routes=NS(apple=True), show_home_unlock=Mock(),
-                 native_host=NS(adapter=NS(content_controller=Mock(return_value=None))),
-                 home_unlock_candidates=Mock(return_value=[]))
-        with patch('mobile.fold_layout.is_iphone_duo', return_value=True):
-            view = prepare(app, content, 'home')
-        unlock = view._destination_actions[1][0]
-        for edge in (0, 2):
-            with patch('mobile.ios_toolbar.vertical_edge', return_value=edge):
-                self.assertEqual(view._ios_toolbar_buttons(), [creator])
-                app.home_unlock_candidates.return_value = ['fixture']
-                self.assertEqual(view._ios_toolbar_buttons(), [creator, unlock])
-                app.home_unlock_candidates.return_value = []
-
-    def test_documents_project_new_search_and_gated_unlock_in_order(self):
-        from mobile.destination_actions import prepare
+    def test_documents_retains_actions_and_finishes_with_conditional_unlock(self):
         app = NS(routes=NS(apple=True), show_home_unlock=Mock(), new_hub_document=Mock(),
-                 open_document_search=Mock(), close_document_search=Mock(),
-                 home_unlock_candidates=Mock(return_value=['fixture']))
+                 open_document_search=Mock(), home_unlock_candidates=Mock(return_value=['fixture']),
+                 adaptive=NS(browsers={}), hub_controller=lambda: NS())
         view = prepare(app, toga.Box(), 'documents')
-        unlock, new, search = view._destination_actions[1]
+        header, (unlock, new, search) = view._destination_actions
+        self.assertEqual(header.children[0].text, 'Documents')
         self.assertEqual(view._ios_toolbar_buttons(), [new, search, unlock])
         app.home_unlock_candidates.return_value = []
         self.assertEqual(view._ios_toolbar_buttons(), [new, search])
-        app.documents_search_open = True
-        self.assertEqual(view._ios_toolbar_buttons(), [new])
-        self.assertEqual(view._ios_toolbar_leading, [view._document_search_close])
 
-    def test_preparing_wrapped_home_keeps_header_metadata(self):
-        from mobile.destination_actions import prepare
-        row = toga.Box(children=[toga.Button('Open'), toga.Button('New')])
-        original = toga.Box(children=[row])
-        original._hub_sections = True
-        original._home_primary_actions = row
-        original._home_primary_buttons = tuple(row.children)
-        app = NS(show_home_unlock=Mock(), routes=NS(apple=True))
-        view = prepare(app, original, 'home')
-        self.assertIsNot(view, original)
-        self.assertIs(view._home_primary_actions, row)
-        self.assertEqual(view._home_primary_buttons, tuple(row.children))
-
-    def test_overview_projection_retains_actions_and_restores_on_capacity_loss(self):
-        from mobile.destination_actions import project_header
-        buttons = [toga.Button(name, on_press=Mock(), style=Pack(width=48, height=48))
-                   for name in ('Open', 'New', 'Search', 'Unlock')]
-        header = toga.Box(style=Pack(margin=(0, 0, 8, 0)))
-        original_height = header.style.height
-        view = toga.Box(children=[header], style=Pack(margin=(8, 16, 16, 16)))
-        view._destination_actions = header, buttons
-        view._ios_toolbar_buttons = lambda: buttons
-        view._ios_toolbar_leading = []
-        frame = NS(origin=NS(x=0, y=0), size=NS(width=669, height=951))
-        controller = NS(view=NS(bounds=frame, convertRect=lambda *a, **kw: frame))
-        # Let Toga retain its own app/window while exercising native placement.
-        adapter = NS(content_controller=lambda _: controller, layout_content=Mock())
-        app = NS(native_host=NS(adapter=adapter), main_window=NS(_impl=NS(native=NS(safeAreaInsets=NS(top=82)))))
-        app.widgets = Mock()
-        app.main_window.app = app
-        self.enterContext(patch('mobile.fold_layout.division', return_value=None))
-        self.enterContext(patch('mobile.ios_toolbar.vertical_edge', return_value=0))
-        regions = self.enterContext(patch('mobile.ios_toolbar.system_occlusions', return_value=((443, 0, 226, 82),)))
-        callbacks = [button.on_press for button in buttons]
-        for _ in range(2):
-            self.assertTrue(project_header(app, view, 'files'))
-            self.assertEqual(header.children[0].children, buttons)
-            self.assertEqual(header.children[0].style.height, 48)
-            self.assertEqual(header.style.margin_left, 0)
-            regions.return_value = ((180, 0, 489, 82),)
-            self.assertFalse(project_header(app, view, 'files'))
-            self.assertIsNone(view._destination_top_band)
-            self.assertIsNone(header.parent)
-            self.assertEqual(header.style.height, original_height)
-            self.assertEqual(header.style.margin, (0, 0, 8, 0))
-            regions.return_value = ((443, 0, 226, 82),)
-        self.assertEqual([button.on_press for button in buttons], callbacks)
-
-    def test_workspaces_returns_the_same_transfer_host_to_the_body(self):
-        from mobile.destination_actions import project_workspace_header
-        tabs = toga.Box(children=[toga.Button(label) for label in ('Local', 'Cloud', 'Home Server')])
-        transfer = toga.Button('Transfer', style=Pack(width=48, height=48, margin_left=8))
-        row = toga.Box(children=[tabs, transfer], style=Pack(direction='row', margin_bottom=4))
-        unlock = toga.Button('Unlock', style=Pack(width=48, height=48))
-        header = toga.Box()
-        body = toga.Box(children=[row])
-        view = toga.Box(children=[header, body], style=Pack(margin=(8, 16, 12, 16)))
-        view._destination_actions = header, [unlock]
-        view._workspaces_source_row = row
-        frame = NS(origin=NS(x=0, y=0), size=NS(width=669, height=951))
-        controller = NS(view=NS(bounds=frame))
-        window = NS(_impl=NS(native=NS(safeAreaInsets=NS(top=82))))
-        app = NS(main_window=window, widgets=Mock())
-        window.app = app
-        self.enterContext(patch('mobile.ios_toolbar.vertical_edge', return_value=0))
-        self.enterContext(patch('mobile.ios_toolbar.system_occlusions', return_value=((535, 0, 134, 82),)))
-
-        self.assertTrue(project_workspace_header(app, view, controller, row, [unlock], frame.origin, divided=False))
-        self.assertIs(row.parent, header)
-        self.assertEqual(list(row.children), [tabs, unlock, transfer])
-        self.assertEqual(row.style.margin_top, 22)
-
-        from mobile.destination_actions import sync_native_host
-        nested = toga.Box()
-        navigation = Mock()
-        app.routes = NS(apple=True, screens={'files': [('folder', None, None)]},
-                        roots={'files': toga.Box(children=[view])})
-        app.native_host = NS(adapter=NS(outer_navigation=navigation, navigation_for=lambda _: navigation))
-        with patch('mobile.ios_system_occlusions.reserve_bar_clearance'):
-            sync_native_host(app, nested, 'files')
-        self.assertIs(row.parent, header)
-        self.assertEqual(list(row.children), [tabs, unlock, transfer])
-
-        self.assertFalse(project_workspace_header(app, view, controller, row, [unlock], frame.origin, divided=True))
-        self.assertIs(row.parent, body)
-        self.assertEqual(list(row.children), [tabs, transfer])
-        self.assertEqual(row.style.margin, (0, 0, 4, 0))
-        self.assertIsNone(unlock.parent)
-
-    def test_activity_rotation_and_large_text_restore_original_actions(self):
-        actions = [toga.Button(title, on_press=Mock(), style=Pack(height=72, flex=1))
-                   for title in ('Open Document', 'New Document')]
-        unlock = toga.Button('Unlock', style=Pack(width=48, height=48))
-        row = toga.Box(children=actions)
-        view = toga.Box(children=[row])
-        view._home_primary_actions, view._home_primary_buttons = row, tuple(actions)
-        view._destination_actions = (toga.Box(), [unlock])
-        frame = NS(origin=NS(x=0, y=0), size=NS(width=669, height=951))
-        controller = NS(view=NS(bounds=frame, convertRect=lambda *a, **kw: frame))
-        adapter = NS(content_controller=lambda destination: controller, layout_content=Mock())
-        app = NS(native_host=NS(adapter=adapter), home_unlock_candidates=Mock(return_value=['fixture']),
-                 main_window=NS(_impl=NS(native=NS(safeAreaInsets=NS(top=82)))))
-        size = NS(width=140, height=34)
-        for button in [*actions, unlock]:
-            self.enterContext(patch.object(button._impl, 'native', NS(sizeThatFits=lambda _: size), create=True))
-        self.enterContext(patch.dict('sys.modules', {'rubicon.objc': NS(CGSize=lambda *args: args)}))
-        self.enterContext(patch('mobile.fold_layout.division', return_value=None))
-        regions = self.enterContext(patch('mobile.ios_toolbar.system_occlusions', return_value=((535, 0, 134, 82),)))
-        edge = self.enterContext(patch('mobile.ios_toolbar.vertical_edge', return_value=0))
-        callbacks = [button.on_press for button in actions]
-        for _ in range(2):
-            self.assertTrue(home_header.sync(app, view))
-            self.assertEqual(row.children, [*actions, unlock])
-            self.assertEqual([button.style.height for button in actions], [48, 48])
-            self.assertEqual(row.style.margin_right, 134)
-            regions.return_value = ((300, 0, 369, 160),)
-            self.assertFalse(home_header.sync(app, view))
-            self.assertEqual(row.children, actions)
-            self.assertEqual([button.style.height for button in actions], [72, 72])
-            regions.return_value = ((535, 0, 134, 82),)
-        self.assertTrue(home_header.sync(app, view))
-        edge.return_value = 2
-        self.assertFalse(home_header.sync(app, view))
-        edge.return_value = 0
-        size.height = 90
-        self.assertFalse(home_header.sync(app, view))
-        self.assertEqual([button.on_press for button in actions], callbacks)
-        self.assertEqual([button.style.height for button in actions], [72, 72])
-
-    def test_native_rail_and_safe_horizontal_row_reuse_the_same_actions(self):
-        from mobile.destination_actions import prepare
-
-        primary = [toga.Button(title, style=Pack(height=48, flex=1))
-                   for title in ('Open Document', 'New Document')]
-        row = toga.Box(children=primary)
-        original = toga.Box(children=[row])
-        original._home_primary_actions, original._home_primary_buttons = row, tuple(primary)
-        frame = NS(origin=NS(x=0, y=50), size=NS(width=390, height=840))
-        controller = NS(view=NS(bounds=frame, convertRect=lambda *a, **kw: frame,
-                                safeAreaInsets=NS(left=0, right=0)))
-        app = NS(routes=NS(apple=True), show_home_unlock=Mock(),
-                 native_host=NS(adapter=NS(content_controller=lambda _: controller)),
+    def test_workspaces_shares_one_row_for_title_search_and_transfers(self):
+        transfer = toga.Button('Transfers', style=Pack(width=48))
+        app = NS(routes=NS(apple=False), show_home_unlock=Mock(), folder_source='Local',
+                 feature_enabled=Mock(return_value=True), folder_transfers_button=transfer,
+                 folder_view_toggle=toga.Button('Hierarchy'),
                  home_unlock_candidates=Mock(return_value=[]),
-                 main_window=NS(_impl=NS(native=NS(safeAreaInsets=NS(top=50)))))
-        view = prepare(app, original, 'home')
-        unlock = view._destination_actions[1][0]
-        for button in [*primary, unlock]:
-            size = NS(width=48 if button is unlock else 120, height=38)
-            self.enterContext(patch.object(button._impl, 'native', NS(sizeThatFits=lambda _, size=size: size),
-                                           create=True))
-        self.enterContext(patch.dict('sys.modules', {'rubicon.objc': NS(CGSize=lambda *args: args)}))
-        self.enterContext(patch('mobile.fold_layout.division', return_value=None))
-        edge = self.enterContext(patch('mobile.ios_toolbar.vertical_edge', return_value=2))
+                 main_window=NS(size=NS(width=390, height=840)))
+        view = toga.Box()
+        view._workspaces_source_row = toga.Box()
+        prepare(app, view, 'files')
+        header, _ = view._destination_actions
+        self.assertEqual(header.children[0].text, 'Workspaces')
+        self.assertEqual(header.children[0].style.text_align, 'center')
+        self.assertEqual(list(header.children)[2:], [view._workspace_search, app.folder_view_toggle, transfer])
 
-        self.assertFalse(home_header.sync(app, view))
-        self.assertEqual(view._ios_toolbar_buttons(), primary)
-        app.home_unlock_candidates.return_value = ['fixture']
-        self.assertEqual(view._ios_toolbar_buttons(), [*primary, unlock])
-        for button in primary:
-            row.remove(button)  # Shared toolbar projection detaches the targets.
+    def test_iphone_landscape_rail_keeps_system_navigation_on_other_poses(self):
+        self.assertTrue(uses_leading_rail(phone=True, duo=False, landscape=True, native_edge=0))
+        self.assertFalse(uses_leading_rail(phone=True, duo=False, landscape=False, native_edge=0))
+        self.assertFalse(uses_leading_rail(phone=True, duo=True, landscape=True, native_edge=2))
+        self.assertFalse(uses_leading_rail(phone=False, duo=False, landscape=True, native_edge=0))
 
-        edge.return_value = 0
-        self.assertTrue(home_header.sync(app, view))
-        self.assertEqual(row.children, [*primary, unlock])
-        self.assertTrue(view._home_inline_unlock)
-        frame.size.width = 320
-        self.assertFalse(home_header.sync(app, view))
-        self.assertEqual(row.children, primary)
-        self.assertEqual(view._ios_toolbar_buttons(), [unlock])
-        self.assertFalse(view._home_inline_unlock)
+    def test_landscape_gutter_release_follows_sensor_and_system_regions(self):
+        self.assertEqual(clear_landscape_gutters(874, 62, 62, 0, ()), (0, 62))
+        self.assertEqual(clear_landscape_gutters(874, 62, 62, 874, ()), (62, 0))
+        self.assertEqual(clear_landscape_gutters(874, 62, 62, 874, ((0, 0, 100, 44),)), (0, 0))
+        self.assertEqual(clear_landscape_gutters(874, 62, 10, 0, ()), (0, 0))
+        self.assertEqual(clear_landscape_gutters(874, 62, 62, 437, ()), (0, 0))
 
-    def test_inline_row_avoids_detached_activity_below_the_safe_top(self):
-        home = NS(_home_inline_unlock=True)
-        root = NS(children=[home])
-        native = NS(bounds=NS(size=NS(width=390)))
-        container = NS(content=NS(interface=root), native=native,
-                       left_inset=0, right_inset=0, top_inset=50)
-        with patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=((100, 48, 190, 50),)):
-            self.assertTrue(home_header.compact_content_top(container))
-            self.assertEqual(container.top_inset, 106)
-            self.assertFalse(home_header.compact_content_top(container))
+    def test_duo_root_clears_the_safe_area_once_through_tab_and_route_wrappers(self):
+        header = toga.Box()
+        header._destination_top_band = True
+        page = toga.Box(children=[header, toga.Box()])
+        tab = toga.Box(children=[toga.Box(children=[page])])
+        window = object()
+        native = NS(window=window, bounds=object(), convertRect=lambda *a, **k: NS(origin=NS(y=0)))
+        container = NS(content=NS(interface=tab), native=native, top_inset=82)
+        self.assertTrue(compact_content_top(container))
+        self.assertEqual(container.top_inset, 0)
+        page.remove(header)
+        container.top_inset = 82
+        self.assertFalse(compact_content_top(container))
+        self.assertEqual(container.top_inset, 82)

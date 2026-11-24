@@ -9,9 +9,15 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
+from functools import partial
+from services import appearance_palette
 from services.appearance_palette import (
-    LIGHT, DARK, EINK, argb, DEFAULT_ACCENT, validate_accent, accent_colors, set_accent, css_variables, themed_chapter, set_eink_enabled, eink_enabled,
+    MOBILE_LIGHT as LIGHT, MOBILE_DARK as DARK, EINK, argb, DEFAULT_ACCENT, validate_accent,
+    accent_colors, set_accent, set_eink_enabled, eink_enabled,
 )
+
+css_variables = partial(appearance_palette.css_variables, mobile=True)
+themed_chapter = partial(appearance_palette.themed_chapter, mobile=True)
 
 
 # Android wraps controls in themed contexts. On older AppCompat versions

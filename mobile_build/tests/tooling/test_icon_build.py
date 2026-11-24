@@ -20,7 +20,7 @@ import unittest
 import xml.etree.ElementTree as ET
 
 from mobile_build.build_support import icon_build
-from services.appearance_palette import LIGHT, DARK
+from mobile.palette import LIGHT, DARK
 
 
 def png_header(path):

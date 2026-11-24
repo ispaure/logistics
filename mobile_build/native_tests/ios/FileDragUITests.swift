@@ -5,6 +5,11 @@
 import XCTest
 
 final class FileDragUITests: XCTestCase {
+    private func artwork(_ caption: XCUIElement) -> XCUICoordinate {
+        caption.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: -96))
+    }
+
     func testLongPressMovesFolderInListAndFileInTiles() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "io.github.ispaure.logisticsnotebookqa")
@@ -20,7 +25,8 @@ final class FileDragUITests: XCTestCase {
         let target = app.buttons["Drop destination"].firstMatch
         XCTAssertTrue(tile.waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertTrue(target.exists, app.debugDescription)
-        tile.press(forDuration: 0.55, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 1.8)
+        artwork(tile).press(forDuration: 0.55, thenDragTo: artwork(target),
+                            withVelocity: .slow, thenHoldForDuration: 1.8)
         XCTAssertTrue(app.navigationBars["Drop destination"].waitForExistence(timeout: 8), app.debugDescription)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "file-browser-after-native-drops"
@@ -59,7 +65,7 @@ final class FileDragUITests: XCTestCase {
         let item = app.buttons["Tile source.txt"].firstMatch
         XCTAssertTrue(item.waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertFalse(app.buttons["Actions for Tile source.txt"].exists, app.debugDescription)
-        item.press(forDuration: 1.15)
+        artwork(item).press(forDuration: 1.15)
         let details = app.buttons["Details"].firstMatch
         XCTAssertTrue(details.waitForExistence(timeout: 8), app.debugDescription)
         details.tap()
@@ -76,7 +82,9 @@ final class FileDragUITests: XCTestCase {
         select.tap()
         let firstTile = app.buttons["Select List source"].firstMatch
         XCTAssertTrue(firstTile.waitForExistence(timeout: 8), app.debugDescription)
-        firstTile.tap()
+        artwork(app.buttons["List source"].firstMatch).tap()
+        XCTAssertTrue(app.buttons["Deselect List source"].firstMatch.waitForExistence(timeout: 5),
+                      app.debugDescription)
         app.buttons["Select Tile source.txt"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["2 selected"].firstMatch.waitForExistence(timeout: 8), app.debugDescription)
         let selectedTiles = XCTAttachment(screenshot: app.screenshot())

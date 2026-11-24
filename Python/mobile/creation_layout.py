@@ -169,6 +169,7 @@ class CreationFormats:
         self.change.enabled = enabled
         if self.picker.notebook_templates is not None:
             self.picker.notebook_templates.set_enabled(enabled)
+            self.picker.notebook_template_button.enabled = enabled
         for button in (*self.buttons.values(), *self.tab_buttons.values()):
             button.enabled = enabled
 
@@ -205,9 +206,6 @@ class CreationFormats:
         fit_text(self.summary, max(120, width - 130))
         self.compact = compact
         view = self.picker.name_view
-        if self.picker.notebook_templates is not None:
-            name_width = self.picker.name_panel.style.width if paired else width
-            self.picker.notebook_templates.fit(name_width)
         short = self.tabbed and keyboard and height < 140
         self.picker.save_as_name.style.height = 44 if short else 48
         # Reserve the short viewport for the field itself. Avoid partially
@@ -220,8 +218,10 @@ class CreationFormats:
             mount(self.picker.name_content, self.tabs, 0 if self.tabbed else None)
         view.style.margin_top = view.style.margin_bottom = (
             0 if short else 8 if compact or self.tabbed else 20)
-        mount(view, self.label, None if compact or self.tabbed else 2)
-        mount(view, self.cards, None if compact or self.tabbed else 3)
+        template_button = getattr(self.picker, 'notebook_template_button', None)
+        format_index = 2 + int(template_button is not None and template_button.parent is view)
+        mount(view, self.label, None if compact or self.tabbed else format_index)
+        mount(view, self.cards, None if compact or self.tabbed else format_index + 1)
         if self.tabbed:
             total = sum(self.tab_weights[ext] for _, ext in self.picker.creation_choices)
             for label, extension in self.picker.creation_choices:
@@ -248,6 +248,7 @@ class CreationLayout(toga.Box):
         self.picker = picker
         self.paired = False
         self.signature = None
+        self.template_panel = None
         self.gutter = toga.Box()
         self.name_cancel = picker.name_actions.children[0]
         self.location_cancel = picker.picker_actions.children[0]
@@ -261,12 +262,58 @@ class CreationLayout(toga.Box):
             self.reflow()
             p = self.picker
             pending = getattr(self, '_location_load', None)
-            if (self.paired and p.editor_picker_location is None and not p.cloud_busy
+            if (self.template_panel is None and self.paired and p.editor_picker_location is None and not p.cloud_busy
                     and (pending is None or pending.done())):
                 async def load():
                     if p.creation_layout is self and self.paired and p.visible():
                         await p.load_picker_location()
                 self._location_load = p.app.loop.create_task(load())
+
+    def open_templates(self):
+        if self.template_panel is not None:
+            return
+        p = self.picker
+        controls = p.notebook_templates
+        self.template_original = p.operation.notebook_template, p.operation.notebook_format
+        finish = toga.Button('Use template', on_press=lambda *_: self.close_templates(apply=True),
+                             style=Pack(height=48))
+        cancel = toga.Button('Cancel', on_press=lambda *_: self.close_templates(), style=Pack(height=48))
+        self.template_fields = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        if not self.apple:
+            self.template_fields.add(toga.Label('Choose a template', style=Pack(font_size=20)))
+        self.template_fields.add(controls)
+        scroll = toga.ScrollContainer(content=self.template_fields, horizontal=False, style=Pack(flex=1))
+        self.template_panel = toga.Box(children=[scroll], style=Pack(direction=COLUMN, flex=1))
+        if self.apple:
+            finish._toolbar_prominent = True
+            cancel._toolbar_symbol = 'chevron.left'
+            self.template_toolbar = finish, cancel
+        else:
+            self.template_panel.add(toga.Box(children=[cancel, finish],
+                style=Pack(direction=ROW, justify_content='end', gap=8, margin=12)))
+        controls.set_preview_active(True)
+        self.reflow()
+
+    def close_templates(self, *, apply=False):
+        if self.template_panel is None or self.picker.creation_layout is not self:
+            return
+        p = self.picker
+        controls = p.notebook_templates
+        if apply:
+            try:
+                choice = controls.selection()
+            except ValueError:
+                return
+        else:
+            choice = self.template_original
+            controls.set_selection(*choice)
+        p.select_notebook_template(p.operation, *choice)
+        controls.set_preview_active(False)
+        self.template_fields.remove(controls)
+        self.remove(self.template_panel)
+        self.template_panel = None
+        self.signature = None
+        self.reflow()
 
     def reflow(self):
         p = self.picker
@@ -281,6 +328,25 @@ class CreationLayout(toga.Box):
             # Android resizes the activity for the IME. Use the window allocation
             # to keep both panes mounted while the user edits the name.
             height = native.getResources().getConfiguration().screenHeightDp
+        if self.template_panel is not None:
+            if self.template_panel.parent is not self:
+                self.clear()
+                self.style.direction = COLUMN
+                self.add(self.template_panel)
+            panel_width = max(120, min(800, width - 32))
+            inset = max(16, round((width - panel_width) / 2))
+            if self.template_fields.style.margin_left != inset:
+                self.template_fields.style.margin_left = self.template_fields.style.margin_right = inset
+            p.notebook_templates.fit(panel_width)
+            if self.apple:
+                finish, cancel = self.template_toolbar
+                self._ios_toolbar_buttons, self._ios_toolbar_leading = [finish], [cancel]
+                self._ios_toolbar_replaces_back = True
+                self._ios_toolbar_title = 'Choose a template'
+                if p.visible():
+                    from .ios_toolbar import sync_screen
+                    sync_screen(p.app, self, p.app.native_host.state.destination)
+            return
         sizes = pane_sizes(width, height, division(p, self))
         if self.paired and sizes is None and p._compact_keyboard:
             field = getattr(p.save_as_name._impl, 'native', None)

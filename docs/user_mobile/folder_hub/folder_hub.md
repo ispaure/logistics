@@ -24,7 +24,8 @@ failed to load, tap **Try again**.
 
 Wide windows show the workspace list beside the browser. Narrow windows
 open the browser on its own screen. Rotating or folding keeps your current
-folder. The folder-view button switches between a hierarchy and a flat list.
+folder. Use the folder-view button in the Workspaces header, next to Transfers,
+to switch Rclone Copies, Cloud and Server between a hierarchy and a flat list.
 
 ## Search and act on a file
 
@@ -41,7 +42,8 @@ Private names stay out of the saved local index.
 
 List shows a larger thumbnail beside supported filenames. Tiles give the
 artwork more room while keeping each image’s proportions and aligning the
-filenames in each row.
+filenames in each row. Tap anywhere inside a tile to open the file or folder.
+In **Select items**, tap anywhere inside a tile to select or deselect it.
 
 In List, tap **…** beside an item. In Tiles, press and hold the tile to
 show eligible actions such as **Details**,
@@ -59,7 +61,8 @@ offers **Move…** and, where the storage supports it, **Duplicate**.
 Press and hold a file or folder in List or Tiles, then move your finger
 and drop it on a folder in the same writable location. In Tiles, a longer
 stationary hold opens the item menu while your finger is still down. Start
-moving after the hold registers to drag. In List, tap the item's **…** for
+moving after the hold registers to drag. The tile’s thumbnail or icon and
+filename stay visible during the drag. In List, tap the item's **…** for
 its menu. If the destination already contains an item of the same name, the
 move stops and both items stay in place.
 Keep holding over a folder to make it flash twice and open. Continue

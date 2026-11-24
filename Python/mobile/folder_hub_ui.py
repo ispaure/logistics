@@ -51,8 +51,6 @@ def fit_folder_credential(app, width):
     row = app.folder_credential_row
     if row.parent is None:
         return
-    toggle = app.folder_view_toggle
-    width -= toggle.style.width + toggle.style.margin_left
     caption = app.folder_credential_label
     # Keep a bounded field even when a long credential name increases the
     # native intrinsic width. The picker and its accessibility label stay intact.
@@ -221,6 +219,7 @@ class FolderHubUI(WorkspacesScreen):
         self.folder_collapsed.clear()
         self.update_folder_list(self.folder_choices())
         self.app.refresh_transfer_status()
+        self.app.adaptive.render()
 
     def change_folder_credential(self, widget=None, **kwargs):
         self.folder_credential_name = self.selected_folder_credential()

@@ -81,6 +81,22 @@ class RecycledNotesRowsTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_search_landing_folder_has_plain_title_and_opens_its_note(self):
+        async def exercise():
+            owner = await self.library()
+            owner.select_panel_tab('Search')
+            owner.search.value = 'Child'
+            await owner.search_task
+            path = 'Vault/Many/Child'
+            result = next(row for row in owner.rows.children if row.path == path)
+            self.assertEqual(result.page, path + '/Child.md')
+            self.assertFalse(result.tree_landing)
+            with patch.object(owner, 'open_note', new=AsyncMock()) as open_note:
+                await owner.rows.activate(result)
+                self.assertEqual(open_note.await_args.args, (result.page,))
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_search_folder_reveals_its_selected_row_in_files(self):
         async def exercise():
             owner = await self.library(count=80)

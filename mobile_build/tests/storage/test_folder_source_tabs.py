@@ -61,7 +61,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(remotes_tab.style.font_weight, 'bold')
         self.assertEqual(remotes_tab.style.height, app.folder_local_buttons['Rclone'].style.height)
         self.assertEqual(list(app.folder_picker_header.children),
-                         [app.folder_credential_row, app.folder_view_toggle])
+                         [app.folder_credential_row])
         self.assertEqual(app.folder_picker_header.style.direction, 'row')
         self.assertIs(app.folder_credential.parent, app.folder_credential_row)
         app.change_folder_source('Network shares')
@@ -171,7 +171,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertFalse(app.folder_picker_header.children)
         app.folder_source_buttons['Network shares'].on_press()
         self.assertEqual(set(app.folder_buttons), {'Home Mac'})
-        self.assertEqual(list(app.folder_picker_header.children), [app.folder_view_toggle])
+        self.assertFalse(app.folder_picker_header.children)
         app.show_locations()
         self.assertEqual(app.folder_source, 'Network shares')
         app.folder_source_buttons['rclone'].on_press()
@@ -199,7 +199,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app.change_folder_source('Network shares')
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_share_button])
         self.assertIsNotNone(app.folder_transfers_button.parent)
-        self.assertEqual(list(app.folder_picker_header.children), [app.folder_view_toggle])
+        self.assertFalse(app.folder_picker_header.children)
         self.assertFalse(any(getattr(child, 'text', '') == 'Add share…'
                              for child in app.folder_list.children))
         app.show_locations()
@@ -252,7 +252,7 @@ class FolderSourceTabTests(unittest.TestCase):
 
             app.change_folder_source('Network shares')
             self.assertEqual(app.folder_buttons['Home-Server-Books'].text, 'Home-Server-Books')
-            self.assertEqual(list(app.folder_picker_header.children), [app.folder_view_toggle])
+            self.assertFalse(app.folder_picker_header.children)
             app.change_folder_source('Local')
             app.folder_local_buttons['Rclone'].on_press()
             self.assertEqual(app.folder_buttons['Local-Server-Music'].text, 'Local-Server-Music')

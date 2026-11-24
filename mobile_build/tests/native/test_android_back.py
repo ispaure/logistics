@@ -525,6 +525,8 @@ class AndroidBackTests(unittest.TestCase):
         with patch('features.pdf.document.PDFDocument.open', native_pdf):
             app.loop.run_until_complete(app.open_download(path=path))
             reader = app.private_sessions.active
+            self.assertIsNone(reader.crypt_tools_view)
+            self.assertNotIn('Open / Metadata…', dict(reader.crypt_actions_menu.actions))
             # Exercise Back with visible controls, then re-enter fullscreen.
             self.assertTrue(reader.reading_frame.immersive)
             reader.toggle_private_reading_mode()

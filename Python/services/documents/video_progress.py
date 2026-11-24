@@ -28,6 +28,7 @@ class VideoProgress:
         self._settings = None
         self.setting_overrides = {}
         self.position = 0
+        self.completed = False
         self.lock = RLock()
         self.private = not DocumentPolicy.for_provider(content.provider).persistent
         self.remote = document_remote(content.provider)
@@ -90,6 +91,7 @@ class VideoProgress:
             self.restore_settings(record)
             self.duration = self.valid_duration(record.get('duration', 0))
             self.position = self.valid_duration(record.get('position', 0))
+            self.completed = record.get('completed') is True
             return self.position
 
     @property
@@ -137,10 +139,25 @@ class VideoProgress:
                     self.setting_overrides = overrides
                 self.duration = duration or self.duration
             self.position = 0 if completed else int(milliseconds)
-            return self.state.observe(dict(
-                position=self.position, duration=self.valid_duration(self.duration),
-                settings=self.setting_overrides,
-            ))
+            self.completed = self.completed or completed
+            return self.state.observe(self.record())
+
+    def record(self):
+        value = dict(position=self.position, duration=self.valid_duration(self.duration),
+                     settings=self.setting_overrides)
+        if self.completed:
+            value['completed'] = True
+        return value
+
+    def mark(self, read):
+        with self.lock:
+            self.load()
+            if self.state.load_status in {'locked', 'error', 'fenced'}:
+                return self.state.load_status
+            self.completed = read
+            if not read:
+                self.position = 0
+            return self.state.save(self.record())
 
     def flush(self, observation=None):
         if self.state is not None:

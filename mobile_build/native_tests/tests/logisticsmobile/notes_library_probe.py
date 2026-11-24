@@ -189,8 +189,10 @@ class NotesLibraryProbe(LogisticsMobile):
         for name in ('Current Page.md', 'Image.png', 'Data.json', 'Unknown.binary'):
             assert await owner.open_note('Technology/Accessories/Devices/' + name), owner.notice.text
             await asyncio.sleep(.3)
-            links = [child.children[1] for child in owner.breadcrumbs.children if isinstance(child, toga.Box)]
+            links = [child.children[1] for child in owner.breadcrumbs.children[:-1] if isinstance(child, toga.Box)]
             assert links, [getattr(child, 'text', '') for child in owner.breadcrumbs.children]
+            filename = owner.breadcrumbs.children[-1].children[1]
+            assert isinstance(filename, toga.Label) and filename.text == name
             separators = [child for child in owner.breadcrumbs.children
                           if isinstance(child, toga.ImageView) and not hasattr(child, 'browser_entry_kind')]
             assert len(separators) == len(links)

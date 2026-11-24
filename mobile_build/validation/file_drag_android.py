@@ -28,14 +28,14 @@ def observe_touch(event, emulator, record, evidence):
         return
     serial = record['serial']
     adb = [str(emulator.adb), '-s', serial]
-    probe = subprocess.run([*adb, 'exec-out', 'run-as', BUNDLE, 'cat', REQUEST],
+    probe = subprocess.run([*adb, 'shell', '-T', 'run-as', BUNDLE, 'cat', REQUEST],
                            capture_output=True, timeout=10)
-    if probe.returncode:
+    if probe.returncode or not probe.stdout.strip():
         return
     data = json.loads(probe.stdout)
     gesture = data['gesture']
     point = checked_point(data['start'])
-    if gesture not in ('drag', 'menu'):
+    if gesture not in ('drag', 'menu', 'tap'):
         raise ValueError('Unknown File Browser test gesture.')
     target = checked_point(data['target']) if gesture == 'drag' else point
 
@@ -51,10 +51,14 @@ def observe_touch(event, emulator, record, evidence):
             pending = subprocess.run([*adb, 'shell', 'run-as', BUNDLE, 'test', '-f',
                                       'cache/file-drag-held-menu.txt'], timeout=10)
             assert pending.returncode == 0, 'The tile menu did not open while the finger was down.'
-        else:
+        elif gesture == 'drag':
             time.sleep(.57)
             motion('MOVE', [(4 * start + end) // 5 for start, end in zip(point, target)])
             motion('MOVE', target)
+            if data.get('layout') == 'tiles':
+                with (evidence / 'tile-drag-preview.png').open('wb') as image:
+                    subprocess.run([*adb, 'exec-out', 'screencap', '-p'], stdout=image,
+                                   timeout=10, check=True)
             time.sleep(1.4)
     finally:
         motion('UP', target)

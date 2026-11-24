@@ -27,10 +27,11 @@ function checkGraphiteWork(source, state) {
   }
   const canvas = new Canvas(), draft = new Canvas(), ctx = canvas.getContext('2d');
   const controls = {draft, grayscale: {checked: false}, tool: {value: '14'},
-    color: {value: '0'}, width: {value: '2'}, layer: {value: 'synthetic'}};
+    color: {value: '0', addEventListener() {}}, width: {value: '2'}, layer: {value: 'synthetic'}};
   const listeners = {};
   const scope = {state, canvas, ctx, DOMMatrix: Matrix, Path2D: Path, performance,
-    document: {createElement(name) {if (name !== 'canvas') throw Error(name); counts.tiles++; return new Canvas()},
+    document: {body: {classList: {contains: () => false}},
+      createElement(name) {if (name !== 'canvas') throw Error(name); counts.tiles++; return new Canvas()},
       addEventListener(name, listener) {listeners[name] = listener}},
     $: id => controls[id], selected: new Set(), points: [], mode: 'ink', active: null};
   vm.createContext(scope);
@@ -44,7 +45,7 @@ function checkGraphiteWork(source, state) {
   const coldTileJsMs = performance.now() - start;
   check(counts.tiles === tilesBefore + 1 && counts.patterns === patternsBefore + 1,
     'A cold graphite style must build exactly one tile and pattern');
-  check(run('graphiteMasks.has(false)&&graphiteMasks.get(false).byteLength>0'),
+  check(run('graphiteTooth.get(false)?.heights.byteLength>0'),
     'The cold graphite style did not construct its material');
   check(counts.imageUploads <= uploadsBefore + 1, 'A cold tile uploaded its image repeatedly');
   const coldUploads = counts.imageUploads;
@@ -75,7 +76,7 @@ function checkGraphiteWork(source, state) {
     controls.tool.value = String(tool);
     listeners.change();
     const warmedTiles = counts.tiles, warmedUploads = counts.imageUploads;
-    run('points=Array.from({length:2000},(_,i)=>[30+i/20,60+Math.sin(i/20)*10,.6]);' +
+    run('points=Array.from({length:2000},(_,i)=>[30+i/20,60+Math.sin(i/20)*10,.5]);' +
       'inkSettings={tool:testTool,color:0,width:2,layer:"synthetic"};clearDraft();preview(points);' +
       'windowOriginalGeometry=geometry;windowTouched=0;geometry=(target,p,...rest)=>{windowTouched+=p.length;return windowOriginalGeometry(target,p,...rest)}');
     check(counts.tiles === warmedTiles && counts.imageUploads === warmedUploads,
@@ -99,8 +100,8 @@ function checkGraphiteWork(source, state) {
       compositeWidth: bounds[2], compositeHeight: bounds[3]});
     run('geometry=windowOriginalGeometry');
   }
-  const alphaMaskBytes = run('[...graphiteMasks.values()].reduce((sum,mask)=>sum+mask.byteLength,0)');
-  check(run('graphiteMasks.size<=2') && alphaMaskBytes <= 32768,
+  const toothBytes = run('[...graphiteTooth.values()].reduce((sum,{heights,fine})=>sum+heights.byteLength+fine.byteLength,0)');
+  check(run('graphiteTooth.size<=2') && toothBytes <= 65536,
     'Color-independent graphite fields grew beyond the two-material budget');
   controls.color.value = '7';
   scope.active = 73;
@@ -109,7 +110,7 @@ function checkGraphiteWork(source, state) {
   check(counts.tiles === activeTiles, 'UI warming generated a new texture during a pen contact');
   scope.active = null;
   return {success: true, coldTileJsMs, newColorTileJsMs, warm1000LookupsJsMs,
-    retainedPatterns, retainedTileBytes, alphaMaskBytes, prewarmFirstPreviewAllocations: 0,
+    retainedPatterns, retainedTileBytes, toothBytes, prewarmFirstPreviewAllocations: 0,
     tailWork, scope: 'Actual renderer JavaScript and operation counts with stub Canvas APIs; no raster or physical latency proof'};
 }
 

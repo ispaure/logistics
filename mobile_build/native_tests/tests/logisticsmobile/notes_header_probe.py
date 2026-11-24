@@ -107,7 +107,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 assert hit == first_button, 'Beginning of breadcrumb path is unreachable'
                 scroll.horizontal_position = scroll.max_horizontal_position
                 await asyncio.sleep(.35)
-                crumbs = [child.children[1] for child in owner.breadcrumbs.children if isinstance(child, toga.Box)]
+                crumbs = [child.children[1] for child in owner.breadcrumbs.children[:-1] if isinstance(child, toga.Box)]
                 for button in (owner.menu, owner.links_button, *crumbs):
                     if not hasattr(button, 'on_press') or not button.enabled:
                         continue

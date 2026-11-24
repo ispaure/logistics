@@ -30,7 +30,9 @@ BUNDLE = 'io.github.ispaure.logisticsconventionsqa'
 
 def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=False,
         duoctl=None, pose=None, extended=False, appearance=None, content_size=None,
-        extended_only=False, reader_space=False, system_occlusions=False, adaptive_shell=False, static_shell=False):
+        extended_only=False, reader_space=False, system_occlusions=False, adaptive_shell=False, static_shell=False,
+        workspace_occlusions=False):
+    adaptive_shell = adaptive_shell or workspace_occlusions
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
@@ -47,6 +49,7 @@ def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=
     with scratch(REPO) as workspace:
         app = prepare(source, workspace / 'build')
         entrypoint = (
+            ('from tests.logisticsmobile.workspace_occlusion_probe import main\nmain().main_loop()\n') if workspace_occlusions else
             ('from tests.logisticsmobile.adaptive_shell_probe import main\nmain().main_loop()\n') if adaptive_shell else
             ('from tests.logisticsmobile.system_occlusion_probe import main\nmain().main_loop()\n') if system_occlusions else
             ('from tests.logisticsmobile.reader_space_probe import ReaderSpaceProbe\n'
@@ -194,6 +197,7 @@ if __name__ == '__main__':
     parser.add_argument('--system-occlusions', action='store_true', help='Focus on Markdown Close/Save, workspace roots and destination confirmation.')
     parser.add_argument('--adaptive-shell', action='store_true', help='Repeat destination/reader transitions with real external audio activity.')
     parser.add_argument('--static-shell', action='store_true', help='Run the adaptive shell inventory without external activity on other devices.')
+    parser.add_argument('--workspace-occlusions', action='store_true', help='Check retained folder bars through external media and library dismissal.')
     parser.add_argument('--reader-space', action='store_true', help='Check the portrait comic title and footer layout')
     args = parser.parse_args()
     if not os.environ.get('DEVELOPER_DIR'):
@@ -203,4 +207,4 @@ if __name__ == '__main__':
         sweep=args.sweep, duoctl=args.duoctl, pose=args.pose, extended=args.extended,
         appearance=args.appearance, content_size=args.content_size,
         extended_only=args.extended_only, reader_space=args.reader_space, system_occlusions=args.system_occlusions,
-        adaptive_shell=args.adaptive_shell, static_shell=args.static_shell)
+        adaptive_shell=args.adaptive_shell, static_shell=args.static_shell, workspace_occlusions=args.workspace_occlusions)

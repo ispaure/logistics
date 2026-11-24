@@ -124,10 +124,13 @@ class NotesDrawersProbe(NotesInteractionChecks, LogisticsMobile):
         # Check that title content cannot swallow taps on the folder row.
         from rubicon.objc import CGPoint
         from commonUtils.ui.native.keyboard import native_value
+        scroll = owner.breadcrumb_scroll
+        position = scroll.horizontal_position
+        scroll.horizontal_position = 0
         button = owner.breadcrumbs.children[-3].children[1]._impl.native
         window = self.main_window._impl.native
         frame = button.convertRect(button.bounds, toView=window)
-        viewport = owner.breadcrumb_scroll._impl.native
+        viewport = scroll._impl.native
         clip = viewport.convertRect(viewport.bounds, toView=window)
         left, top = max(frame.origin.x, clip.origin.x), max(frame.origin.y, clip.origin.y)
         right = min(frame.origin.x + frame.size.width, clip.origin.x + clip.size.width)
@@ -140,6 +143,7 @@ class NotesDrawersProbe(NotesInteractionChecks, LogisticsMobile):
         while hit is not None and hit != button:
             hit = native_value(hit.superview)
         assert hit == button, 'Folder breadcrumb is covered by another native view'
+        scroll.horizontal_position = position
         report['native_note_actions'] = True
 
     def startup(self):

@@ -12,6 +12,7 @@ __status__ = "Production"
 from html import escape
 import re
 
+EPUB_TOP_GUTTER = 8
 DEFAULTS = {'reading_font': 'system', 'line_spacing': '150', 'reading_width': '800', 'epub_justify': 'false'}
 THEMES = ('system', 'light', 'dark', 'sepia', 'slate')
 SPACING = tuple(str(value) for value in range(100, 221))
@@ -66,14 +67,13 @@ def css(size, margin, theme, *, font_family='system', line_spacing=150, reading_
     from features.books.themes import THEMES as colors
     background, foreground = colors.get(theme, colors['light'])
     width = 'none' if reading_width == 'auto' else str(reading_width) + 'px'
-    # Native title and progress controls already separate the page from chrome.
-    # Keep the chosen horizontal gutter without spending it again vertically.
+    # Use one top gutter and leave the full remaining height to the columns.
     result = (f'html{{background:{background};color-scheme:{"light dark" if theme == "system" else "dark" if theme in ("dark", "slate") else "light"};'
         '-webkit-text-size-adjust:100%;text-size-adjust:100%}'
         f'body{{background:{background};color:{foreground};font-family:{family};font-size:{size}px;'
-        f'line-height:{line_spacing / 100};margin:0 auto;padding:0 {margin}px;max-width:{width};'
+        f'line-height:{line_spacing / 100};margin:0 auto;padding:{EPUB_TOP_GUTTER}px {margin}px 0;max-width:{width};'
         'box-sizing:border-box;overflow-wrap:anywhere}'
-        f'p,li{{text-align:var(--logistics-text-align,{"justify" if justify else "start"})}}'
+        f'p,li{{text-align:var(--logistics-text-align,{"justify" if justify else "start"});orphans:1;widows:1}}'
         'p{margin:0 0 1em}h1,h2,h3,h4,h5,h6{line-height:1.25;margin:1.25em 0 .65em;overflow-wrap:break-word}'
         'body>:first-child,[data-logistics-pages]>:first-child{margin-top:0}'
         'blockquote{margin:1em;padding-left:1em;border-left:3px solid currentColor}'

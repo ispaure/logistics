@@ -170,7 +170,7 @@ class FolderLocationHeader(toga.Box):
         """Use one secondary line for operation text or passive storage identity."""
         if getattr(self, '_native_title_mounted', False):
             if self.status.text and self.caption not in self.children:
-                self.insert(0, self.caption)
+                self.add(self.caption)
             elif not self.status.text and self.caption in self.children:
                 self.remove(self.caption)
         visible = self.status if self.status.text else self.storage_identity
@@ -227,7 +227,7 @@ class FolderLocationHeader(toga.Box):
             indicator.control_icon = name
             accessible_name(indicator, label)
             surface(indicator, radius=0, background='transparent',
-                    foreground=name if name.startswith('folder_') else 'accent',
+                    foreground=name if name.startswith('folder_') else 'file_icon',
                     outlined=False, eink_outlined=False)
             self.storage_icons.add(indicator)
         identity = 'Cloud' if remote else 'On-device'

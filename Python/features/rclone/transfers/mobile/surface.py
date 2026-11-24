@@ -50,7 +50,7 @@ async def evaluate_bounded(web, script):
 @lru_cache(maxsize=1)
 def surface_html():
     return ((ASSETS / 'surface.html').read_text()
-            .replace('/*STYLE*/', css_variables() + '\n' + (ASSETS / 'surface.css').read_text())
+            .replace('/*STYLE*/', css_variables(mobile=True) + '\n' + (ASSETS / 'surface.css').read_text())
             .replace('/*SCRIPT*/', (ASSETS / 'surface.js').read_text().replace('SEARCH_DEBOUNCE_MS', str(SEARCH_DEBOUNCE_MS))))
 
 

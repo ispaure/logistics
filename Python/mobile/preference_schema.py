@@ -25,17 +25,18 @@ from features.notebooks.mobile.brush_presets import PREFERENCE as NOTEBOOK_BRUSH
 
 DEFAULTS = {
     'notebook_paper_preview': 'true',
+    'notebook_paper_appearance': 'system',
     'native_video_airplay': 'false',
     NOTEBOOK_BRUSH_PRESETS: '[]',
     'notes_library_migrated': 'true',
+    'notes_search_open': 'ask',
     'seasonal_snow': 'true',
     'android_eink': 'false',
     'font_size': '16',
     'markdown_font_size': '16',
     'text_font_size': '16',
     'epub_font_size': '16',
-    'restore_last_document': 'true',
-    'last_document': '',
+    'document_restart': 'resume',
     'accent_hue': str(DEFAULT_ACCENT[0]),
     'accent_saturation': str(DEFAULT_ACCENT[1]),
     'workspace_local_group': 'Others',
@@ -44,7 +45,6 @@ DEFAULTS = {
     'show_legacy': 'false',
     'disabled_features': '[]',
     'markdown_justify': 'false',
-    'clear_unmodified_documents_on_restart': 'true',
     CLIPBOARD_KEY: 'false',
     'session_speech_when_locked': 'false',
     'playlist_speech_when_locked': 'false',
@@ -94,6 +94,8 @@ def validate(values):
         raise ValueError('Invalid speech lock-screen preference.')
     if values['notebook_paper_preview'] not in {'true', 'false'}:
         raise ValueError('Invalid notebook preview preference.')
+    if values['notebook_paper_appearance'] not in {'system', 'light', 'dark'}:
+        raise ValueError('Invalid notebook paper appearance.')
     if values['native_video_airplay'] not in {'true', 'false'}:
         raise ValueError('Invalid native video AirPlay preference.')
     read_presets(values[NOTEBOOK_BRUSH_PRESETS])
@@ -103,10 +105,12 @@ def validate(values):
         raise ValueError('Invalid Android E Ink preference.')
     if values['markdown_justify'] not in {'true', 'false'}:
         raise ValueError('Invalid Markdown justification preference.')
+    if values['notes_search_open'] not in {'ask', 'notes', 'viewer'}:
+        raise ValueError('Invalid Notes Library search opening preference.')
     if any(values[key] not in FONT_SIZES for key in ('font_size', 'markdown_font_size', 'text_font_size', 'epub_font_size')):
         raise ValueError('Choose a supported font size.')
-    if values['restore_last_document'] not in {'true', 'false'}:
-        raise ValueError('Invalid document restore preference.')
+    if values['document_restart'] not in {'home', 'resume', 'keep_open'}:
+        raise ValueError('Invalid document restart preference.')
     if values['workspace_local_group'] not in {'Rclone', 'Others'}:
         raise ValueError('Invalid local workspace tab.')
     if values['workspace_folder_view'] not in {'hierarchy', 'list'}:
@@ -115,8 +119,6 @@ def validate(values):
         raise ValueError('Invalid legacy folder preference.')
     if values['document_card_overview'] != 'false':
         raise ValueError('Invalid document overview preference.')
-    if values['clear_unmodified_documents_on_restart'] not in {'true', 'false'}:
-        raise ValueError('Invalid document clearing preference.')
     if values['reading_margin'] not in {'8', '16', '24', '32'} or values['reading_theme'] not in {'system', 'light', 'dark', 'sepia', 'slate'}:
         raise ValueError('Invalid reader appearance preference.')
     validate_reading(values)
@@ -140,6 +142,3 @@ def validate(values):
             or len(item['remotes']) > 256 or any(not isinstance(name, str) or not 0 < len(name) <= 80 for name in item['remotes'])
             for item in packages)):
         raise ValueError('Invalid remote credential associations.')
-    key = values['last_document']
-    if key and (len(key) != 32 or any(c not in '0123456789abcdef' for c in key)):
-        raise ValueError('Invalid last-document identity.')

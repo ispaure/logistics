@@ -39,11 +39,71 @@ def open_documents(content):
 
 
 class HubDocumentTests(unittest.TestCase):
+    def test_recent_and_favourite_percentages_are_centered_over_their_menus(self):
+        import toga
+        from mobile.favourites import catalog
+        from mobile.workspace import Session
+
+        app = self.app
+        hub = app.hub_controller()
+        path = app.private_root / 'Progress.mp4'
+        path.touch()
+        source = dict(type='local', path=str(path))
+        app.recent_documents.remember_file(
+            Session('recent-video', 'provider-session', 'video', 'video', title=path.name, transient=True), source)
+        catalog(app).remember(source, path.name, dict(kind='video'), favourite=True)
+
+        with patch('mobile.document_completion.load_percentage', new=AsyncMock(return_value=35)):
+            home = app.build_home()
+            app.show_documents_hub(collection='Recent')
+            recent = hub.document_recent_list
+            app.loop.run_until_complete(asyncio.sleep(0))
+            app.show_documents_hub(collection='Favourites')
+            favourites = hub.document_favourites_list
+            app.loop.run_until_complete(asyncio.sleep(0))
+
+        for section, count in ((home, 2), (recent, 1), (favourites, 1)):
+            menus = {widget for widget in widgets(section)
+                     if getattr(widget, 'accessible_name', None) == 'File actions for Progress.mp4'}
+            self.assertEqual(len(menus), count)
+            for menu in menus:
+                badge, overflow = menu.parent.children
+                self.assertIs(overflow, menu)
+                self.assertIsInstance(badge, toga.Label)
+                self.assertEqual(badge.text, '35%')
+                self.assertEqual(badge.style.width, menu.style.width)
+                self.assertEqual(badge.style.text_align, 'center')
+                self.assertEqual(badge.style.display, 'pack')
+                self.assertLess(badge.style.margin_bottom, 0)
+
+    def test_back_dismisses_the_wide_document_selection(self):
+        app = self.app
+        hub = app.hub_controller()
+        self.enterContext(patch.object(app.adaptive, 'content_width', return_value=900))
+        app.show_documents_hub(collection='Recent')
+        hub.reflow_documents_hub()
+        detail = hub._document_selection
+        opener = AsyncMock()
+        for dismiss in ('button', 'toolbar', 'system'):
+            with self.subTest(dismiss=dismiss):
+                app.loop.run_until_complete(hub.select_document_card('Recent', 'Example', opener))
+                self.assertIn('Example', labels(detail))
+                if dismiss == 'button':
+                    next(widget for widget in widgets(detail)
+                         if getattr(widget, 'accessible_name', '') == 'Back to documents').on_press()
+                elif dismiss == 'toolbar':
+                    self.assertTrue(app.routes.back())
+                else:
+                    self.assertTrue(app.routes.system_back())
+                self.assertFalse(detail.children)
+                self.assertEqual(app.native_host.state.destination, 'documents')
+        opener.assert_not_called()
+
     def test_replacing_a_hub_section_disposes_its_row_menus(self):
         import toga
         hub = self.app.hub_controller()
 
-        def row_menu(session):
+        def row_menu(session, **kwargs):
             button = toga.Button('Document actions')
             button.document_actions = Mock()
             return [button]
@@ -386,7 +446,7 @@ class HubDocumentTests(unittest.TestCase):
                     self.assertEqual(list(hub.content.children), original)
                     self.assertEqual(len(hub.children), 1)
 
-    def test_retained_native_hub_cannot_keep_a_landscape_minimum_in_portrait(self):
+    def test_retained_native_hub_uses_current_safe_width_in_both_rotation_directions(self):
         from types import SimpleNamespace
         from unittest.mock import patch
         from toga.style.pack import NONE
@@ -398,7 +458,7 @@ class HubDocumentTests(unittest.TestCase):
             with patch.object(app.adaptive, 'content_width', return_value=900):
                 hub.reflow(app, 'home')
                 self.assertTrue(hub.paired)
-                self.assertEqual(hub.leading_scroll.style.width, 375)
+                self.assertEqual(hub.leading_scroll.style.width, 450)
             with patch.object(app.adaptive, 'content_width', return_value=402):
                 hub.reflow(app, 'home')
                 self.assertFalse(hub.paired)
@@ -407,7 +467,8 @@ class HubDocumentTests(unittest.TestCase):
             bounds.size.width = 350
             with patch.object(app.adaptive, 'content_width', return_value=900):
                 hub.reflow(app, 'home')
-                self.assertFalse(hub.paired)
+                self.assertTrue(hub.paired)
+                self.assertEqual(hub.leading_scroll.style.width, 450)
 
     def test_partial_fold_forces_sections_and_accounts_for_asymmetric_safe_area(self):
         from unittest.mock import patch
@@ -439,22 +500,25 @@ class HubDocumentTests(unittest.TestCase):
             app.adaptive.render()
         self.assertTrue(home.paired)
         self.assertEqual(documents._duo_heading_pane.parent.style.direction, 'row')
+        title = documents._destination_title
+        self.assertIs(title.parent, documents._destination_actions[0])
         self.assertIs(app.document_recent_list.parent, app.document_results)
         with patch.object(app.adaptive, 'content_width', return_value=390):
             app.adaptive.render()
         self.assertFalse(home.paired)
         self.assertEqual(documents._duo_heading_pane.parent.style.direction, 'column')
+        self.assertIs(title, documents._destination_title)
         self.assertIs(app.document_recent_list.parent, app.document_results)
 
     def test_home_keeps_page_heading_and_navigation_label(self):
         import toga
         app = self.app
         app.workspace.active = None
-        view = app.build_home()
-        labels = [child.text for child in view.content.children if isinstance(child, toga.Label)]
+        app.show_home()
+        view = app.routes.roots['home'].children[0]
+        labels = [child.text for child in widgets(view) if isinstance(child, toga.Label)]
         self.assertEqual(labels.count('Home'), 1)
-        self.assertEqual(view.content.style.margin_top, 8)
-        self.assertEqual(view.content.children[0].style.margin_top, 0)
+        self.assertIs(view._destination_title.parent, view._destination_actions[0])
         self.assertNotIn('Read. Write. Organize.', labels)
         self.assertEqual(app.native_host.labels[0], 'Home')
 
@@ -522,6 +586,7 @@ class HubDocumentTests(unittest.TestCase):
             app.recent_documents.remember(Session('', 'managed-text', doc.id, 'text', title=doc.name))
         app.refresh_documents()
         app.show_documents_hub()
+        app.open_document_search()
         search = app.document_search
         search.value = 'OLD SAVED'
         app.loop.run_until_complete(asyncio.sleep(.35))
@@ -531,8 +596,8 @@ class HubDocumentTests(unittest.TestCase):
         found = [widget for widget in widgets(app.document_search_results)
                  if isinstance(widget, toga.Button) and widget.text == 'Old saved draft.md']
         self.assertEqual(len(found), 1)
-        self.assertIsNone(app.document_views.parent)
-        self.assertEqual(list(app.document_results.children), [app.document_search_results])
+        self.assertIsNotNone(app.document_views.parent)
+        self.assertTrue(app.routes.screens['documents'][-1][0].startswith('search:'))
         app.loop.run_until_complete(found[0].on_press())
         self.assertEqual(app.current.id, hidden.id)
         self.assertEqual(app.editor.value, '# Old content')
@@ -559,12 +624,13 @@ class HubDocumentTests(unittest.TestCase):
         frame = view._workspace_frame
         self.assertIsNone(view.transfer_banner)
         self.assertIs(frame.main.children[0], app._files_status_row)
-        self.assertEqual(list(app._files_status_row.children), [app.folder_source_tabs, app.folder_transfers_button])
+        self.assertEqual(list(app._files_status_row.children), [app.folder_source_tabs])
+        self.assertIs(app.folder_transfers_button.parent, view._destination_actions[0])
         credential_row = app.folder_credential.parent
         self.assertIs(app._files_status_row.children[0], app.folder_source_tabs)
         self.assertEqual(list(app.folder_subtab_header.children), [app.folder_cloud_tabs])
         self.assertIn(app.folder_picker_header, frame.main.children)
-        self.assertEqual(list(app.folder_picker_header.children), [credential_row, app.folder_view_toggle])
+        self.assertEqual(list(app.folder_picker_header.children), [credential_row])
         self.assertIsNotNone(app.folder_transfers_button.parent)
         app.transfer_busy = False
         app.transfer_notification = True
@@ -728,8 +794,7 @@ class HubDocumentTests(unittest.TestCase):
             home = self.app.build_home()
         creator, = home._home_primary_buttons
         camera = next(widget for widget in widgets(home.trailing) if getattr(widget, 'text', '') == 'Burst camera')
-        self.assertEqual(creator._impl._surface_roles, ('transparent', 'accent', False))
-        self.assertFalse(creator._impl._surface_eink_outlined)
+        self.assertEqual(creator._impl._surface_roles, ('surface', 'accent', False))
         self.assertEqual(camera._impl._surface_roles, ('transparent', 'accent', False))
 
     def test_open_document_links_have_direct_close_controls_in_both_views(self):
@@ -772,18 +837,24 @@ class HubDocumentTests(unittest.TestCase):
 
     def test_recent_keeps_older_live_sessions_beyond_the_history_limit(self):
         app = self.app
-        for index in range(12):
+        for index in range(22):
             doc = app.store.create(f'File-{index}.txt')
             session = app.workspace.open('managed-text', doc.id, 'text', doc.name)
             app.recent_documents.remember(session)
         recent = app.recent_items()
         self.assertEqual(len(recent), len(app.workspace.sessions))
-        self.assertEqual([summary[0] for _, summary in recent[:10]],
-                         [f'File-{index}.txt' for index in range(11, 1, -1)])
+        self.assertEqual([summary[0] for _, summary in recent[:20]],
+                         [f'File-{index}.txt' for index in range(21, 1, -1)])
+        app.show_documents_hub(collection='Recent')
+        rows = [widget.document_button.text for widget in widgets(app.hub_controller().document_recent_list)
+                if hasattr(widget, 'document_button')]
+        self.assertEqual(len(rows), 20)
+        self.assertIn('File-2.txt', rows)
+        self.assertNotIn('File-1.txt', rows)
         content = app.build_documents_hub()
         section = open_documents(content)
         self.assertEqual(sum(hasattr(widget, 'session_id') for widget in widgets(section)),
-                         len(app.workspace.sessions))
+                         20)
 
     def test_recent_live_draft_uses_current_owner_and_closed_draft_recovers(self):
         app = self.app
@@ -933,7 +1004,7 @@ class HubDocumentTests(unittest.TestCase):
         app.current.snapshot.path.write_bytes(b'Changed elsewhere')
         app.workspace.open('managed-text', 'f' * 32, 'text')
         app.workspace.open('library', 'e' * 32, 'epub')
-        app.preferences.save(restore_last_document='false')
+        app.preferences.save(document_restart='home')
         app.save_workspace()
         restored = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
         try:
@@ -941,21 +1012,29 @@ class HubDocumentTests(unittest.TestCase):
             self.assertEqual(resources, {draft, conflict, 'f' * 32})
             self.assertEqual(restored.store.open(clean).text, 'Saved writing')
             self.assertEqual(restored.store.open(draft).text, 'Pending draft')
+            self.assertIsNone(restored.current)
+            self.assertEqual(restored.native_host.state.destination, 'home')
+            recent = {session.resource: summary for session, summary in restored.hub_controller().recent_items()}
+            self.assertIn('Recovered draft', recent[draft][2])
         finally:
             restored.main_window.close()
 
-    def test_disabled_clear_setting_restores_saved_documents(self):
+    def test_keep_open_keeps_saved_document_in_recent_without_resuming_it(self):
         app = self.app
         app.show_settings()
         app.settings_navigation.choose('App')
-        app.clear_documents_choice.value = False
-        app.save_preferences()
+        app.settings_navigation.sections['App'].restart_choice.value = 'Keep open documents'
         key = app.current.id
         app.save_workspace()
         restored = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
         try:
+            self.assertIsNone(restored.current)
+            self.assertEqual(restored.native_host.state.destination, 'home')
+            self.assertEqual(restored.preferences.values['document_restart'], 'keep_open')
+            session, _ = next(item for item in restored.hub_controller().recent_items() if item[0].resource == key)
+            self.assertIn(session.id, restored.workspace.sessions)
+            restored.loop.run_until_complete(restored.hub_controller().recent_opener(session)())
             self.assertEqual(restored.current.id, key)
-            self.assertEqual(restored.preferences.values['clear_unmodified_documents_on_restart'], 'false')
         finally:
             restored.main_window.close()
 

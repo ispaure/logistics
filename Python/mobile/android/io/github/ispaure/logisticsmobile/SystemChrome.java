@@ -5,8 +5,11 @@ package io.github.ispaure.logisticsmobile;
 
 import android.view.View;
 import android.view.ViewGroup;
+import java.util.Collections;
+import java.util.function.Consumer;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
+import androidx.core.view.DisplayCutoutCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -22,11 +25,10 @@ public final class SystemChrome {
         status.setTag(STATUS_TAG);
         activity.addContentView(status, new ViewGroup.LayoutParams(-1, 0));
         int[] location = new int[2];
-        Runnable layout = () -> {
-            WindowInsetsCompat root = ViewCompat.getRootWindowInsets(content);
+        Consumer<WindowInsetsCompat> layout = root -> {
             if (root == null || !(content.getParent() instanceof View)) return;
-            Insets safe = root.getInsets(WindowInsetsCompat.Type.systemBars()
-                | WindowInsetsCompat.Type.displayCutout());
+            Insets bars = root.getInsets(WindowInsetsCompat.Type.systemBars());
+            Insets safe = Insets.max(bars, root.getInsets(WindowInsetsCompat.Type.displayCutout()));
             View parent = (View) content.getParent();
             parent.getLocationInWindow(location);
             int parentTop = location[1];
@@ -37,8 +39,20 @@ public final class SystemChrome {
                 top = Math.max(top, location[1] + bar.getHeight() - parentTop);
             }
             ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) content.getLayoutParams();
-            if (lp.topMargin != top) {
-                lp.topMargin = top;
+            int left = safe.left;
+            DestinationRailView rail = content.findViewWithTag(DestinationRailView.WINDOW_TAG);
+            if (rail != null) {
+                DisplayCutoutCompat cutout = root.getDisplayCutout();
+                boolean safeCandidate = cutout != null && bars.left == 0
+                    && cutout.getWaterfallInsets().left == 0 && cutout.getSafeInsetLeft() == left;
+                if (rail.useCameraStrip(safeCandidate ? left : 0,
+                        safeCandidate ? cutout.getBoundingRects() : Collections.emptyList())) {
+                    left = 0;
+                }
+            }
+            if (lp.leftMargin != left || lp.topMargin != top
+                    || lp.rightMargin != safe.right || lp.bottomMargin != safe.bottom) {
+                lp.setMargins(left, top, safe.right, safe.bottom);
                 content.setLayoutParams(lp);
             }
             ViewGroup.MarginLayoutParams strip = (ViewGroup.MarginLayoutParams) status.getLayoutParams();
@@ -49,16 +63,10 @@ public final class SystemChrome {
             }
         };
         // AppCompat can show or hide a toolbar without redispatching window insets.
-        content.getViewTreeObserver().addOnGlobalLayoutListener(layout::run);
+        content.getViewTreeObserver().addOnGlobalLayoutListener(
+            () -> layout.accept(ViewCompat.getRootWindowInsets(content)));
         ViewCompat.setOnApplyWindowInsetsListener(content, (view, insets) -> {
-            Insets sides = insets.getInsets(WindowInsetsCompat.Type.systemBars()
-                | WindowInsetsCompat.Type.displayCutout());
-            ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
-            if (lp.leftMargin != sides.left || lp.rightMargin != sides.right || lp.bottomMargin != sides.bottom) {
-                lp.setMargins(sides.left, lp.topMargin, sides.right, sides.bottom);
-                view.setLayoutParams(lp);
-            }
-            layout.run();
+            layout.accept(insets);
             return insets;
         });
     }

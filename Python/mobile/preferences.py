@@ -46,6 +46,11 @@ class Preferences:
                 for key in DEFAULTS:
                     if key not in {'show_legacy', 'document_card_overview'} and parser.has_option('Mobile', key):
                         self.values[key] = parser['Mobile'][key]
+                if not parser.has_option('Mobile', 'document_restart'):
+                    if parser.get('Mobile', 'clear_unmodified_documents_on_restart', fallback='true') == 'false':
+                        self.values['document_restart'] = 'keep_open'
+                    elif parser.get('Mobile', 'restore_last_document', fallback='true') == 'false':
+                        self.values['document_restart'] = 'home'
                 # Seed each new category from the old shared size only when absent.
                 for key in ('markdown_font_size', 'text_font_size', 'epub_font_size'):
                     if not parser.has_option('Mobile', key):
@@ -77,6 +82,7 @@ class Preferences:
             raise ValueError('Repair or move the preserved preferences file before saving settings.')
         # Retain retired keys for INI compatibility, but keep cards and the saved legacy toggle off.
         changes = dict(changes, show_legacy='false', document_card_overview='false', notes_library_migrated='true')
+        changes.setdefault('document_restart', self.values['document_restart'])
         for key in ('markdown_font_size', 'text_font_size', 'epub_font_size'):
             changes.setdefault(key, self.values[key])
         values = dict(self.values, **changes)

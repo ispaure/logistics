@@ -142,7 +142,8 @@ class ViewerLayoutProbe(LogisticsMobile):
                     content = geometry(self, reader._reading_frame_owner.content) if reader is not None else row['view']
                     row['title_content_gap'] = content[1] - float(rect.origin.y + rect.size.height)
                     row['title_in_reader'] = reader is not None
-                    if not 4 <= row['title_top_gap'] <= 8 or not 4 <= row['title_content_gap'] <= 8:
+                    expected_gap = 0 if 'epub' in name else 6
+                    if not 4 <= row['title_top_gap'] <= 8 or abs(row['title_content_gap'] - expected_gap) > 2:
                         row['errors'].append('Reader title overlaps content or is not at the safe top')
             if not footer.vertical:
                 row['transport'] = geometry(self, footer.row)
@@ -202,12 +203,13 @@ class ViewerLayoutProbe(LogisticsMobile):
             if abs(row['bottom_gap'] - row['intentional_margin']) > 2:
                 row['errors'].append('Reader frame is not at the safe bottom')
         if 'epub' in name:
+            from features.books.mobile.typography import EPUB_TOP_GUTTER
             row['epub'] = await self.epub_metrics(owner)
             dom = row['epub']
-            if dom['padding'] != [0, 32, 0, 32]:
-                row['errors'].append('EPUB padding differs from compact vertical/chosen horizontal gutters')
-            if abs(dom['viewport_height'] - dom['inner_height']) > 1:
-                row['errors'].append('EPUB viewport loses height beyond its vertical gutters')
+            if dom['padding'] != [EPUB_TOP_GUTTER, 32, 0, 32]:
+                row['errors'].append('EPUB padding differs from its top and horizontal gutters')
+            if abs(dom['viewport_height'] + EPUB_TOP_GUTTER - dom['inner_height']) > 1:
+                row['errors'].append('EPUB viewport loses height beyond its top gutter')
             if before and before['anchor'] != dom['anchor']:
                 row['errors'].append('EPUB rotation lost the retained passage anchor')
             if dom.get('native_adjusted_inset', [0, 0, 0, 0]) != [0, 0, 0, 0]:

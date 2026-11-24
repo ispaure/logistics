@@ -117,18 +117,17 @@ class ProviderDocumentView:
         owner._show_crypt_content(kind, content, view=view)
         view.crypt_save = toga.Button('Save', on_press=owner.save_crypt, enabled=reader.editable and not getattr(reader, 'read_only', False), style=Pack(height=44))
         view.crypt_read_page.enabled = not reader.editable
-        read_only = getattr(reader, 'read_only', False)
-        mutation_controls = [] if read_only else ([view.crypt_save,
-            toga.Button('Save As…', on_press=owner.show_crypt_save_as, style=Pack(height=44))]
-            if reader.editable else [toga.Button('Edit metadata…', on_press=owner.edit_crypt_metadata, style=Pack(height=44))])
-        view.crypt_view = toga.Box(children=[view.crypt_title, view.crypt_page, view.crypt_read_page, view.crypt_content,
-            *mutation_controls,
-            toga.Button('Open…', on_press=owner.show_editor_open, style=Pack(height=44)),
-            toga.Label(private_label('Remote preview · Read-only' if read_only else
-                ('Edits stay in memory until saved to the selected local file.' if reader.editable else 'Reading position is saved when available'))),
-            toga.Button('Cancel request', on_press=owner.cancel_cloud, style=Pack(height=44)),
-            *([] if read_only or not reader.editable else [toga.Button('Discard changes and close', on_press=owner.discard_crypt, style=Pack(height=44))]),
-            toga.Button('Close private reader', on_press=owner.close_crypt, style=Pack(height=44))],
-            style=Pack(direction=COLUMN, flex=1, margin=12))
+        view.crypt_tools_view = None
+        if reader.editable and not getattr(reader, 'read_only', False):
+            actions = toga.Box(children=[
+                toga.Button('Save As…', on_press=owner.show_crypt_save_as, style=Pack(height=44)),
+                toga.Button('Open…', on_press=owner.show_editor_open, style=Pack(height=44)),
+                toga.Label(private_label('Edits stay in memory until saved to the selected local file.')),
+                toga.Button('Cancel request', on_press=owner.cancel_cloud, style=Pack(height=44)),
+                toga.Button('Discard changes and close', on_press=owner.discard_crypt, style=Pack(height=44)),
+                toga.Button('Close private reader', on_press=owner.close_crypt, style=Pack(height=44)),
+                toga.Button('Return to private document', on_press=owner.resume_crypt, style=Pack(height=44))],
+                style=Pack(direction=COLUMN, flex=1, margin=12))
+            view.crypt_tools_view = toga.ScrollContainer(horizontal=False, content=actions, style=Pack(flex=1))
         owner.compact_private_view(view)
         return view

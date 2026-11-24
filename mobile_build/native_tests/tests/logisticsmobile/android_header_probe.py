@@ -104,6 +104,7 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 self.adaptive.render()
                 await asyncio.sleep(.3)
                 scroll = owner.breadcrumb_scroll
+                assert owner.breadcrumbs.children[-1].children[1].text == name
                 for crumb in owner.breadcrumbs.children:
                     if not isinstance(crumb, toga.Box):
                         continue
@@ -174,6 +175,7 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                     'Ancestor breadcrumb tap did not open its landing page')
                 owner.select_panel_tab('Search')
                 history = owner.history[:]
+                scroll.horizontal_position = 0
                 await self.touch_native(owner.breadcrumbs.children[0].children[1]._impl.native)
                 await self.wait_for(lambda: owner.panel_tab == 'Files'
                     and owner.selected_path == 'World' and (owner.sidebar.expanded or owner.sidebar.sidebar_open),

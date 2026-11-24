@@ -3,9 +3,9 @@
 ## Categories and adaptive layout
 
 Tap a category to open its options. Use **Back** to return to the list on a
-phone. A wide window shows the list beside the selected category. On iPhone
-Duo the panes can follow the fold. The current category stays open when the
-window resizes. Preferences save as you change them.
+phone. A wide window shows the list beside the selected category, starting
+with **App**. On Duo the panes can follow the fold. A category you select
+stays open when the window resizes. Preferences save as you change them.
 
 ## Appearance and E Ink status
 
@@ -50,12 +50,17 @@ local video. See [watching on a TV](../../features/video/user_mobile/controls.md
 
 ## Document restoration
 
-Both **Close saved documents on restart** and **Restore last document**
-are on by default under **Settings → App**. When the app restarts, it closes
-the other saved documents but can reopen the last eligible file. Recovery
-drafts stay available. Turn off **Restore last document** to start without
-reopening that file, or turn off **Close saved documents on restart** to
-keep the other open documents. See [recovering a
+Choose **On restart** under **Settings → App**.
+
+- **Start at Home** closes saved documents and shows Home.
+- **Resume last document** opens the last eligible document and closes the
+  other saved documents. This is the default.
+- **Keep open documents** starts at Home and keeps restorable sessions marked
+  **Open** in **Documents → Recent**. Recent can also reopen files whose
+  readers only stay open for the current app session.
+
+Saved files stay where they are. Recoverable unsaved drafts stay in
+**Documents → Recent** with every option. See [recovering a
 draft](../documents/workflows.md#recover-a-draft) if a file has changed or
 its source is unavailable.
 

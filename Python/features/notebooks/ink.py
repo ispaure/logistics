@@ -17,7 +17,7 @@ import struct
 from uuid import uuid4
 
 from ._vendor.rmscene import scene_stream as ss, scene_items as si
-from ._vendor.rmscene.crdt_sequence import CrdtSequenceItem
+from ._vendor.rmscene.crdt_sequence import CrdtSequence, CrdtSequenceItem, END_MARKER
 from ._vendor.rmscene.tagged_block_common import CrdtId, LwwValue, HEADER_V6
 from ._vendor.rmscene.scene_tree import SceneTree
 from .images import ImageResources, ImageItem, ImageQuad, Picture
@@ -42,6 +42,67 @@ def encode(blocks):
     output = BytesIO()
     ss.write_blocks(output, blocks, options={'version': '3.4'})
     return output.getvalue()
+
+
+def insertion_links(sequence):
+    """Find each item's insertion anchors using only older sequence items."""
+    end = END_MARKER
+    neighbors = {key: [sequence[i - 1] if i else end,
+                       sequence[i + 1] if i + 1 < len(sequence) else end]
+                 for i, key in enumerate(sequence)}
+    links = {}
+    for key in sorted(sequence, key=lambda identity: (identity.part2, identity.part1), reverse=True):
+        left, right = neighbors.pop(key)
+        links[key] = left, right
+        if left != end:
+            neighbors[left][1] = right
+        if right != end:
+            neighbors[right][0] = left
+    return links
+
+
+def write_layer_stack(data, layers):
+    """Reorder the live layer links without moving root-level artwork slots."""
+    root = CrdtId(0, 1)
+    blocks = list(ss.read_blocks(BytesIO(data)))
+    root_items = {block.item.item_id: block for block in blocks
+                  if isinstance(block, (ss.SceneGroupItemBlock, ImageItem))
+                  and block.parent_id == root}
+    layer_items = [(block.item.value, key) for key, block in root_items.items()
+                   if isinstance(block, ss.SceneGroupItemBlock) and block.item.value is not None]
+    groups = dict(layer_items)
+    if len(groups) != len(layer_items):
+        raise ValueError('This page has repeated native layer references.')
+    layer_nodes = [(CrdtId(*map(int, key.split(':'))), visible) for key, _, visible in layers]
+    ordered = [groups[node] for node, _ in layer_nodes]
+    group_items = set(groups.values())
+    deleted = group_items - set(ordered)
+    deleted_nodes = {node for node, key in groups.items() if key in deleted}
+    active = next((node for node, visible in reversed(layer_nodes) if visible), layer_nodes[-1][0])
+    current = CrdtSequence(block.item for block in root_items.values())
+    replacement = iter(ordered)
+    sequence = [next(replacement) if key in group_items else key for key in current
+                if key not in deleted and root_items[key].item.value is not None
+                and (key in group_items or not root_items[key].item.deleted_length)]
+    links = insertion_links(sequence)
+    chunks = []
+    for raw, block in zip(frames(data), blocks):
+        if isinstance(block, (ss.SceneGroupItemBlock, ImageItem)) and block.parent_id == root:
+            item = block.item
+            left, right = links.get(item.item_id, (END_MARKER, END_MARKER))
+            tombstone = item.item_id in deleted
+            if tombstone or (left, right) != (item.left_id, item.right_id):
+                block = deepcopy(block)
+                block.item = replace(item, left_id=left, right_id=right,
+                                     value=None if tombstone else item.value,
+                                     deleted_length=1 if tombstone else item.deleted_length)
+                raw = encode([block])[len(HEADER_V6):]
+        elif isinstance(block, ss.SceneInfo) and block.current_layer.value in deleted_nodes:
+            block = deepcopy(block)
+            block.current_layer = replace(block.current_layer, value=active)
+            raw = encode([block])[len(HEADER_V6):]
+        chunks.append(raw)
+    return HEADER_V6 + b''.join(chunks)
 
 
 def frames(data):
@@ -286,6 +347,29 @@ class InkPage:
         updated = InkPage.read(raw + encode(extra)[len(HEADER_V6):])
         self.__dict__.update(updated.__dict__)
 
+    def move_layer(self, key, target, *, after):
+        if self.warning:
+            raise ValueError(self.warning)
+        if key == target or not {key, target}.issubset(row[0] for row in self.layers):
+            raise ValueError('Choose two different layers on the current page.')
+        moved = next(row for row in self.layers if row[0] == key)
+        layers = [row for row in self.layers if row[0] != key]
+        index = next(i for i, row in enumerate(layers) if row[0] == target)
+        layers.insert(index + int(after), moved)
+        self.layers = layers
+
+    def delete_layer(self, key):
+        if self.warning:
+            raise ValueError(self.warning)
+        remaining = [row for row in self.layers if row[0] != key]
+        if len(remaining) == len(self.layers) or not remaining:
+            raise ValueError('Keep at least one layer on the page.')
+        removed = {item.id for item in (*self.strokes, *self.images) if item.layer == key}
+        self.layers = remaining
+        self.strokes = [stroke for stroke in self.strokes if stroke.layer != key]
+        self.images = [image for image in self.images if image.layer != key]
+        self.order = [identity for identity in self.order if identity not in removed]
+
     def to_bytes(self):
         if self.warning:
             return self.raw
@@ -398,4 +482,7 @@ class InkPage:
             ids = {**identities, **image_identities}
             ids.update({p.id: CrdtId(*map(int, p.id.split(':'))) for p in self.images if p.id in self._image_baseline})
             result = reorder_native(result, [ids[key] for key in self.order if key in ids])
+        layer_ids = [key for key, _, _ in self.layers]
+        if layer_ids != [key for key, _, _ in self._original_layers]:
+            result = write_layer_stack(result, self.layers)
         return result

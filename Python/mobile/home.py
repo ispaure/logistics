@@ -16,7 +16,7 @@ from toga.style.pack import COLUMN, ROW, CENTER
 from .ui_metrics import TOUCH_TARGET
 from .appearance import accessible_name, surface
 from .control_icons import button_icons, icon_button
-from .hub_controls import (DocumentThumbnails, HubSections, document_group, empty_document_row,
+from .hub_controls import (DocumentCardMedia, HubSections, document_group, empty_document_row,
                            heading, retire_document_actions)
 
 
@@ -55,27 +55,16 @@ class HomeScreen:
         box = toga.Box(style=Pack(direction=COLUMN, margin=(8, 16, 16, 16)))
         self.app._home_status_row = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
         self.home_continue = None
-        self.home_actions = None
-        if self.app.routes.apple:
-            self.home_actions = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
-            box.add(self.home_actions)
         self.home_content = box
         from .document_choices import available_choices
         primary = ()
         if available_choices(self.app):
             creator = icon_button('compose', 'New document', on_press=self.new_hub_document)
             creator._toolbar_symbol = 'plus'
-            if self.home_actions is not None:
-                from .appearance import action_button
-                action_button(creator)
-                creator._toolbar_group = 'home-documents'
-                self.home_actions.add(creator)
-            else:
-                surface(creator, background='transparent', foreground='accent', eink_outlined=False)
+            from .appearance import action_button
+            action_button(creator)
+            creator._toolbar_group = 'home-documents'
             primary = (creator,)
-        self._home_title = toga.Label('Home',
-            style=Pack(font_size=30, font_weight='bold', height=40, margin_bottom=8))
-        box.add(self._home_title)
         self._home_recents = toga.Box(style=Pack(direction=COLUMN))
         self._populate_home_overview(self._home_recents, overview)
         secondary = toga.Box(style=Pack(direction=COLUMN))
@@ -83,6 +72,7 @@ class HomeScreen:
         secondary.add(self._home_section_header('Favourites', see_all=True))
         populate(self.app, secondary, heading=False, row_font=15, limit=2)
         shortcuts = toga.Box(style=Pack(direction=ROW, margin_bottom=12))
+        self._home_library_shortcuts = shortcuts
         for title, feature, glyph in HOME_LIBRARY_SHORTCUTS:
             if not self.app.feature_enabled(feature):
                 continue
@@ -110,9 +100,6 @@ class HomeScreen:
                 style=Pack(height=TOUCH_TARGET)), background='transparent', foreground='accent',
                 eink_outlined=False))
         self.home_sections = HubSections(box, secondary)
-        self.home_sections._destination_body_heading = self._home_title
-        self.home_sections._home_prefer_native = self.app.routes.apple
-        self.home_sections._home_primary_actions = self.home_actions
         self.home_sections._home_primary_buttons = primary
         self.reflow_home()
         return self.home_sections
@@ -120,7 +107,7 @@ class HomeScreen:
     def _populate_home_overview(self, box, overview):
         retire_document_actions(box)
         box.clear()
-        previews = box._document_thumbnails = DocumentThumbnails(self.app)
+        previews = box._document_card_media = DocumentCardMedia(self.app)
         box.add(self._home_section_header('Recent', see_all=bool(overview)))
         self._home_recent_buttons = []
         for index, (session, summary) in enumerate(overview):
@@ -160,16 +147,16 @@ class HomeScreen:
     def reflow_home(self):
         sections = self.home_sections
         sections.reflow(self.app, 'home')
-        top = 16
-        if sections.paired and sections.style.direction == ROW:
-            title = self._home_title.style
-            top = sections.content.style.margin_top
-            if self._home_title.parent is not None:
-                top += title.height + title.margin_bottom
-            if self.home_actions is not None and self.home_actions.parent is sections.content:
-                top += max((button.style.height for button in self.home_actions.children), default=0)
-                top += self.home_actions.style.margin_top + self.home_actions.style.margin_bottom
-        sections.trailing_content.style.margin_top = top
+        shortcuts = self._home_library_shortcuts
+        width = (sections.trailing_scroll.style.width if sections.paired and sections.style.direction == ROW
+                 else self.adaptive.content_width('home', margin=0))
+        stacked = isinstance(width, (int, float)) and width - 32 < 360
+        shortcuts.style.direction = COLUMN if stacked else ROW
+        for index, button in enumerate(shortcuts.children):
+            button.style.update(flex=0 if stacked else 1, margin_left=0 if stacked or not index else 8,
+                                margin_bottom=6 if stacked else 0)
+        sections.trailing_content.style.margin_top = (
+            sections.content.style.margin_top if sections.paired and sections.style.direction == ROW else 16)
 
     def new_hub_document(self, widget=None, **kwargs):
         return self.choose_document_type()

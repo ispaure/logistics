@@ -259,7 +259,7 @@ def reorder_native(data, order):
     """Arrange native objects using insertion anchors older than each item."""
     from copy import deepcopy
     from dataclasses import replace
-    from .ink import frames, encode
+    from .ink import frames, encode, insertion_links
     from ._vendor.rmscene import scene_stream as ss
     from ._vendor.rmscene.tagged_block_common import HEADER_V6
     blocks = list(ss.read_blocks(BytesIO(data)))
@@ -272,20 +272,7 @@ def reorder_native(data, order):
     for members in groups.values():
         sequence = [key for key in order if key in members]
         sequence += [key for key in members if key not in sequence]
-        neighbors = {key: [sequence[i-1] if i else end,
-                           sequence[i+1] if i+1 < len(sequence) else end]
-                     for i, key in enumerate(sequence)}
-        # Reconstruct insertion history from newest to oldest. Removing each
-        # item exposes the neighbors that existed when it could be inserted.
-        # A display-order chain can point to a newer ID and lose native objects
-        # on save, even when its dependencies are acyclic and frames are sorted.
-        for key in sorted(sequence, key=lambda identity: (identity.part2, identity.part1), reverse=True):
-            left, right = neighbors.pop(key)
-            links[key] = (left, right)
-            if left != end:
-                neighbors[left][1] = right
-            if right != end:
-                neighbors[right][0] = left
+        links.update(insertion_links(sequence))
     chunks = []
     for raw, b in zip(frames(data), blocks):
         if isinstance(b, (ss.SceneLineItemBlock, ImageItem)):

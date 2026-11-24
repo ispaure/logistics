@@ -329,10 +329,10 @@ class CredentialDocumentListTests(unittest.TestCase):
 
     def test_recent_bound_and_credential_deletion_across_window_files(self):
         self.client.unlock()
-        for index in range(12):
+        for index in range(22):
             self.remember(index)
-        self.assertEqual(len(self.app.recent_items()), 10)
-        self.assertEqual(len(self.cache.states['a' * 64]['recent']), 10)
+        self.assertEqual(len(self.app.recent_items()), 22)  # Include the live sessions outside history.
+        self.assertEqual(len(self.cache.states['a' * 64]['recent']), 20)
         other_window = self.cache.path('a' * 64).with_name('c' * 64 + '.zip')
         other_window.write_bytes(b'encrypted-other-window')
         self.client.unlock(key='d' * 64, identity='e' * 64, remote='Other')

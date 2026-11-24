@@ -336,7 +336,7 @@ def _install_ios_appearance(app):
     Switch.create = create_switch
     from .ios_reader_chrome import install
     install()
-    from rubicon.objc import objc_method, send_super, objc_id
+    from rubicon.objc import ObjCInstance, objc_method, send_super, objc_id
     import toga_iOS.widgets.box as box_module
     # CALayer stores a resolved CGColor. Refresh card strokes when UIKit
     # changes traits, while dynamic text/background colours update themselves.
@@ -347,6 +347,10 @@ def _install_ios_appearance(app):
             impl = self.impl
             if impl in _surfaces:
                 paint_surface(impl, _surfaces[impl])
+            callback = getattr(impl.interface, '_notebook_thumbnail_appearance_changed', None) if impl else None
+            if callback is not None and (not previous
+                    or ObjCInstance(previous).userInterfaceStyle != self.traitCollection.userInterfaceStyle):
+                callback()
     box_module.TogaView = LogisticsSurfaceView
     import toga_iOS.widgets.scrollcontainer as scroll_module
 
@@ -453,6 +457,9 @@ def _install_ios_appearance(app):
     for cls in (Label, TextInput, MultilineTextInput, Selection):
         original = cls.set_color
         def set_color(impl, value, previous=original):
+            if isinstance(impl, Label) and impl in _surfaces and impl._surface_roles[1]:
+                impl.native.textColor = apple_color(impl._surface_roles[1])
+                return
             if value not in (None, BLACK):
                 return previous(impl, value)
             impl.native.textColor = apple_color('text')
@@ -493,6 +500,7 @@ def _install_android_appearance(app):
     from toga_android.widgets.label import TextViewWidget
     from toga_android.widgets.selection import Selection
     from toga_android.widgets import button as android_button
+    from toga_android.widgets.label import Label
     from toga_android.widgets.textinput import TextInput
     from com.google.android.material import R as MaterialR
     from android.text import TextUtils
@@ -549,6 +557,9 @@ def _install_android_appearance(app):
     def set_color(impl, value):
         _widgets.add(impl)
         restore_eink_button(impl)
+        if isinstance(impl, Label) and impl in _surfaces and impl._surface_roles[1]:
+            paint_surface(impl, _surfaces[impl])
+            return
         if not eink_enabled() and value not in (None, BLACK):
             return original(impl, value)
         impl.native.setTextColor(impl.get_theme_color(R.attr.textColorPrimary))

@@ -39,11 +39,13 @@ class FolderScreen:
     scope: str = ''
     root_title: str = ''
     private: bool = field(init=False)
+    scroll_mode: str = field(init=False)
 
     def __post_init__(self):
         provider = getattr(self.browser, 'search_provider', None)
         provider = getattr(provider, 'provider', provider)
         self.private = self.kind == 'remote-browser' or getattr(provider, 'private', False)
+        self.scroll_mode = getattr(self.browser, 'mode', 'List')
         if self.root_title:
             return
         if getattr(provider, 'private', False) and not getattr(provider, 'remote_storage', False):
@@ -59,11 +61,16 @@ class FolderScreen:
     def route(self):
         return f'folder:{self.kind}:{self.scope}:{self.source!r}:{self.path!r}'
 
+    @property
+    def restored_scroll(self):
+        return self.scroll if self.scroll_mode == getattr(self.browser, 'mode', 'List') else 0
+
 
 class FolderPreview:
     """Read-only parent contents, ready before UIKit begins an interactive pop."""
     def __init__(self, app, entry, *, captured=False):
         from .browser_ui import FileBrowser
+        from .file_browser_view import LocalFileBrowser
         self.app, self.entry = app, entry
         self.provider = entry.browser.search_provider
         live = getattr(entry.view, '_folder_screen', None)
@@ -75,7 +82,9 @@ class FolderPreview:
         self.private = entry.kind == 'remote-browser' or getattr(owner, 'private', False)
         self.client = getattr(app, 'cloud_client', None)
         self.generation = getattr(self.client, 'generation', None)
-        self.browser = FileBrowser(folder_visible=app.folder_path_visible, preview=False)
+        browser_type = LocalFileBrowser if isinstance(entry.browser, LocalFileBrowser) else FileBrowser
+        self.browser = browser_type(folder_visible=app.folder_path_visible, preview=False)
+        self.browser.mode = entry.browser.mode
         self.status = self.browser.status_label('Opening folder…')
         parent = toga.Button('')
         header = self.browser.attach_location_header(self.status, parent)
@@ -111,7 +120,6 @@ class FolderPreview:
         if captured:
             # Keep an actual list in the parent controller before the live
             # browser moves into its child. No disk/network refresh is needed.
-            self.browser.mode = entry.browser.mode
             self.browser.search.on_change = None
             self.browser.search.value = entry.query
             self.browser.sort.value = entry.browser.sort.value
@@ -226,6 +234,7 @@ class FolderNavigation:
         entry.selected = entry.browser.selected
         scroll = getattr(entry.browser, '_scroll', None)
         entry.scroll = scroll.vertical_position if scroll is not None else 0
+        entry.scroll_mode = getattr(entry.browser, 'mode', 'List')
 
     def restore_viewport(self, destination, expected=None):
         screens = self.routes.screens[destination]
@@ -236,7 +245,7 @@ class FolderNavigation:
             return
         scroll = getattr(entry.browser, '_scroll', None)
         if scroll is not None:
-            scroll.vertical_position = min(entry.scroll, scroll.max_vertical_position)
+            scroll.vertical_position = min(entry.restored_scroll, scroll.max_vertical_position)
 
     def capture(self):
         routes = self.routes
@@ -252,6 +261,7 @@ class FolderNavigation:
             entry.selected = entry.browser.selected
             scroll = getattr(entry.browser, '_scroll', None)
             entry.scroll = scroll.vertical_position if scroll is not None else 0
+            entry.scroll_mode = getattr(entry.browser, 'mode', 'List')
             if getattr(entry.browser, 'tree', None) is not None:
                 if entry.preview is not None:
                     entry.preview.close()
@@ -298,6 +308,12 @@ class FolderNavigation:
         if not any((destination, route) in self.screens for route, _, _ in routes.screens[destination]):
             return
         self.paint_canvas(destination)
+        for route, panel, pane in routes.screens[destination]:
+            if pane is not None and pane.controller == controller:
+                entry = self.screens.get((destination, route))
+                if entry is not None:
+                    self.prepare_preview(entry, panel)
+                break
         from commonUtils.ui.native.keyboard import native_value
         from .appearance import apple_color
         color = apple_color('window')
@@ -306,6 +322,18 @@ class FolderNavigation:
                        or native_value(controller.transitionCoordinator))
         if coordinator is not None:
             native_value(coordinator.containerView).backgroundColor = color
+
+    def prepare_preview(self, entry, panel):
+        """Make the incoming folder agree with the live browser before Back."""
+        preview = entry.preview
+        if preview is None or preview.browser.mode == entry.browser.mode:
+            return
+        preview.browser.mode = entry.browser.mode
+        if preview.browser.tree is not None:
+            preview.browser.render()
+            panel.refresh()
+            preview.browser.vertical_position = entry.restored_scroll
+        clear_snapshot(entry)
 
     def forget(self, destination, route):
         entry = self.screens.pop((destination, route), None)
@@ -385,7 +413,7 @@ class FolderNavigation:
                     if not panel.children:
                         panel.add(retained.preview.view)
                         panel.refresh()
-                        retained.preview.browser.vertical_position = retained.scroll
+                        retained.preview.browser.vertical_position = retained.restored_scroll
                 continue
             # The previous item supplies UIKit's Back button for this folder.
             # Keep the native chevron and pop gestures without breadcrumb text.
@@ -446,6 +474,7 @@ class FolderNavigation:
         if self.task is not None and not self.task.done():
             self.task.cancel()
         panel = screens[-1][1]
+        self.prepare_preview(entry, panel)
         # Keep the retained parent preview visible throughout the transition
         # and the fresh listing; never replace it with an empty controller.
         loading = toga.Label('Opening folder…')

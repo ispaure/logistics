@@ -7,21 +7,27 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import androidx.core.view.ViewCompat;
 import com.google.android.material.navigationrail.NavigationRailView;
 import com.google.android.material.shape.ShapeAppearanceModel;
+import java.util.List;
 
 /** Desktop-style placement while retaining Material selection and accessibility. */
 public final class DestinationRailView extends NavigationRailView {
+    static final String WINDOW_TAG = "logistics.destination.rail";
     private int footerItemId;
     private final Paint dividerPaint = new Paint();
+    private int cameraTop;
+    private int cameraBottom;
 
     public DestinationRailView(Context context, int footerItemId) {
         super(context);
         this.footerItemId = footerItemId;
+        setTag(WINDOW_TAG);
         // The native window host already reserves system bars and cutouts.
         // An explicit pass-through also prevents framework inset padding when
         // an existing tablet rail rotates; removing the listener falls back to
@@ -70,6 +76,60 @@ public final class DestinationRailView extends NavigationRailView {
         super.onMeasure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), heightSpec);
     }
 
+    /** Use the left cutout strip only when every real tab target fits beside the camera. */
+    boolean useCameraStrip(int inset, List<Rect> rects) {
+        int top = 0;
+        int bottom = 0;
+        boolean fits = false;
+        if (inset > 0 && inset <= getWidth() && isShown() && getLayoutDirection() == View.LAYOUT_DIRECTION_LTR) {
+            int[] location = new int[2];
+            getLocationInWindow(location);
+            top = getHeight();
+            for (Rect rect : rects) {
+                if (rect.left < inset && rect.right > 0) {
+                    top = Math.min(top, rect.top - location[1] - getPaddingTop() - dp(4));
+                    bottom = Math.max(bottom, rect.bottom - location[1] - getPaddingTop() + dp(4));
+                }
+            }
+            fits = bottom > top && targetsFit(top, bottom);
+        }
+        if (!fits) top = bottom = 0;
+        if (top != cameraTop || bottom != cameraBottom) {
+            cameraTop = top;
+            cameraBottom = bottom;
+            requestLayout();
+        }
+        return fits;
+    }
+
+    private int skipCamera(int y, int itemHeight, int top, int bottom) {
+        return bottom > top && y < bottom && y + itemHeight > top ? bottom : y;
+    }
+
+    private int footerTop(int height, int inset, int itemHeight, int top, int bottom) {
+        int y = height - inset - itemHeight;
+        return skipCamera(y, itemHeight, top, bottom) != y ? top - itemHeight : y;
+    }
+
+    private boolean targetsFit(int top, int bottom) {
+        ViewGroup menu = (ViewGroup) getMenuView();
+        int inset = dp(8);
+        int itemHeight = dp(48);
+        int height = getHeight() - getPaddingTop() - getPaddingBottom();
+        int y = inset;
+        int end = height - inset;
+        for (int i = 0; i < menu.getChildCount(); i++) {
+            View item = menu.getChildAt(i);
+            if (item.getVisibility() == View.GONE) continue;
+            if (item.getId() == footerItemId) {
+                end = footerTop(height, inset, itemHeight, top, bottom);
+            } else {
+                y = skipCamera(y, itemHeight, top, bottom) + itemHeight;
+            }
+        }
+        return y <= end;
+    }
+
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
@@ -91,11 +151,13 @@ public final class DestinationRailView extends NavigationRailView {
         for (int i = 0; i < menu.getChildCount(); i++) {
             View item = menu.getChildAt(i);
             if (item.getVisibility() == View.GONE) continue;
-            int itemTop = item.getId() == footerItemId ? height - inset - itemHeight : y;
+            boolean footer = item.getId() == footerItemId;
+            int itemTop = footer ? footerTop(height, inset, itemHeight, cameraTop, cameraBottom)
+                                 : skipCamera(y, itemHeight, cameraTop, cameraBottom);
             item.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
                          MeasureSpec.makeMeasureSpec(itemHeight, MeasureSpec.EXACTLY));
             item.layout(0, itemTop, width, itemTop + itemHeight);
-            if (item.getId() != footerItemId) y += itemHeight;
+            if (!footer) y = itemTop + itemHeight;
         }
     }
 }

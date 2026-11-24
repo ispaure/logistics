@@ -37,11 +37,16 @@ function templateControls() {
   dialog.setAttribute('aria-labelledby', 'templatePickerTitle');
   dialog.innerHTML = `<form>
     <h2 id="templatePickerTitle">Change Template</h2>
-    <label>Page template <span class="template-select"><select id="pageTemplate" autofocus></select></span></label>
-    <label>Template size <select id="templateFormat"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>
-    <label><input id="templateVisible" type="checkbox"> Show template</label>
-    <figure id="templatePreview" role="img" aria-label="Template preview"><img alt="" decoding="async" hidden></figure>
-    <p id="templatePreviewStatus" class="hint" role="status"></p>
+    <div class="template-settings">
+      <label class="template-dropdown">Page template <span class="template-select"><select id="pageTemplate"></select></span></label>
+      <fieldset class="template-list"><legend>Page template</legend><div id="templateChoices"></div></fieldset>
+      <label>Template size <select id="templateFormat"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>
+      <label><input id="templateVisible" type="checkbox"> Show template</label>
+    </div>
+    <div class="template-preview-pane">
+      <figure id="templatePreview" role="img" aria-label="Template preview"><img alt="" decoding="async" hidden></figure>
+      <p id="templatePreviewStatus" class="hint" role="status"></p>
+    </div>
     <p id="templateCompatibility" class="hint"></p>
     <div class="template-actions"><button type="button" id="cancelTemplate">Cancel</button>
       <button type="submit" id="applyTemplate">Apply</button></div>
@@ -79,6 +84,22 @@ function openTemplatePicker() {
   const unavailable = state.template_available === false || !known;
   if (unavailable) catalog.unshift(['', (known ? state.templates[name] : name) + ' (preserved)']);
   options('pageTemplate', catalog.map(([value, label]) => [label, value]));
+  const choices = $('templateChoices');
+  choices.replaceChildren(...catalog.map(([value, label]) => {
+    const row = document.createElement('label');
+    const radio = document.createElement('input');
+    const caption = document.createElement('span');
+    radio.type = 'radio';
+    radio.name = 'template-choice';
+    radio.value = value;
+    radio.onchange = () => {
+      $('pageTemplate').value = value;
+      updateTemplatePreview();
+    };
+    caption.textContent = label;
+    row.append(radio, caption);
+    return row;
+  }));
   $('pageTemplate').value = unavailable ? '' : name;
   $('templateFormat').value = state.template_fixed_size ? state.template_settings.format : paperView;
   $('templateVisible').checked = state.template_settings?.visible !== false;
@@ -86,10 +107,13 @@ function openTemplatePicker() {
   dialog.dataset.page = state.page_id;
   dialog.showModal();
   updateTemplatePreview();
+  const initial = $('pageTemplate').getClientRects().length ? $('pageTemplate') : choices.querySelector(':checked');
+  initial?.focus();
 }
 
 function updateTemplatePreview() {
   const name = $('pageTemplate').value;
+  for (const choice of $('templateChoices').querySelectorAll('input')) choice.checked = choice.value === name;
   const move = $('templateFormat').value === 'move';
   const preview = $('templatePreview');
   const image = preview.querySelector('img');
@@ -134,28 +158,109 @@ function paperBounds() {
   return {x: left, y: 0, width: right - left, height: Math.min(state.height, bottom)}
 }
 
+function confirmLayerDeletion(key, name) {
+  let dialog = $('deleteLayerDialog');
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = 'deleteLayerDialog';
+    dialog.setAttribute('aria-labelledby', 'deleteLayerTitle');
+    dialog.innerHTML = '<form method="dialog"><h2 id="deleteLayerTitle">Delete layer?</h2>' +
+      '<p id="deleteLayerMessage"></p><div class="template-actions">' +
+      '<button value="cancel" autofocus>Cancel</button><button value="delete" class="layer-remove">Delete layer</button></div></form>';
+    document.body.append(dialog);
+  }
+  if (dialog.open) return;
+  $('deleteLayerMessage').textContent = `Delete “${name}” and its contents? You can undo this change.`;
+  const page = state.page_id;
+  const confirmDelete = event => {
+    if (event.submitter?.value === 'delete' && !busy && page === state.page_id)
+      send({op: 'delete-layer', layer: key});
+  };
+  dialog.querySelector('form').onsubmit = confirmDelete;
+  dialog.showModal();
+}
+
+function bindLayerReorder(handle, row) {
+  let hold, drag, drop, after;
+  function clear() {
+    clearTimeout(hold);
+    row.classList.remove('layer-dragging');
+    drop?.classList.remove('layer-drop-before', 'layer-drop-after');
+    drag = drop = null;
+  }
+  function move(target, after) {
+    if (!target || target === row || busy || active !== null ||
+        target === (after ? row.previousElementSibling : row.nextElementSibling)) return;
+    send({op: 'move-layer', layer: row.dataset.layer, target: target.dataset.layer, after});
+  }
+  handle.onpointerdown = event => {
+    if (event.button !== 0 || busy || active !== null) return;
+    drag = {id: event.pointerId, x: event.clientX, y: event.clientY, page: state.page_id};
+    handle.setPointerCapture(event.pointerId);
+    hold = setTimeout(() => row.classList.add('layer-dragging'), 350);
+  };
+  handle.onpointermove = event => {
+    if (drag?.id !== event.pointerId) return;
+    if (!row.classList.contains('layer-dragging')) {
+      if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 8) clear();
+      return;
+    }
+    drop?.classList.remove('layer-drop-before', 'layer-drop-after');
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.layer-row');
+    drop = target && target !== row && target.parentElement === row.parentElement ? target : null;
+    if (drop) {
+      const bounds = drop.getBoundingClientRect();
+      after = event.clientY > bounds.top + bounds.height / 2;
+      drop.classList.add(after ? 'layer-drop-after' : 'layer-drop-before');
+    }
+  };
+  handle.onpointerup = event => {
+    if (drag?.id === event.pointerId && drag.page === state.page_id) move(drop, after);
+    clear();
+  };
+  handle.onpointercancel = handle.onlostpointercapture = clear;
+  handle.oncontextmenu = event => event.preventDefault();
+  handle.onkeydown = event => {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const down = event.key === 'ArrowDown';
+    move(down ? row.nextElementSibling : row.previousElementSibling, down);
+  };
+}
+
 function renderLayerRows() {
   const rows = $('layerRows'), activeLayer = $('layer');
   if (!rows) return;
   const focused = document.activeElement;
   const previous = new Map([...rows.children].map(row => [row.dataset.layer, row]));
   const visibilityLocked = !!(state.read_only || state.warning || state.password_required);
-  for (const [key, name, visible] of state.layers) {
+  for (const [index, [key, name, visible]] of state.layers.entries()) {
     let row = previous.get(key);
     if (!row) {
       row = document.createElement('div');
       row.className = 'layer-row';
       row.dataset.layer = key;
-      for (const className of ['layer-choice', 'layer-eye']) {
+      for (const className of ['layer-grip', 'layer-choice', 'layer-eye', 'layer-remove']) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = className;
         row.append(button);
       }
-      rows.append(row);
+      bindLayerReorder(row.firstChild, row);
     }
+    const current = rows.children[index];
+    if (current !== row) rows.insertBefore(row, current || null);
     previous.delete(key);
-    const [choose, eye] = row.children;
+    const [grip, choose, eye, remove] = row.children;
+    grip.textContent = '⠿';
+    grip.title = 'Hold and drag to move ' + name;
+    grip.setAttribute('aria-label', 'Move ' + name + ' with the Up or Down arrow');
+    grip.disabled = visibilityLocked || state.layers.length < 2;
+    remove.textContent = '−';
+    remove.title = 'Delete ' + name;
+    remove.setAttribute('aria-label', remove.title);
+    remove.disabled = grip.disabled;
+    remove.onclick = () => confirmLayerDeletion(key, name);
     const selected = activeLayer.value === key;
     choose.textContent = name;
     choose.setAttribute('aria-pressed', String(selected));
@@ -340,6 +445,14 @@ function paintBackground(target, image = $('pdfBackground')) {
   if (bounds) target.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height);
 }
 
+function invertPaper(target, width, height) {
+  target.save();
+  target.globalCompositeOperation = 'difference';
+  target.fillStyle = 'white';
+  target.fillRect(0, 0, width, height);
+  target.restore();
+}
+
 function fitLandscapePdf() {
   return $('zoom').value === 'fit' && !state.template_editable && !!state.background && innerWidth > innerHeight &&
     !document.body.classList.contains('notebook-laptop');
@@ -356,12 +469,14 @@ function draw(highlight = mode === 'ink' ? activeHighlight() : null, region = nu
   if (typeof imageRender === 'function') imageRender();
   clearDraft();
   ctx.clearRect(0, 0, state.width, state.height);
+  const dark = darkNotebookPaper();
   // Blend ink with the PDF in scene order. The same image behind the canvas
   // stays visible through holes made by the temporary eraser preview.
   if (state.background) {
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, state.width, state.height);
     paintBackground(ctx);
+    if (dark) invertPaper(ctx, state.width, state.height);
   }
   let visible = new Set(state.layers.filter(x => x[2]).map(x => x[0]));
   const items = sceneItems(selectionStrokes(), selectionPictures()).filter(s => visible.has(s.layer) && !wholeErasePreview.has(s.id));
@@ -374,7 +489,7 @@ function draw(highlight = mode === 'ink' ? activeHighlight() : null, region = nu
       });
   if (pendingInk) items.push(pendingInk);
   if (highlight) items.push(highlight);
-  paintOrderedInk(items, ctx, true, region);
+  paintOrderedInk(items, ctx, true, region, null, dark);
   if (mode === 'capture' && points.length && !imageGesture) {
     ctx.save(); ctx.strokeStyle='#2877cb'; ctx.lineWidth=3; ctx.setLineDash([8,6]); ctx.beginPath(); ctx.moveTo(points[0][0],points[0][1]); for(const p of points.slice(1))ctx.lineTo(p[0],p[1]); ctx.stroke(); ctx.restore()
   }

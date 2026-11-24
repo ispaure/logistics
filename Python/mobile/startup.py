@@ -133,10 +133,10 @@ def load_startup_models(root, workspace_root):
                 source_revision=store._recovery_revision(store.path(key, '.data')))
         except (OSError, ValueError, KeyError, TypeError):
             continue
-    if preferences.values['clear_unmodified_documents_on_restart'] == 'true':
+    restart = preferences.values['document_restart']
+    if restart != 'keep_open':
         for session in list(workspace.sessions.values()):
-            if (preferences.values['restore_last_document'] == 'true'
-                    and session.id == workspace.active):
+            if restart == 'resume' and session.id == workspace.active:
                 continue
             if session.provider == 'managed-text':
                 info = display.get(session.resource)

@@ -23,6 +23,30 @@ ARCHIVE_SUFFIXES = frozenset({'.zip', '.cbz', '.epub'})
 PREVIEW_SUFFIXES = DIRECT_IMAGE_SUFFIXES | ARCHIVE_SUFFIXES | {'.pdf', '.rmdoc'}
 
 
+def dark_notebook_thumbnails(app):
+    preferences = getattr(app.preferences, 'feature_preferences', app.preferences)
+    appearance = preferences.values.get('notebook_paper_appearance', 'system')
+    if appearance != 'system':
+        return appearance == 'dark'
+    backend = type(app._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        window = getattr(app, '_main_window', None)
+        return window is not None and window._impl.native.traitCollection.userInterfaceStyle == 2
+    if backend.startswith('toga_android.'):
+        from .appearance import native_theme_configuration
+        return native_theme_configuration(app) == 0x20
+    return False
+
+
+def refresh_notebook_thumbnails(app):
+    dark = dark_notebook_thumbnails(app)
+    browser = getattr(app, 'file_browser', None)
+    if browser is not None:
+        browser.refresh_notebook_thumbnails(dark)
+    for media in tuple(getattr(app, '_notebook_card_media', ())):
+        media.refresh_notebook_thumbnails(dark)
+
+
 @lru_cache(maxsize=1)
 def local_image_bridge():
     # The descriptor/image bridge works even with Connections disabled or locked.
@@ -32,8 +56,9 @@ def local_image_bridge():
 
 class LocalThumbnails:
     """An offline provider snapshot, scoped to the browser's access and revision."""
-    def __init__(self, provider, client, password):
+    def __init__(self, provider, client, password, *, dark_notebooks=False):
         self.provider, self.client, self.password = provider, client, password
+        self.dark_notebooks = dark_notebooks
         capabilities = getattr(provider, 'document_capabilities', None)
         self.private = getattr(provider, 'private', False)
         self.enabled = (isinstance(provider, LocalFiles)
@@ -83,7 +108,7 @@ class LocalThumbnails:
                     data = resource.read(cancelled=cancelled)
                 if suffix == '.rmdoc':
                     from features.notebooks.thumbnail import notebook_thumbnail
-                    data = notebook_thumbnail(data, max(size), cancelled=cancelled)
+                    data = notebook_thumbnail(data, max(size), cancelled=cancelled, dark=self.dark_notebooks)
                 else:
                     data = PDFDocument.render_page(data, 0, edge=max(size))
             else:

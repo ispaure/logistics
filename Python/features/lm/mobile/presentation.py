@@ -144,8 +144,8 @@ def transcript_document(*, theme_css=""):
 <style>
 ''' + theme_css + TRANSCRIPT_CSS + '''
 :root { --ink:var(--text); --user:var(--hover); --line:var(--control_border) }
-html { min-height:100%; background:var(--window) }
-* { box-sizing:border-box } body { margin:0; padding:8px 4px 12px; background:var(--window); color:var(--ink); font:16px/1.5 system-ui; overflow-wrap:anywhere }
+html { min-height:100%; background:var(--chat_background) }
+* { box-sizing:border-box } body { margin:0; padding:8px 4px 12px; background:var(--chat_background); color:var(--ink); font:16px/1.5 system-ui; overflow-wrap:anywhere }
 main { max-width:780px; margin:auto } article { margin:0 0 12px; padding:12px 16px; border:1px solid var(--border); border-radius:16px; background:var(--surface) }
 article.user { width:fit-content; max-width:84%; margin-left:auto; padding:12px 16px; border-radius:16px; background:var(--user) }
 .role { color:var(--muted); font-size:.8em; margin-bottom:10px }
@@ -156,8 +156,8 @@ pre { padding:12px; background:var(--user); border-radius:8px; white-space:pre-w
 h1,h2,h3,h4,h5,h6 { font-size:1.15em; margin:16px 0 8px } .muted { color:var(--muted) }
 .copy { min-height:48px; min-width:48px; padding:8px 12px; border:1px solid var(--control_border); border-radius:8px; background:transparent; color:var(--text); font:inherit; font-size:.75em }
 button { touch-action:manipulation } button:focus-visible { outline:2px solid var(--accent) }
-#latest { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); padding:10px 16px; min-height:48px; border:1px solid var(--line); border-radius:24px; background:var(--window); color:var(--ink); font:inherit; font-size:.8em }
-#empty { padding:12vh 16px 24px; text-align:center } #empty h1 { font-size:1.25em; margin:0 0 8px } #copy-status { position:fixed; bottom:0; background:var(--window); color:var(--ink); font-size:.8em }
+#latest { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); padding:10px 16px; min-height:48px; border:1px solid var(--line); border-radius:24px; background:var(--chat_background); color:var(--ink); font:inherit; font-size:.8em }
+#empty { padding:12vh 16px 24px; text-align:center } #empty h1 { font-size:1.25em; margin:0 0 8px } #copy-status { position:fixed; bottom:0; background:var(--chat_background); color:var(--ink); font-size:.8em }
 </style></head><body><main id="messages" aria-label="Conversation"></main>
 <section id="empty"><h1>Start a conversation</h1><p class="muted" id="hint">Write a message below.</p></section>
 <button id="latest" hidden>Latest message ↓</button><div id="copy-status" role="status"></div></body></html>'''

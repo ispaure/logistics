@@ -213,7 +213,9 @@ class EditorPicker(DestinationForm):
 
     def visible(self, body=None):
         from .routes import contains
-        return self.panel is not None and contains(body or self.app.body, self.panel)
+        templates = getattr(self.creation_layout, 'template_panel', None)
+        panel = templates if templates is not None else self.panel
+        return panel is not None and contains(body or self.app.body, panel)
 
     def _restore_origin(self, origin):
         app = self.app
@@ -362,8 +364,10 @@ class EditorPicker(DestinationForm):
 
     def destination_storage(self, destination_action, *, include_encrypted=True):
         action = getattr(destination_action, 'kind', '')
-        roots = (self.app.file_roots if destination_action is not None and action != 'download'
-                 else self.app.ordinary_file_roots(include_collections=action != 'download'))
+        roots = (getattr(self.app, 'file_roots', None)
+                 if destination_action is not None and action != 'download' else None)
+        if roots is None:
+            roots = self.app.ordinary_file_roots(include_collections=action != 'download')
         if not include_encrypted:
             from commonUtils.runtime.resources.local import LocalFiles
             roots = {label: provider for label, provider in roots.items()
@@ -532,6 +536,8 @@ class EditorPicker(DestinationForm):
     async def choose_creation_location(self, widget=None, **kwargs):
         if self.cloud_busy or self.name_panel is None or not self.visible():
             return
+        if self.creation_layout.template_panel is not None:
+            return
         if self.panel is self.location_panel and self.creation_layout.paired:
             from .keyboard import dismiss_picker_keyboard
             dismiss_picker_keyboard(self)
@@ -568,6 +574,15 @@ class EditorPicker(DestinationForm):
     def select_notebook_template(self, operation, template, paper_format):
         if self.operation is operation and self._work is None:
             operation.notebook_template, operation.notebook_format = template, paper_format
+            from features.notebooks.templates import CATALOG, FORMATS
+            self.notebook_template_button.text = f'First page template · {CATALOG[template]} · {FORMATS[paper_format]}'
+
+    def show_notebook_template_panel(self, widget=None, **kwargs):
+        if (not self.cloud_busy and self.visible() and self.creation_layout is not None
+                and self._creation_extension() == 'rmdoc'):
+            from .keyboard import dismiss_picker_keyboard
+            dismiss_picker_keyboard(self)
+            self.creation_layout.open_templates()
 
     def picker_extensions(self):
         if self.operation.destination_action is not None:
@@ -772,9 +787,13 @@ class EditorPicker(DestinationForm):
                 elif self._accepts(work):
                     self._finish_work(work)
                     self.clear()
-                    await self.app.show_files()
-                    await self.app.browse_files()
-                    self.app.file_status.value = 'Move finished.'
+                    if action.on_complete is not None:
+                        self.return_from_destination_picker()
+                        await action.on_complete('Move finished.')
+                    else:
+                        await self.app.show_files()
+                        await self.app.browse_files()
+                        self.app.file_status.value = 'Move finished.'
         except (OSError, ValueError) as error:
             if self._accepts(work):
                 self.save_as_status.value = str(error)[:250]
@@ -807,11 +826,13 @@ class EditorPicker(DestinationForm):
                 return
             self._finish_work(work)
             self.clear()
-            self.return_from_archive_picker()
+            self.return_from_destination_picker()
             if action.kind == 'archive-add':
                 action.workspace.status.text = action.workspace.message
             elif action.kind == 'archive-extract':
                 action.workspace.status.text = 'Extracted to ' + result.name
+            elif action.on_complete is not None:
+                await action.on_complete('Created ' + result.name)
             else:
                 await self.app.browse_files()
                 self.app.file_status.value = 'Created ' + result.name
@@ -822,7 +843,7 @@ class EditorPicker(DestinationForm):
         finally:
             self._finish_work(work)
 
-    def return_from_archive_picker(self):
+    def return_from_destination_picker(self):
         adaptive = self.app.adaptive
         if self.app.native_host.state.destination == 'documents' and adaptive.split is not None:
             adaptive.trim_details(max(0, len(adaptive.detail_routes) - 1))
@@ -1124,9 +1145,10 @@ class EditorPicker(DestinationForm):
             self.clear()
             if visible:
                 if destination_action is not None:
-                    if destination_action.kind in ACTION_KINDS:
-                        return None if dismissed else self.return_from_archive_picker()
-                    if getattr(destination_action, 'kind', '') == 'download':
+                    kind = destination_action.kind
+                    if kind in ACTION_KINDS or (kind == 'move-selection' and destination_action.on_complete is not None):
+                        return None if dismissed else self.return_from_destination_picker()
+                    if kind == 'download':
                         # UIKit may already have popped this form; direct Back
                         # and Cancel still need to retire it exactly once.
                         return None if dismissed else self.app.routes.back()

@@ -338,7 +338,7 @@ class NotesLibraryTests(unittest.TestCase):
             for name in ('Current.md', 'Image.png', 'Data.json', 'Unknown.bin'):
                 self.assertTrue(await owner.open_note('Vault/Projects/Plain/' + name))
                 owner.reflow(1400)
-                crumbs = [child for child in owner.breadcrumbs.children if isinstance(child, toga.Box)]
+                crumbs = [child for child in owner.breadcrumbs.children[:-1] if isinstance(child, toga.Box)]
                 links = [crumb.children[1] for crumb in crumbs]
                 self.assertEqual([child.breadcrumb_path for child in links],
                                  ['Vault/Projects/Projects.md', None])
@@ -346,7 +346,10 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertEqual([link.text for link in links], ['Projects', 'Plain'])
                 self.assertEqual([crumb.children[0].browser_entry_kind for crumb in crumbs],
                                  ['folder_document', 'folder'])
-                self.assertEqual(owner.breadcrumbs.children[-1].browser_entry_kind, 'file')
+                icon, filename = owner.breadcrumbs.children[-1].children
+                self.assertEqual(icon.browser_entry_kind, 'file')
+                self.assertIsInstance(filename, toga.Label)
+                self.assertEqual(filename.text, name)
             owner.reflow(390)
             for index in (1, 3):
                 separator = owner.breadcrumbs.children[index]
@@ -375,6 +378,7 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertEqual(owner.history, history)
             await owner.previous_note()
             self.assertEqual(owner.path, 'Vault/Projects/Plain/Unknown.bin')
+            self.assertEqual(owner.breadcrumbs.children[-1].children[1].text, 'Unknown.bin')
             self.assertTrue(await owner.open_note(self.provider.relative(deep / 'Current.md')))
             owner.reflow(220)
             self.assertEqual(owner.breadcrumbs.children[-3].children[1].text, 'Nested')
@@ -389,7 +393,10 @@ class NotesLibraryTests(unittest.TestCase):
             with patch('features.notes_library.notes.can_write', return_value=False):
                 owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
                 self.assertTrue(await owner.open_note('Vault/Home.md'))
-                self.assertEqual([child.browser_entry_kind for child in owner.breadcrumbs.children], ['file'])
+                current, = owner.breadcrumbs.children
+                icon, filename = current.children
+                self.assertEqual(icon.browser_entry_kind, 'file')
+                self.assertEqual(filename.text, 'Home.md')
                 for apple in (False, True):
                     owner.host = replace(owner.host, apple=apple)
                     for width in (320, 834, 390):
@@ -411,7 +418,7 @@ class NotesLibraryTests(unittest.TestCase):
             owner = await open_vault(self.app, LocalFiles(self.vault), '', 'documents')
             self.assertTrue(await owner.open_note(parent + '/Plan.md'))
             owner.reflow(320)
-            links = [child.children[1] for child in owner.breadcrumbs.children if isinstance(child, toga.Box)]
+            links = [child.children[1] for child in owner.breadcrumbs.children[:-1] if isinstance(child, toga.Box)]
             self.assertEqual([child.text for child in links], parent.split('/'))
             self.assertEqual(links[0].breadcrumb_folder, 'Projects')
             self.assertGreater(sum(child.style.width for child in links), owner._breadcrumb_width)
@@ -1353,10 +1360,15 @@ class NotesLibraryTests(unittest.TestCase):
             await self.app._notes_discovery_task
             from mobile_build.tests.workspace.test_hub_documents import widgets
             button = next(child for child in widgets(self.app.document_notes_list)
-                          if getattr(child, 'text', '') == 'Notes' and hasattr(child, '_source_caption'))
-            self.assertEqual(button._source_caption.children[-1].text, 'Local library')
+                          if isinstance(child, toga.Button) and child.text == 'Notes')
+            self.assertFalse(hasattr(button, '_source_caption'))
             self.assertIsNotNone(button.parent)
-            await button.on_press()
+            with patch.object(self.app.adaptive, 'content_width', return_value=900):
+                self.app.adaptive.render()
+                hub = self.app.hub_controller()
+                self.assertEqual(hub._document_collection_body.style.direction, 'row')
+                await button.on_press()
+                self.assertIsNone(hub.visible_library_drawer())
             owner = self.app.vault_browser
             self.assertEqual(self.app.native_host.state.destination, 'documents')
             self.assertEqual(owner.session.provider, 'notes-library')

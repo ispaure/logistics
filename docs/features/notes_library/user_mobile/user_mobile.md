@@ -12,7 +12,7 @@ Discovery checks the storage root and two levels down for `.noteslibrary` or `.o
 
 - Use **New Document** for Markdown or Remarkable Document. Pick a name and folder inside the library. Tap the pencil to edit a note. **Contents…** jumps to headings, **Find / replace…** opens Source search, and **Properties…** or **Edit YAML…** edits draft frontmatter. See the [mobile editor](../../text_editor/user_mobile/user_mobile.md).
 - Save, discard or cancel before leaving an edited note. A failed save keeps the draft. Markdown is limited to 16 MiB. Above 1 MiB, use Source editing. For notebooks, **Note actions → Save a copy…** exports a separate editable copy.
-- In **Files**, tap a folder name to open `Folder/Folder.md` or tap its arrow to expand. Tap the breadcrumb to open a landing note or reveal its folder. Swipe along the breadcrumb to reach earlier folders.
+- In **Files**, tap a folder name to open `Folder/Folder.md` or tap its arrow to expand. The breadcrumb ends with the current filename. Tap a folder in the breadcrumb to open its landing note or reveal the folder. Swipe along the breadcrumb to reach earlier folders.
 - Hold an entry or tap **…** for **Rename…**, **Move…**, **Copy…** and **Delete…**. Existing destinations are protected. Renaming a folder also renames its matching landing note. File links keep their original paths. Confirmed deletion permanently removes the selected entry and its contents.
 - Open supported source files and use **••• → Save** or **Find / replace…**. PDFs scroll, videos open the native player and Markdown embeds play inline or with **Play fullscreen video**. See [source types and limits](../user/user.md#embedded-source-files-in-notes-library) and [data views](../user/user.md#json-data-views-in-notes-library).
 

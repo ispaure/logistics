@@ -313,8 +313,8 @@ class ShowInFolderTests(TestCase):
         self.path = self.folder / 'note.txt'
         self.path.write_text('Keep my draft')
 
-    def test_parent_list_is_mounted_before_pop_while_refresh_is_blocked(self):
-        from mobile.browser_ui import FileBrowser
+    def test_parent_preview_uses_current_mode_before_pop_while_refresh_is_blocked(self):
+        from mobile.file_browser_view import LocalFileBrowser
         from services.documents.locations import CollectionFiles
         app = self.app
         host = NativeNavigationHost(DESTINATION_ITEMS)
@@ -325,7 +325,7 @@ class ShowInFolderTests(TestCase):
         routes = owner.routes = MobileRoutes(owner, host, guard=lambda: True, changed=Mock())
         navigation = [Navigation() for _ in host.destinations]
         def push(destination, panel, title):
-            controller = SimpleNamespace(title=title)
+            controller = SimpleNamespace(title=title, view=SimpleNamespace(), transitionCoordinator=None)
             navigation[host.destinations.index(destination)].viewControllers.append(controller)
             return SimpleNamespace(controller=controller)
         host.adapter = SimpleNamespace(navigation=navigation, push=push,
@@ -334,7 +334,7 @@ class ShowInFolderTests(TestCase):
             route_depth=lambda nav: len(nav.viewControllers) - 1,
             containers=[(None, nav.viewControllers[0]) for nav in navigation], release_pane=Mock())
         provider = CollectionFiles(app.private_root)
-        browser = FileBrowser()
+        browser = LocalFileBrowser()
         view = toga.Box(children=[browser.scroll_container()])
         view._folder_entry_location = ('Local files', 'Projects')
         release = asyncio.Event()
@@ -348,14 +348,27 @@ class ShowInFolderTests(TestCase):
             record(owner, view, browser, 'browser', 'Local files', 'Projects', navigate)
             routes.show(view, destination='files', route='browser')
             routes.folders.capture()
-            parent = routes.screens['files'][0][1]
-            entry = routes.folders.screens['files', routes.screens['files'][0][0]]
+            parent_route, parent, pane = routes.screens['files'][0]
+            entry = routes.folders.screens['files', parent_route]
             preview = entry.preview
             self.assertIsNone(preview.task)
             browser.set_entries(provider, 'Projects/Reports', provider.list('Projects/Reports'))
             record(owner, view, browser, 'browser', 'Local files', 'Projects/Reports', navigate)
             self.assertIs(parent.children[0], preview.view)
+            self.assertIs(preview.browser.mounted_listing(), preview.browser.native_list)
             self.assertEqual([item.label for item in preview.browser.entries], ['Reports'])
+            entry.snapshot = snapshot = Mock()
+            nav = host.adapter.navigation_for('files')
+            nav.transitionCoordinator = None
+            with patch('mobile.appearance.apple_color', return_value='window'):
+                for mode, listing in (('Tiles', preview.browser._tile_scroll),
+                                      ('List', preview.browser.native_list),
+                                      ('Tiles', preview.browser._tile_scroll)):
+                    browser.switch_view()
+                    routes.folders.prepare_transition(nav, pane.controller, animated=True)
+                    self.assertEqual(preview.browser.mode, mode)
+                    self.assertIs(preview.browser.mounted_listing(), listing)
+            snapshot.removeFromSuperview.assert_called_once_with()
             routes.back()
             await asyncio.sleep(0)
             self.assertFalse(routes.folders.task.done())
@@ -364,6 +377,7 @@ class ShowInFolderTests(TestCase):
             release.set()
             await routes.folders.task
             self.assertIs(routes.body().children[0], view)
+            self.assertIs(browser.mounted_listing(), browser._tile_scroll)
             routes.trim('files', 0)
             await browser.close()
             await asyncio.sleep(0)

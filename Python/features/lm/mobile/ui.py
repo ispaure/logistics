@@ -15,7 +15,7 @@ import inspect
 import time
 import toga
 from toga.style import Pack
-from toga.style.pack import CENTER, COLUMN, ROW, END, NONE, PACK
+from toga.style.pack import COLUMN, ROW, END, NONE, PACK
 
 from features.lm.domain import conversation, validate_settings
 from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
@@ -85,7 +85,7 @@ class ChatUI(ChatSettingsPanel):
         self.chat_transcript = ChatTranscript(on_navigation_starting=self.chat_transcript_navigation,
             on_webview_load=self.chat_transcript_loaded, style=Pack(flex=1))
         self.presentation.bind_font(self.chat_transcript, 'markdown', web=True)
-        self.presentation.surface(self.chat_transcript, radius=0, background='window', outlined=False)
+        self.presentation.surface(self.chat_transcript, radius=0, background='chat_background', outlined=False)
         self.chat_prompt = toga.MultilineTextInput(on_change=self.chat_draft_changed,
             placeholder='Message…', style=Pack(flex=1, height=52, margin=4, margin_left=12))
         self.presentation.bind_font(self.chat_prompt, 'markdown')
@@ -134,21 +134,19 @@ class ChatUI(ChatSettingsPanel):
             style=Pack(direction=COLUMN, flex=1))
         self.presentation.surface(self.chat_prompt, radius=12, background='surface', foreground='text', outlined=False)
         self.presentation.surface(self.chat_send, radius=12, background='text', foreground='window', outlined=False)
-        self.presentation.surface(self.chat_status, radius=0, background='window', foreground='muted', outlined=False)
+        self.presentation.surface(self.chat_status, radius=0, background='chat_background', foreground='muted', outlined=False)
         self.chat_messages = toga.Box(children=[self.chat_transcript_card, self.chat_status_box, self.chat_composer],
             style=Pack(direction=COLUMN, flex=1))
         self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
         self.chat_drawer_open = self.adaptive.width() >= 640
         leading = [self.chat_menu_button, self.chat_header_new, self.chat_drawer_settings]
-        self.chat_header_actions = toga.Box(children=[*leading, self.chat_actions_button],
-            style=Pack(direction=ROW, align_items=CENTER))
-        self.chat_header = toga.Box(children=[self.chat_header_actions], style=Pack(direction=ROW))
+        self.chat_header = toga.Box(style=Pack(direction=ROW))
         self.chat_view = toga.Box(children=[self.chat_header, self.chat_workspace],
             style=Pack(direction=COLUMN, margin=(12, 12, COMPOSER_BOTTOM_GAP), flex=1))
-        self.presentation.surface(self.chat_view, radius=0, background='window', outlined=False)
-        self.chat_view._ios_toolbar_buttons = [self.chat_actions_button]
-        self.chat_view._ios_toolbar_leading = leading
-        self.chat_view._ios_toolbar_hidden = [self.chat_header_actions]
+        self.presentation.surface(self.chat_view, radius=0, background='chat_background', outlined=False)
+        self.chat_view._chat_destination_header = self.chat_header
+        self.chat_view._chat_destination_buttons = (*leading, self.chat_actions_button)
+        self.adaptive.prepare(self.chat_view, 'chat', root=True)
         from .laptop import LaptopChat
         self.laptop = LaptopChat(self)
 
@@ -301,12 +299,12 @@ class ChatUI(ChatSettingsPanel):
 
     def sync_chat_appearance(self):
         """Match the navigation/status area to Chat without moving its menu."""
+        self.presentation.surface(self.routes.roots['chat'], radius=0, background='chat_background', outlined=False)
         if not self.routes.apple:
             return
         from rubicon.objc import ObjCClass
-        self.presentation.surface(self.routes.roots['chat'], radius=0, background='window', outlined=False)
         navigation = self.native_host.adapter.navigation[self.native_host.destinations.index('chat')]
-        color = self.presentation.apple_color('window')
+        color = self.presentation.apple_color('chat_background')
         navigation.view.backgroundColor = color
         bar = navigation.navigationBar
         if not hasattr(self, 'chat_bar_appearance'):

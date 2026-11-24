@@ -29,15 +29,29 @@ class MobileHubTests(unittest.TestCase):
             store = Preferences(root)
             self.assertFalse(store.path.exists())
             with patch('os.link', side_effect=PermissionError('No hard links')):
-                store.save(font_size='20', restore_last_document='false', last_document='a' * 32)
+                store.save(font_size='20', document_restart='home')
             loaded = Preferences(root)
             self.assertEqual(loaded.values['font_size'], '20')
-            self.assertEqual(loaded.values['last_document'], 'a' * 32)
-            self.assertEqual(loaded.values['restore_last_document'], 'false')
+            self.assertEqual(loaded.values['document_restart'], 'home')
             data = store.path.read_bytes()
             with self.assertRaises(ValueError):
                 loaded.save(font_size='200')
             self.assertEqual(store.path.read_bytes(), data)
+
+    def test_old_restart_switches_migrate_to_one_choice(self):
+        for close, restore, mode in (
+                ('true', 'true', 'resume'), ('true', 'false', 'home'),
+                ('false', 'true', 'keep_open'), ('false', 'false', 'keep_open')):
+            with self.subTest(close=close, restore=restore), TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                store = Preferences(root)
+                store.path.write_text('[Mobile]\nnotes_library_migrated=true\n'
+                                      f'clear_unmodified_documents_on_restart={close}\n'
+                                      f'restore_last_document={restore}\n')
+                store.reload()
+                self.assertEqual(store.values['document_restart'], mode)
+                store.save(document_restart='resume')
+                self.assertEqual(Preferences(root).values['document_restart'], 'resume')
 
     def test_legacy_visibility_never_survives_restart_or_save(self):
         with TemporaryDirectory() as directory:
@@ -71,7 +85,7 @@ class MobileHubTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 store.save(font_size='20')
             store.reload()
-            store.save(restore_last_document='false')
+            store.save(document_restart='home')
             self.assertIn('; retained comment', store.path.read_text())
             self.assertIn('keep=yes', store.path.read_text())
             store.path.write_bytes(b'not an INI\xff')

@@ -107,7 +107,8 @@ class NotebookPanel:
         self.view._canvas_document_title = True
         self.view._notebook_dom_toolbar_contract = app.presentation.notebook_toolbar_clearance
         from services.documents.mobile_notebooks import install_notebook_controls
-        install_notebook_controls(self)
+        if native_backend(self.view).startswith('toga_iOS.'):
+            install_notebook_controls(self)
         self._release_protection = app.protection.register(self, self.privacy_gates)
         if library:
             self.library()
@@ -264,8 +265,18 @@ class NotebookPanel:
     def paper_preview(self):
         return self.app.preferences.values.get('notebook_paper_preview', 'true') == 'true'
 
+    @property
+    def paper_appearance_preferences(self):
+        preferences = self.app.preferences
+        return getattr(preferences, 'feature_preferences', preferences)
+
+    @property
+    def paper_appearance(self):
+        return self.paper_appearance_preferences.values.get('notebook_paper_appearance', 'system')
+
     def state(self):
         state = document_state(self.editor, self.document)
+        state['brush_intensities'] = self.editor.brush_intensities
         state['eraser_kind'] = self.editor.eraser_kind
         state['brush_preset_limit'] = TOOLBAR_PRESET_LIMIT
         state['brush_presets'] = read_presets(self.app.preferences.values.get(BRUSH_PRESETS, '[]'))
@@ -277,6 +288,8 @@ class NotebookPanel:
         state['native_close'] = hasattr(self.view, '_native_reader_buttons')
         state['native_actions'] = hasattr(self, 'native_actions')
         state['canvas_header'] = True
+        state['notebook_title_layout'] = getattr(self.view, '_notebook_title_layout', 'auto')
+        state['paper_appearance'] = self.paper_appearance
         from services.documents.mobile_notebooks import notebook_storage_identity
         state['storage_status'], state['storage_icons'] = notebook_storage_identity(self)
         state['notebook_viewport_insets'] = getattr(self.view, '_notebook_viewport_insets', (0, 0, 0))
@@ -435,8 +448,11 @@ class NotebookPanel:
                     Path(self.app.private_root) / 'notebook-input-diagnostics.json')
         self._brush_presets_sent = self.app.preferences.values.get(BRUSH_PRESETS, '[]')
         self._paper_preview_sent = self.paper_preview
+        state = self.state()
+        self._title_layout_sent = state['notebook_title_layout']
+        self._paper_appearance_sent = state['paper_appearance']
         set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(
-            self.state(), self.bridge.url, stylesheet=self.app.presentation.css_variables(),
+            state, self.bridge.url, stylesheet=self.app.presentation.css_variables(),
             paper_preview=self._paper_preview_sent))
 
     async def canvas_loaded(self, widget=None, **kwargs):
@@ -501,6 +517,14 @@ class NotebookPanel:
         async def update():
             try:
                 self.refresh_native_canvas_layout()
+                title_layout = getattr(self.view, '_notebook_title_layout', 'auto')
+                if title_layout != getattr(self, '_title_layout_sent', 'auto'):
+                    accepted = await web.evaluate_javascript(
+                        'window.notebookTitleLayout?.(' + json.dumps(title_layout) + ')')
+                    if self.web is not web or self.bridge is not bridge or self.closed:
+                        return
+                    if _input_true(accepted):
+                        self._title_layout_sent = title_layout
                 band = getattr(self.view, '_reader_top_band_state', None)
                 candidate = band.get('notebook_candidate') if band is not None else None
                 ready = getattr(self.view, '_notebook_dom_ready', None)
@@ -550,6 +574,12 @@ class NotebookPanel:
                         accepted = await web.evaluate_javascript('window.notebookRefreshPaperPreview?.(' + json.dumps(preview) + ')')
                         if self.web is web and self.bridge is bridge and _input_true(accepted):
                             self._paper_preview_sent = preview
+                    appearance = self.paper_appearance
+                    if appearance != getattr(self, '_paper_appearance_sent', None):
+                        accepted = await web.evaluate_javascript(
+                            'window.notebookRefreshPaperAppearance?.(' + json.dumps(appearance) + ')')
+                        if self.web is web and self.bridge is bridge and _input_true(accepted):
+                            self._paper_appearance_sent = appearance
                 if self.web is web and hasattr(self, '_brush_presets_sent'):
                     raw = self.app.preferences.values.get(BRUSH_PRESETS, '[]')
                     if raw != self._brush_presets_sent:
@@ -683,9 +713,26 @@ class NotebookPanel:
                                   + json.dumps(command.error) + ')', acknowledges=True)
             self._paper_preview_sent = preview
             return True
-        if op in ('brush-color', 'eraser-kind'):
+        if op == 'paper-appearance':
+            previous = self.paper_appearance
+            try:
+                if previous != action['appearance']:
+                    self.paper_appearance_preferences.save(notebook_paper_appearance=action['appearance'])
+            except (OSError, ValueError) as failure:
+                command.error = str(failure)
+            appearance = self.paper_appearance
+            if appearance != previous:
+                from mobile.browser_preview import refresh_notebook_thumbnails
+                refresh_notebook_thumbnails(self.app)
+            await command.respond('window.notebookPaperAppearanceUpdate(' + json.dumps(appearance) + ', '
+                                  + json.dumps(command.error) + ')', acknowledges=True)
+            self._paper_appearance_sent = appearance
+            return True
+        if op in ('brush-color', 'brush-intensity', 'eraser-kind'):
             if op == 'brush-color':
                 editor.brush_colors[action['tool']] = action['color']
+            elif op == 'brush-intensity':
+                editor.brush_intensities[action['tool']] = action['intensity']
             else:
                 editor.eraser_kind = action['kind']
             self._position_sequence = command.position_sequence
@@ -694,8 +741,9 @@ class NotebookPanel:
                 observation = progress.observe(notebook_progress_state(editor))
                 status = ('fenced' if observation is None else
                           await command.canvas.wait(asyncio.to_thread(progress.flush, observation)))
-            await command.respond(brush_color_script(status, 'eraser type' if op == 'eraser-kind' else 'brush color'),
-                                  acknowledges=True)
+            setting = {'brush-color': 'brush color', 'brush-intensity': 'brush intensity',
+                       'eraser-kind': 'eraser type'}[op]
+            await command.respond(brush_color_script(status, setting), acknowledges=True)
             return True
         if op == 'page-previews':
             previews = await command.canvas.wait(asyncio.to_thread(editor.page_previews, action['start']))

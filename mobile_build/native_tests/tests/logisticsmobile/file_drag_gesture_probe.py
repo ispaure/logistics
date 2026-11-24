@@ -116,8 +116,10 @@ class AndroidFileDragGestureProbe(NotebookProbe):
         start_native_check(self, type(self).check_android)
 
     async def check_android(self):
+        from commonUtils.formats.image_headers import image_header
         from commonUtils.testing.waiting import wait_until
         from mobile.native.file_drag_android import screen_origin
+        from .browser_thumbnail_checks import cached, png, preview_attached
 
         cache = Path(self.paths.cache)
         report = dict(success=False)
@@ -142,10 +144,12 @@ class AndroidFileDragGestureProbe(NotebookProbe):
             root = self.file_provider.root
             target = root / 'Drop destination'
             target.mkdir()
-            for name in ('List file.txt', 'Tile file.txt'):
-                (root / name).write_text(name)
+            files = {'List file.txt': b'List drag', 'Tile image.png': png(1600, (30, 100, 170))}
+            for name, data in files.items():
+                (root / name).write_bytes(data)
             browser = self.file_browser
-            assert browser.file_drag.context() is not None
+            await wait_until(lambda: browser.file_drag.context() is not None, timeout=15,
+                             message='The local File Browser did not become ready for drag.')
             original_actions = browser.on_item_actions
 
             def menu(row):
@@ -153,7 +157,7 @@ class AndroidFileDragGestureProbe(NotebookProbe):
                 original_actions(row)
 
             browser.on_item_actions = menu
-            for mode, filename in (('List', 'List file.txt'), ('Tiles', 'Tile file.txt')):
+            for mode, filename in zip(('List', 'Tiles'), files):
                 browser._show_mode(mode)
                 assert await self.browse_files()
                 await asyncio.sleep(.4)
@@ -162,24 +166,50 @@ class AndroidFileDragGestureProbe(NotebookProbe):
                     views = {row.title: impl.getChildAt(index - impl.getFirstVisiblePosition())
                              for index, row in enumerate(browser.native_list.data)}
                 else:
-                    for _, card, *_ in browser._tile_cards.values():
-                        preview = card.children[0]
-                        icon = preview.children[1].children[0]
+                    source = next(entry for entry in browser.entries if entry.label == filename)
+                    await wait_until(lambda: preview_attached(browser, source.identity), timeout=12)
+                    thumbnail = image_header(cached(browser, filename), max_bytes=1024 * 1024)
+                    assert thumbnail.width == browser._tile_thumbnail_size()[0] > 160
+                    report['tile_thumbnail_pixels'] = thumbnail.width
+                    views = {}
+                    for entry, card, *_ in browser._tile_cards.values():
+                        preview = card.children[-2]
+                        icon = preview.children[0]
                         actual = center(icon._impl.native)
                         expected = center(preview._impl.native)
                         assert all(abs(a - b) <= 2 for a, b in zip(actual, expected)), (actual, expected)
+                        views[entry.label] = icon._impl.native
                     report['tile_media_centered'] = True
-                    views = {entry.label: card.children[-1]._impl.native
+                    opened = []
+                    original_open = browser.on_open_file
+                    browser.on_open_file = lambda row: opened.append(row['path'])
+                    try:
+                        await request_input(gesture='tap', start=center(views[filename]))
+                        assert opened == [filename], opened
+                    finally:
+                        browser.on_open_file = original_open
+                    self.begin_file_selection()
+                    await asyncio.sleep(.2)
+                    image, _ = browser._tile_previews[source.identity]
+                    point = center(image._impl.native)
+                    await request_input(gesture='tap', start=point)
+                    assert browser.checked_entries == {source.identity}
+                    await request_input(gesture='tap', start=point)
+                    assert not browser.checked_entries
+                    self.end_file_selection()
+                    await wait_until(lambda: preview_attached(browser, source.identity), timeout=12)
+                    views = {entry.label: card.children[-2].children[0]._impl.native
                              for entry, card, *_ in browser._tile_cards.values()}
+                    report['tile_artwork_taps_open_and_select'] = True
                     await request_input(gesture='menu', start=center(views[filename]))
                     assert observed.exists(), 'Holding still did not invoke the tile menu'
                     report['tile_menu_opened'] = True
-                await request_input(gesture='drag', start=center(views[filename]),
+                await request_input(gesture='drag', layout=mode.lower(), start=center(views[filename]),
                                     target=center(views[target.name]))
                 await wait_until(lambda: (target / filename).is_file(), timeout=12,
                                  message='Android drag did not move ' + filename)
                 assert self.file_path == target.name, 'Dwell did not open the destination'
-                assert (target / filename).read_text() == filename and not (root / filename).exists()
+                assert (target / filename).read_bytes() == files[filename] and not (root / filename).exists()
                 report[mode.lower() + '_spring_open_and_move'] = True
                 assert await self.browser_file_location(('Local files', ''))
             report['success'] = True

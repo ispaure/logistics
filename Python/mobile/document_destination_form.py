@@ -220,6 +220,8 @@ class DestinationForm:
                                   style=Pack(direction=COLUMN, margin=20))
         if any(extension == 'rmdoc' for _, extension in self.creation_choices):
             from features.notebooks.mobile.setup import NotebookTemplateChoices
+            self.notebook_template_button = toga.Button('First page template', on_press=self.show_notebook_template_panel,
+                style=Pack(height=48, margin_top=8))
             self.notebook_templates = NotebookTemplateChoices(partial(self.select_notebook_template, operation))
             self.sync_notebook_templates()
         self.creation_formats = CreationFormats(self)
@@ -430,12 +432,11 @@ class DestinationForm:
         if controls is None:
             return
         enabled = self._creation_extension() == 'rmdoc'
-        if enabled and controls.parent is None:
-            self.name_view.add(controls)
-            controls.set_preview_active(True)
-        elif not enabled and controls.parent is self.name_view:
-            controls.set_preview_active(False)
-            self.name_view.remove(controls)
+        button = self.notebook_template_button
+        if enabled and button.parent is None:
+            self.name_view.insert(2, button)
+        elif not enabled and button.parent is self.name_view:
+            self.name_view.remove(button)
 
     def present_picker_location(self, label, folder, *, has_parent, private, suggest_creation):
         if self.creation is not None:

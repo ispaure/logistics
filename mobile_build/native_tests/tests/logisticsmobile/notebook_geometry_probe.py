@@ -22,19 +22,22 @@ from .notebook_acceptance_checks import signature
 from .notebook_probe import NotebookProbe
 from .rotation_checks import rotate
 from .web_checks import wait_for_text
+from .fixtures import capture_window, choose_creation_type
 
 
 async def wait_for_form(web):
     deadline = monotonic() + 15
+    observed = {}
     while monotonic() < deadline:
-        ready = await web.evaluate_javascript(
-            "JSON.stringify(!!$('pdfBackground').naturalWidth && resizeFrame === null && !viewportResizePending"
-            " && viewportZoomMemory?.layout === viewportLayoutKey())"
-        )
-        if json.loads(ready):
+        observed = json.loads(await web.evaluate_javascript("""JSON.stringify({
+            artwork:!!$('pdfBackground').naturalWidth, queued:resizeFrame !== null,
+            pending:viewportResizePending, measured:viewportZoomMemory?.layout, current:viewportLayoutKey()
+        })"""))
+        if (observed['artwork'] and not observed['queued'] and not observed['pending']
+                and observed.get('measured') == observed['current']):
             return
         await asyncio.sleep(.1)
-    raise AssertionError('Notebook form layout did not settle')
+    raise AssertionError(f'Notebook form layout did not settle: {observed}')
 
 
 MEASURE = """JSON.stringify((()=>{
@@ -45,6 +48,19 @@ MEASURE = """JSON.stringify((()=>{
     scrollLeft:$('viewport').scrollLeft, scrollTop:$('viewport').scrollTop,
     mark:coord({clientX:r.left+600*s,clientY:r.top+173*r.height/state.height,
       pointerType:'mouse'}).slice(0,2), ink:state.strokes[0].points[0].slice(0,2)};
+})())"""
+
+TOOLBAR = """JSON.stringify((()=>{
+  const header=document.querySelector('header'), dock=header.querySelector('.mobile-dock');
+  const title=$('notebookIdentity').getBoundingClientRect(), brush=$('brushToggle').getBoundingClientRect();
+  const bounds=dock.getBoundingClientRect(), tools=[...dock.querySelectorAll('button')].filter(b=>!b.hidden);
+  return {layout:header.dataset.titleLayout, titleVisible:!!title.width,
+    beside:title.right<=brush.left && Math.abs(title.y-brush.y)<=4,
+    above:title.bottom<=brush.top, count:tools.length, fits:tools.every(b=>{
+      const r=b.getBoundingClientRect();
+      return r.width>=44 && r.height>=44 && r.top===brush.top &&
+        r.left>=bounds.left && r.right<=bounds.right;
+    })};
 })())"""
 
 
@@ -65,7 +81,29 @@ class NotebookGeometryProbe(NotebookProbe):
                 await task
             app.show_home()
             app.set_feature_enabled('notebooks', True, refresh=False)
+            captures = Path(self.paths.cache) / 'notebook-ui'
+            captures.mkdir(exist_ok=True)
+            await choose_creation_type(app, 'rmdoc')
+            picker = app.editor_picker()
+            picker.show_notebook_template_panel()
+            layout, controls = picker.creation_layout, picker.notebook_templates
+            assert layout.template_panel is not None and controls.parent is layout.template_fields
+            controls.set_selection('Logistics Restaurant review', 'move')
+            for _ in range(80):
+                if controls.preview.image is not None:
+                    break
+                await asyncio.sleep(.05)
+            assert controls.preview.image is not None
+            report_layout = 'list' if controls.template_list.parent is controls.choices else 'dropdown'
+            await capture_window(self, captures / 'new-notebook-template.png')
+            layout.close_templates(apply=True)
+            assert 'Restaurant review' in picker.notebook_template_button.text
+            picker.cancel_text_destination()
+            result['creation_template_layout'] = report_layout
             assert await open_notebook(app)
+            from features.notebooks.mobile.brush_presets import PREFERENCE
+            app.preferences.values[PREFERENCE] = json.dumps([
+                dict(id='blue', brush=[17, 6, 2]), dict(id='yellow', brush=[18, 13, 1])])
             root = collection_path(app.private_root)
             root.mkdir(parents=True, exist_ok=True)
             for form, paper_format, bounds in [
@@ -86,9 +124,47 @@ class NotebookGeometryProbe(NotebookProbe):
                         assert await open_notebook(app, path=source)
                     panel = app.notebook_panel
                     await wait_for_text(panel.web, book.name)
-                    for orientation in ('portrait', 'landscape-left', 'portrait'):
+                    for index, orientation in enumerate(('portrait', 'landscape-left', 'portrait')):
                         await rotate(app, orientation)
                         await wait_for_form(panel.web)
+                        if form == 'Restaurant review' and paper_format == 'move' and stage == 'reopen':
+                            toolbar = json.loads(await panel.web.evaluate_javascript(TOOLBAR))
+                            result.setdefault('toolbar', []).append(dict(orientation=orientation, **toolbar))
+                            await capture_window(self, captures / f'notebook-toolbar-{index}.png')
+                            if type(panel.web._impl).__module__.startswith('toga_iOS.'):
+                                layout = panel.view._notebook_title_layout
+                                assert toolbar['layout'] == layout, toolbar
+                                controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
+                                if layout == 'native':
+                                    assert not toolbar['titleVisible'], toolbar
+                                    assert controller.navigationItem.titleView == panel.view._document_title_view
+                                elif layout == 'inline':
+                                    assert toolbar['titleVisible'] and toolbar['beside'], toolbar
+                                else:
+                                    assert layout == 'stacked' and toolbar['titleVisible'] and toolbar['above'], toolbar
+                                    assert toolbar['count'] == 7 and toolbar['fits'], toolbar
+                            if index == 0:
+                                await panel.web.evaluate_javascript("window.notebookNativeAction('view');"
+                                    "$('paperAppearance').value='dark';$('paperAppearance').dispatchEvent(new Event('change'));true")
+                                for _ in range(40):
+                                    if await panel.web.evaluate_javascript("window.notebookIdle() && darkNotebookPaper()"):
+                                        break
+                                    await asyncio.sleep(.05)
+                                assert panel.paper_appearance == 'dark'
+                                assert await panel.web.evaluate_javascript("window.notebookIdle() && darkNotebookPaper()")
+                                assert signature(panel.editor.notebook) == original
+                                await capture_window(self, captures / 'notebook-dark-paper.png')
+                                await panel.web.evaluate_javascript("$('paperAppearance').value='system';"
+                                    "$('paperAppearance').dispatchEvent(new Event('change'));true")
+                                for _ in range(40):
+                                    if await panel.web.evaluate_javascript(
+                                            "window.notebookIdle() && $('paperAppearance').value === 'system'"):
+                                        break
+                                    await asyncio.sleep(.05)
+                                assert panel.paper_appearance == 'system'
+                                await panel.web.evaluate_javascript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));true")
+                                assert await panel.web.evaluate_javascript("$('mobileSheet').hidden")
+                                result['paper_appearance'] = True
                         value = json.loads(await panel.web.evaluate_javascript(MEASURE))
                         result['cases'].append(dict(form=form, format=paper_format, stage=stage,
                                                     orientation=orientation, **value))

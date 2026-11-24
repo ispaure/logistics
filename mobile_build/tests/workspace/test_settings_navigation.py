@@ -93,7 +93,7 @@ class SettingsNavigationTests(unittest.TestCase):
 
     def test_phone_category_list_pushes_options_and_native_back_returns_to_list(self):
         app, nav = self.app, self.nav
-        self.assertEqual(list(nav.children), [nav.sidebar])
+        self.assertEqual(list(nav.panes.children), [nav.sidebar])
         self.assertFalse(app.routes.screens['settings'])
         nav.buttons['Text'].on_press()
         self.assertEqual(app.routes.screens['settings'][-1][0], 'settings-category')
@@ -161,16 +161,20 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertIs(nav.options['Text'].parent, nav.detail)
         self.assertIs(section.children[0], heading)
 
-    def test_repeated_rotation_from_category_list_does_not_open_default_options(self):
+    def test_default_wide_category_does_not_push_a_compact_route_on_rotation(self):
         app, nav = self.app, self.nav
         for width in (900, 390, 900, 390, 900, 390):
             self.width.return_value = width
             app.resize_workspace()
             self.assertFalse(app.routes.screens['settings'])
             self.assertIs(app.body.children[0], nav)
+            if nav.wide:
+                self.assertEqual(list(nav.detail.children), [nav.options['App']])
+            else:
+                self.assertIsNone(nav.detail.parent)
         self.assertFalse(nav.detail_requested)
-        self.assertEqual(nav.sections.built, {})
-        self.assertEqual(nav.options.built, {})
+        self.assertEqual(set(nav.sections.built), {'App'})
+        self.assertEqual(set(nav.options.built), {'App'})
 
     def test_reselecting_settings_resets_category_and_stays_at_list_after_rotation(self):
         app, nav = self.app, self.nav
@@ -182,7 +186,8 @@ class SettingsNavigationTests(unittest.TestCase):
                 app.native_host._selected(app.native_host.root)
                 self.assertFalse(app.routes.screens['settings'])
                 self.assertFalse(nav.detail_requested)
-                self.assertFalse(nav.detail.children)
+                if nav.wide:
+                    self.assertEqual(list(nav.detail.children), [nav.options['App']])
                 self.width.return_value = 390
                 nav.reflow()
                 self.assertFalse(app.routes.screens['settings'])
@@ -208,10 +213,11 @@ class SettingsNavigationTests(unittest.TestCase):
         self.width.return_value = 900
         app.resize_workspace()
         self.assertTrue(nav.wide)
-        self.assertEqual(list(nav.children), [nav.sidebar, nav.detail])
-        self.assertEqual(list(nav.detail.children), [])
-        self.assertEqual(nav.sections.built, {})
-        self.assertEqual(nav.options.built, {})
+        self.assertEqual(list(nav.panes.children), [nav.sidebar, nav.detail])
+        self.assertEqual(list(nav.detail.children), [nav.options['App']])
+        self.assertEqual(set(nav.sections.built), {'App'})
+        self.assertEqual(set(nav.options.built), {'App'})
+        self.assertEqual(nav.buttons['App'].style.font_weight, 'bold')
         nav.buttons['Read aloud'].on_press()
         self.assertFalse(app.routes.screens['settings'])
         self.assertEqual(list(nav.detail.children), [nav.options['Read aloud']])
@@ -271,7 +277,7 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertTrue(app.reset_button.enabled)
         nav.buttons['Text'].on_press()
         self.assertEqual(list(app.body.children), [nav])
-        self.assertEqual(list(nav.children), [nav.sidebar, nav.detail])
+        self.assertEqual(list(nav.panes.children), [nav.sidebar, nav.detail])
         self.assertIs(nav.detail.children[0], nav.options['Text'])
         self.assertFalse(app.routes.screens['settings'])
 
@@ -285,7 +291,7 @@ class SettingsNavigationTests(unittest.TestCase):
         self.width.return_value = 780
         nav.reflow()
         self.assertTrue(nav.wide)
-        self.assertEqual(list(nav.children), [nav.sidebar, nav.detail])
+        self.assertEqual(list(nav.panes.children), [nav.sidebar, nav.detail])
 
     def test_android_and_ios_have_appearance_categories(self):
         for backend in ('toga_android.app', 'toga_iOS.app'):
@@ -310,15 +316,16 @@ class SettingsNavigationTests(unittest.TestCase):
         self.width.return_value = 600
         with patch('mobile.fold_layout.division', return_value=Division(330, 0, 0, 700)):
             nav.reflow()
-            nav.choose('App')
             self.assertEqual(nav.sidebar.style.width, 330)
-            label, switch = app.clear_documents_choice.parent.children
-            self.assertEqual(label.text.replace('\n', ' '), 'Close saved documents on restart')
-            self.assertGreater(len(label.text.splitlines()), 1)
-            note = switch.parent._settings_note
+            self.assertEqual(list(nav.detail.children), [nav.options['App']])
+            section = nav.sections['App']
+            label, choice = section.restart_choice.parent.children
+            self.assertEqual(label.text, 'On restart')
+            note = next(child for child in section.children
+                        if isinstance(child, toga.Label) and child.text.startswith('Saved files'))
             self.assertGreater(len(note.text.splitlines()), 1)
             self.assertEqual(note.text.replace('\n', ' '), note._settings_source_text)
-            self.assertIs(switch, app.clear_documents_choice)
+            self.assertIs(choice, section.restart_choice)
             nav.choose('LM Chat')
             button = nav.sections['LM Chat'].children[1].children[0]
             self.assertIn('\n', button.text)

@@ -75,4 +75,25 @@ def text_size(app, title, key, *, register=True, status=None):
                 status.text = ''
 
         justify.on_change = save_justify
+    if title == 'Markdown' and register and app.feature_enabled('notes_library'):
+        choices = {'Always Ask': 'ask', 'Notes Library': 'notes', 'Regular Viewer': 'viewer'}
+        labels = {value: label for label, value in choices.items()}
+        opening = toga.Selection(items=list(choices), value=labels[app.preferences.values['notes_search_open']],
+                                 style=Pack(height=48, font_size=OPTION_FONT_SIZE))
+
+        def save_opening(widget, **kwargs):
+            value = choices[widget.value]
+            if value == app.preferences.values['notes_search_open']:
+                return
+            try:
+                app.preferences.save(notes_search_open=value)
+                status.text = ''
+            except (OSError, ValueError) as error:
+                widget.value = labels[app.preferences.values['notes_search_open']]
+                status.text = str(error)
+
+        opening.on_change = save_opening
+        app._notes_search_open_choice = opening
+        box.add(SettingsLabel('Notes Library files from search', style=Pack(font_weight='bold', margin_top=12)),
+                opening)
     return box

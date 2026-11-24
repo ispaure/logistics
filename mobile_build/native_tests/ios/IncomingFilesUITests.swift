@@ -156,7 +156,7 @@ final class IncomingFilesUITests: XCTestCase {
 
     private func isIPadAppSettingsWindow(_ window: String) -> Bool {
         window.contains("label: 'Settings', Selected")
-            && window.contains("label: 'Restore last document'")
+            && window.contains("label: 'On restart'")
             && window.contains("label: 'New window'")
     }
 

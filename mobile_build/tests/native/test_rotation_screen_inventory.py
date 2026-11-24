@@ -143,7 +143,8 @@ class RotationScenarioTests(unittest.TestCase):
             async def check(name):
                 self.assertEqual(name, 'settings')
                 self.assertFalse(app.settings_navigation.detail_requested)
-                self.assertFalse(app.settings_navigation.detail.children)
+                nav = app.settings_navigation
+                self.assertEqual(list(nav.detail.children), [nav.options['App']])
             app.loop.run_until_complete(rotation_screens.visit_screens(app, check, panels={'settings'}))
 
     def test_refused_category_is_not_reported_as_visited(self):

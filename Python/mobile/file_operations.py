@@ -98,6 +98,7 @@ class FileSelectionMove:
     kind: str = 'move-selection'
     title: str = 'Move selected items'
     primary: str = 'Move here'
+    on_complete: Callable | None = None
 
 
 @dataclass(frozen=True)

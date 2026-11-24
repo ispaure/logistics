@@ -99,6 +99,9 @@ def relocate_reference(origin, target=None):
 
 def remember(window, *, favourite=False):
     source, title, opener, cipher = reference(window)
+    from services.documents.help_history import is_documentation
+    if not favourite and is_documentation(source):
+        return
     catalog(recent=not favourite).remember(source, title, opener, favourite=favourite, cipher=cipher)
     if favourite:
         signals.favourites_changed.emit()
@@ -253,6 +256,9 @@ def populate(layout, parent, *, recent=False):
     try:
         store = catalog(recent=recent)
         rows = store.entries('recent' if recent else 'favourites', ciphers=unlocked_ciphers(), strict=False)
+        if recent:
+            from services.documents.help_history import is_documentation
+            rows = [row for row in rows if not is_documentation(row['source'])]
     except (OSError, ValueError, PermissionError):
         rows = []
     title = qt.QLabel('Recent' if recent else 'Favourites')

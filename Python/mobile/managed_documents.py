@@ -149,7 +149,6 @@ class ManagedDocumentWorkflows:
     def open_document(self, key):
         if not self.require_feature('text_editor'):
             return False
-        self.__dict__.pop('_pending_managed_restore', None)
         opened = False
         previous_view = self.document_view
         displaying = (hasattr(self, 'routes') and previous_view in self.routes.body().children)
@@ -180,10 +179,6 @@ class ManagedDocumentWorkflows:
             selected = next((label for label, identity in self.labels.items() if identity == key), None)
             if selected is not None:
                 self.selector.value = selected
-            try:
-                self.preferences.save(last_document=key)
-            except (OSError, ValueError) as error:
-                self.status.text += ' · ' + str(error)
         except (OSError, ValueError, KeyError, TypeError) as error:
             self.status.text = str(error)
         finally:
@@ -201,9 +196,9 @@ class ManagedDocumentWorkflows:
 
     def clear_restored_documents(self):
         """Prune only proven clean sessions; preserve unreadable recovery records."""
+        resume = self.preferences.values['document_restart'] == 'resume'
         for session in list(self.workspace.sessions.values()):
-            if (self.preferences.values['restore_last_document'] == 'true'
-                    and session.id == self.workspace.active):
+            if resume and session.id == self.workspace.active:
                 continue
             if session.provider == 'managed-text':
                 try:

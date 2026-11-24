@@ -479,17 +479,29 @@ class AppearanceTests(unittest.TestCase):
             for palette in (LIGHT, DARK):
                 for role, color in palette.items():
                     self.assertIn(f'--{role}:{color}', html)
-            self.assertIn('background:var(--window)', html)
         self.assertIn('html,html body{background:var(--window);color:var(--text)}', markdown_preview('# Notes'))
+
+    def test_mobile_dark_layers_are_independent_of_desktop(self):
+        from services.appearance_palette import css_variables as shared_css_variables
+        roles = ('window', 'surface', 'alternate', 'chat_background')
+        for role, mobile, desktop in zip(roles,
+                ('#0e1013', '#191c21', '#22262c', '#0b0d10'),
+                ('#23262c', '#2d3035', '#34373c', '#000000')):
+            self.assertEqual(DARK[role], mobile)
+            self.assertIn(f'--{role}:{mobile}', css_variables('dark'))
+            self.assertIn(f'--{role}:{desktop}', shared_css_variables('dark'))
+        self.assertEqual(DARK['settings_background'], DARK['window'])
+        self.assertEqual(DARK['settings_group'], DARK['surface'])
 
     def test_chat_canvas_tracks_system_light_and_dark_themes(self):
         html = transcript_document(theme_css=css_variables())
-        self.assertIn('html { min-height:100%; background:var(--window) }', html)
-        self.assertRegex(html, r'body \{[^}]*background:var\(--window\)')
+        self.assertIn('html { min-height:100%; background:var(--chat_background) }', html)
+        self.assertRegex(html, r'body \{[^}]*background:var\(--chat_background\)')
         self.assertIn('@media(prefers-color-scheme:dark)', html)
+        self.assertEqual(LIGHT['chat_background'], LIGHT['window'])
         for palette in (LIGHT, DARK):
             self.assertGreaterEqual(contrast_ratio(argb(palette['text']),
-                                                   argb(palette['window'])), 4.5)
+                                                   argb(palette['chat_background'])), 4.5)
 
     def test_explicit_reader_appearance_overrides_device_mode(self):
         content = '<html><head><style>body{margin:24px}</style></head><body>Book</body></html>'

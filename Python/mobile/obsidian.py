@@ -11,10 +11,69 @@ __status__ = "Production"
 
 import asyncio
 from functools import partial
+from pathlib import PurePosixPath
 from uuid import uuid4
 from .preview import markdown_preview
 from features.notes_library.notes import vault_root, local_library
 from features.notes_library.mobile.notes_library import VaultBrowser as _VaultBrowser
+
+
+def find_note_library(provider, path):
+    from features.notes_library.notes import LIBRARY_MARKER
+    from services.documents.storage import document_operation
+    if not local_library(provider):
+        return None
+    folder = provider.relative(path).rpartition('/')[0]
+    with document_operation(provider):
+        while True:
+            rows = []
+            for marker in ('.obsidian', LIBRARY_MARKER):
+                key = '/'.join(part for part in (folder, marker) if part)
+                try:
+                    rows.append(provider.entry(key))
+                except (FileNotFoundError, ValueError):
+                    continue
+            root = vault_root(provider, folder, rows)
+            if root is not None or not folder:
+                return root
+            folder = folder.rpartition('/')[0]
+
+
+async def open_search_note(app, provider, path, *, regular):
+    mode = app.preferences.values['notes_search_open']
+    if (mode == 'viewer' or not app.feature_enabled('notes_library')
+            or PurePosixPath(path).suffix.lower() not in {'.md', '.markdown'}):
+        return await regular()
+    generation = app.navigation_generation
+    try:
+        root = await asyncio.to_thread(find_note_library, provider, path)
+    except (OSError, ValueError):
+        root = None
+    if not app.active_host or generation != app.navigation_generation:
+        return False
+    if root is None:
+        return await regular()
+    if mode == 'ask':
+        from services.documents.authoring.document_dialogs import SearchNoteOpenDialog
+        mode = await app.main_window.dialog(SearchNoteOpenDialog())
+        if not app.active_host or generation != app.navigation_generation:
+            return False
+        if isinstance(mode, str) and mode.startswith('remember-'):
+            mode = mode.removeprefix('remember-')
+            if mode in {'notes', 'viewer'}:
+                try:
+                    app.preferences.save(notes_search_open=mode)
+                    choice = getattr(app, '_notes_search_open_choice', None)
+                    if choice is not None:
+                        choice.value = 'Notes Library' if mode == 'notes' else 'Regular Viewer'
+                except (OSError, ValueError) as error:
+                    app.settings_status.text = str(error)
+    if mode == 'viewer':
+        return await regular()
+    if mode != 'notes':
+        return False
+    owner = await open_vault(app, provider, root, 'documents')
+    return owner is not None and await owner.open_note(provider.relative(path))
 
 
 class VaultBrowser(_VaultBrowser):

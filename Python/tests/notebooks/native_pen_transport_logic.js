@@ -46,6 +46,18 @@ vm.runInContext('busy=false;constantPressure.checked=false;constantPressure.onch
 assert.equal(vm.runInContext('constantPenPressure',context),false);
 console.log(JSON.stringify({constant_pressure_choice:true,default_event_force_preserved:true,no_midstroke_or_busy_change:true}));
 
+context.state.brush_intensities = {14: 64};
+context.state.iphone_duo = true;
+context.inkSettings.tool = 14;
+context.brushFor = () => ({default_intensity: 80});
+context.fixedBrushPressure = tool => context.state.brush_intensities[tool] / 100;
+const pressure = type => vm.runInContext(`coord({pointerType:'${type}',clientX:10,clientY:10,pressure:.2})[2]`,context);
+assert.equal(pressure('pen'), .64);
+assert.equal(pressure('touch'), .64);
+context.state.iphone_duo = false;
+assert.equal(pressure('pen'), .2);
+assert.equal(pressure('touch'), .64);
+
 const queueSource=fs.readFileSync(path.replace('input.js','queue.js'),'utf8');
 context.queue=[{op:'save'},{op:'stroke',points:[[1,1,.5]]}];context.busy=true;context.continuousInk=false;context.active=null;
 context.$=()=>({textContent:''});context.render=()=>{};context.pump=()=>{};

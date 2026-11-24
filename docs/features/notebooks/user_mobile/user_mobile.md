@@ -1,20 +1,24 @@
 # reMarkable notebooks on Android and iOS
 
-Choose **New document → Notebook (.rmdoc)**, enter a name and choose a first-page template. The preview shows the pattern and proportions for the Paper Pro or Paper Pro Move size you select. Then choose a Local or unlocked LocalCrypt folder. Open an existing notebook from Files. To annotate a PDF, choose **⋯ → Duplicate as .rmdoc to annotate** in a writable folder. The notebook opens beside the source with its same base name. Existing files are preserved.
+Choose **New document → Notebook (.rmdoc)** and enter a name. Tap **First page template** to open the picker, preview the pattern at Paper Pro or Paper Pro Move size, and tap **Use template**. Then choose a Local or unlocked LocalCrypt folder. Open an existing notebook from Files. To annotate a PDF, choose **⋯ → Duplicate as .rmdoc to annotate** in a writable folder. The notebook opens beside the source with its same base name. Existing files are preserved.
 
 **Save** updates the file. **Save As** saves and switches to a new location. **Export .rmdoc** writes a separate copy. Close offers Save, Quit without saving or Cancel when dirty. **Quit without saving** also discards the recovery draft. If discard fails, the editor stays open. Ordinary notebooks recover completed edits when reopened after an unexpected close. If the original changed or vanished, save the recovered draft to a new location. LocalCrypt drafts stay in memory until saved. Save before locking. Saving or exporting to ordinary storage asks before writing a decrypted copy.
 
-- Tap a brush slot to select it, then tap again for **Writing tools**. Choose brush, color and width. Tap **+** to add a preset, up to three slots. Hold a preset for **Delete preset**.
+In **Documents → Recent**, the notebook row shows its filename and a thumbnail when available. **Unsaved edits** means opening that row resumes the draft.
+
+The top navigation bar shows the filename and storage location between the document controls. The drawing strip sits below. On iPhone Duo with the document controls on the side, open landscape puts the filename to the left of the drawing tools. Closed front portrait puts it above them.
+
+- Tap a brush slot to select it, then tap again for **Writing tools**. Choose brush, color and width. Pencil and Mechanical Pencil also have an **Intensity** slider for finger and constant-pressure strokes. They start at 80% and 95%, and each notebook remembers the two values. On iPhone Duo, both pencil tools use the slider for stylus input as well. Tap **+** to add a preset, up to three slots. Hold a preset for **Delete preset**.
 - Use a stylus or turn on **Notebook actions → View and input → Draw with finger**. Choose **Constant stylus pressure (this open document)** for pens without pressure sensitivity. The choice resets on reopen. **Finishing pen input; try again** means wait and retry Save.
 - With finger drawing disabled, swipe horizontally to change pages and use two fingers to pan. Swipe beyond the last page for **+ Page**. The button clears after three seconds or when you write or tap elsewhere. Pinch to zoom 10%–400%. Use **Fit page** to see the whole page or **Fill screen** to cover the drawing area and pan to the rest. **Reset** restores automatic framing. Pen contact takes priority over finger gestures. Physical pressure and palm behavior depend on hardware.
 - Use **Select / move** to lasso fully enclosed visible ink and images. Drag the selection, a corner or the rotation handle. Copy, Cut, Delete and **Paste selection** operate on the selection. A successful paste consumes this clipboard. Capture has its own reusable image clipboard.
-- **Notebook actions → Pages Overview** opens thumbnails, **Go to page** and add, duplicate, delete, reorder and copy actions. Open or import the target notebook first. **Layers** adds, selects or hides layers. **Hide tools** maximizes the canvas. Use **Show tools** to restore them.
+- **Notebook actions → Pages Overview** opens thumbnails, **Go to page** and add, duplicate, delete, reorder and copy actions. Open or import the target notebook first. In **Layers**, hold a grip and drag to reorder. Tap the red minus and confirm to delete a layer and its contents. **Undo** restores it. Each page keeps at least one layer. **Hide tools** maximizes the canvas. Use **Show tools** to restore them.
 
 **Notebook actions → Delete document…** requests confirmation before removing the source and recovery draft. Reopen an externally changed source before deletion. See [desktop compatibility limits](../user/user.md#current-compatibility-limits) and [brush settings](../user/user.md#paper-pro--move-brush-settings). Physical Boox, iPad Pencil and reMarkable behavior remain under validation.
 
 ## Page templates
 
-Open **Change Template…** from **Notebook actions → Layers** or **Pages Overview**. Choose a template, size and background visibility, then review the preview. **Apply** changes the current page and preserves handwriting. **Cancel** leaves the page as it was. If imported artwork is unavailable, the picker shows its name and preserves the original until you apply a replacement. Added pages inherit the current settings. PDF-backed pages keep their PDF background and can be duplicated within that notebook.
+Open **Change Template…** from **Notebook actions → Layers** or **Pages Overview**. On wider screens, choose a template from the list on the left and review it on the right. Narrow screens use a dropdown above the preview. Choose the size and background visibility, then tap **Apply** to change the current page and preserve handwriting. **Cancel** leaves the page as it was. If imported artwork is unavailable, the picker shows its name and preserves the original until you apply a replacement. Added pages inherit the current settings. PDF-backed pages keep their PDF background and can be duplicated within that notebook.
 
 Choose **Paper view** in Layers for framing across the open notebook. Automatic framing fits the saved Pro or Move format for pages sized in the template picker. Other pages adapt to screen size and posture, with Move framing on narrow portrait phones. Reset keeps a manual choice and reopening restores automatic framing. See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes).
 
@@ -31,6 +35,8 @@ Writable persistent notebooks save when leaving. A failed save keeps the draft o
 ## Paper Pro preview
 
 Use **Aa → View and input → Notebook colors** or **Settings → Features → Notebook preview** for Muted or Vivid. The device preference changes display colors. Exports keep native colors.
+
+Use **Aa → View and input → Paper appearance** to choose Follow system (the default), Light or Dark for every notebook. The setting also applies to thumbnails in Files, Favourites, Recent and Pages Overview. Dark inverts the page background, swaps displayed black and white ink, and dims highlighter fills to keep white writing legible. Other colored ink and pasted images retain their own colors. Saves, exports and cutouts use the original colors.
 
 ## Image cutouts and protected PDFs
 

@@ -231,7 +231,9 @@ def install_apple_destination_layout(host):
     only then leaves that presentation with stale geometry until a rotation.
     """
     from .ios_toolbar import vertical_edge
+    from .ios_destination_rail import DestinationRail
     adapter = host.adapter
+    adapter.destination_rail = rail = DestinationRail(host)
     container = host.window._impl.container
     original = container.on_native_layout
     pending = False
@@ -250,6 +252,7 @@ def install_apple_destination_layout(host):
         pending = False
         if host.adapter is not adapter:
             return
+        rail.layout()
         current = signature()
         if current is None or current == projected:
             return
@@ -272,7 +275,7 @@ def install_apple_destination_layout(host):
     def layout(value):
         nonlocal pending
         original(value)
-        if host.adapter is adapter and not pending and signature() != projected:
+        if host.adapter is adapter and not pending:
             pending = True
             host.window.app.loop.call_soon(refresh)
 

@@ -206,17 +206,19 @@ class ProgressWrites:
         self.state.retire()
 
 
+def open_provider_progress(app, copies, reader, key, *, check):
+    revision = provider_revision(copies, reader)
+    provider, legacy = copies, str(key)
+    if getattr(reader, 'password', '') and not reading_capabilities(copies).private:
+        provider = PASSWORD_READER
+        key = repr(document_identity(copies, key, app=app))
+    return open_progress(provider, key, app.private_root, kind=reader.kind or 'text',
+                         revision=revision, legacy_path=legacy, app=app, check=check)
+
+
 class ProviderProgress(ProgressWrites):
     def __init__(self, owner, copies, reader, key, *, check=None):
-        app = owner.app
-        revision = provider_revision(copies, reader)
-        provider = copies
-        legacy = str(key)
-        if getattr(reader, 'password', '') and not reading_capabilities(copies).private:
-            provider = PASSWORD_READER
-            key = repr(document_identity(copies, key, app=app))
-        state = open_progress(provider, key, app.private_root, kind=reader.kind or 'text',
-                              revision=revision, legacy_path=legacy, app=app, check=check or owner.document_access)
+        state = open_provider_progress(owner.app, copies, reader, key, check=check or owner.document_access)
         super().__init__(owner, state)
         self.restored = {}
         self.reader = reader
@@ -335,6 +337,9 @@ class ProviderProgress(ProgressWrites):
             if panel is None or not getattr(panel, 'position_ready', True):
                 return
             value.update(resource=reader.book.spine[index], offset=panel.offset)
+            footer = getattr(getattr(owner, 'crypt_view', None), 'page_footer', None)
+            if footer is not None:
+                footer.checkpoint_epub_progress(value)
         elif reader.kind in {'.cbz', '.zip'}:
             value.update(resource=reader.pages[index], half=owner._provider_displayed_half)
         self._position(value, initial=initial)

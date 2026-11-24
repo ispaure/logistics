@@ -232,10 +232,13 @@ class ReaderAppearanceProbe(LogisticsMobile):
         await turn(owner.next_page, 1)
         assert owner.show_provider_layout() is None  # PDF has no Appearance action.
         assert self.visible_reader() == owner.session.id
-        # Exercise an actual secondary reader route above the PDF.
-        owner.show_private_tools()
-        assert self.visible_reader() is None
-        await self.back()
+        assert owner.crypt_tools_view is None
+        if owner.crypt_immersive:
+            owner.toggle_private_reading_mode()
+        owner.pdf_tools.toggle()
+        assert owner.pdf_tools.panel in owner.pdf_tools.widget.children
+        assert self.routes.back()
+        assert owner.pdf_tools.panel not in owner.pdf_tools.widget.children
         await until(lambda: self.visible_reader() == owner.session.id and not owner.page_suspended
                     and not owner.cloud_busy)
         await self.wait_for_pdf(owner, 1)

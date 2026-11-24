@@ -10,12 +10,14 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import asyncio
+from collections import OrderedDict
 from pathlib import PurePosixPath
 from threading import Event
+from weakref import WeakSet
 import toga
 from .control_icons import apply_icon
 from toga.style import Pack
-from toga.style.pack import COLUMN
+from toga.style.pack import CENTER, COLUMN, ROW
 from commonUtils.ui.native_browser.recycled import RecycledBrowser, BrowserPresentation
 from .appearance import list_button
 from .appearance import surface, template_icon, selection_row
@@ -78,8 +80,7 @@ def entry_icon(directory, *, landing_page=False):
 
 def tile_entry_icon(directory):
     image = entry_icon(directory)
-    del image.style.width
-    image.style.update(height=56, margin_left=0, margin_right=0)
+    image.style.update(width=64, height=64, margin_left=0, margin_right=0)
     if type(image._impl).__module__.startswith('toga_iOS.'):
         from rubicon.objc import ObjCClass
         symbol = ObjCClass('UIImage').systemImageNamed('folder.fill' if directory else 'doc')
@@ -260,6 +261,9 @@ class LogisticsBrowserPresentation(BrowserPresentation):
         return file_list_icon(folder)
 
 class FileBrowser(RecycledBrowser):
+    COMPLETION_HEIGHT = 18
+    TILE_ROW_HEIGHT = RecycledBrowser.TILE_ROW_HEIGHT + COMPLETION_HEIGHT
+
     def refresh_entries(self, rows):
         """Replace a directory snapshot while retaining its location and viewport."""
         from commonUtils.runtime.browsing import BrowseEntry, BrowseTree, provider_entries
@@ -286,6 +290,9 @@ class FileBrowser(RecycledBrowser):
         self.checked_entries = set()
         self._resource_provider = None
         self._release_resource = lambda: None
+        self._completion_pending = OrderedDict()
+        self._completion_task = self._completion_current = None
+        self._completion_generation = 0
         from functools import partial
         from .recycled_file_list import RecycledFileList
         self.folder_visible = folder_visible
@@ -315,6 +322,136 @@ class FileBrowser(RecycledBrowser):
                                        style=Pack(direction=COLUMN))
         self.widget._clear_return_selection = self.clear_selection
         self.widget._file_browser_owner = self
+
+    def _show_completion(self):
+        return (not self.closed and self.on_item_actions is not None and self.search_provider is not None
+                and self.native_list.factory.DetailedList.__module__.startswith(('toga_iOS.', 'toga_android.')))
+
+    def _publish_list_rows(self):
+        if self._show_completion():
+            self.native_list.observe_rows = True
+        super()._publish_list_rows()
+
+    def _visible_rows(self):
+        impl = self.native_list._impl
+        if type(impl).__module__.endswith('_android'):
+            first, last = impl.native.getFirstVisiblePosition(), impl.native.getLastVisiblePosition()
+            return range(max(0, first), min(len(self._list_entries), last + 1))
+        if type(impl).__module__.endswith('_ios'):
+            paths = impl.native.indexPathsForVisibleRows
+            return sorted(int(path.row) for path in paths) if paths is not None else ()
+        return ()
+
+    def _row_visible(self, row):
+        super()._row_visible(row)
+        self._queue_row_completion(row)
+
+    def _queue_row_completion(self, row):
+        from .hub_controls import completion_caption
+
+        def publish(percent):
+            row.accessory_caption = completion_caption(percent) if percent is not None else ('', 'muted')
+
+        self._queue_completion(row.entry, row, publish,
+            lambda: (self.mode == 'List' and row.epoch == self.epoch
+                     and self._list_rows.get(row.entry.identity) is row))
+
+    def _tile_card(self, entry):
+        card = super()._tile_card(entry)
+        card.children[0].style.update(direction=COLUMN, align_items=CENTER, justify_content=CENTER)
+        if self._show_completion():
+            from .hub_controls import make_completion_badge
+
+            card._completion_badge = make_completion_badge()
+            card._completion_strip = toga.Box(
+                children=[toga.Box(style=Pack(flex=1)), card._completion_badge],
+                style=Pack(direction=ROW, height=self.COMPLETION_HEIGHT))
+            card.insert(0, card._completion_strip)
+            self._queue_tile_completion(entry, card)
+        return card
+
+    def _queue_tile_completion(self, entry, card):
+        from .hub_controls import paint_completion_badge
+
+        def publish(percent):
+            badge = card._completion_badge
+            if percent is None:
+                badge.text = ''
+            else:
+                paint_completion_badge(badge, percent)
+
+        self._queue_completion(entry, card, publish,
+            lambda: self.mode == 'Tiles' and self.entry_rows.get(entry.identity) is card)
+
+    def _retire_tile(self, identity):
+        card = self.entry_rows[identity]
+        strip = getattr(card, '_completion_strip', None)
+        if strip is not None:
+            card.remove(strip)
+        super()._retire_tile(identity)
+
+    def _queue_completion(self, entry, control, publish, current):
+        if entry.container or not self._show_completion():
+            return
+        generation = self._completion_generation
+        if getattr(control, '_completion_generation', None) == generation:
+            return
+        key = id(control), generation
+        if key == self._completion_current or key in self._completion_pending:
+            return
+        from commonUtils.runtime.resources.selection import ResourceSelection
+        from .document_completion import file_target
+
+        provider = self.search_provider
+        if isinstance(provider, ResourceSelection):
+            provider = provider.provider
+        app = toga.App.app
+        target = file_target(app, provider, entry.payload)
+        if target is None:
+            return
+        if not hasattr(app, '_completion_browsers'):
+            app._completion_browsers = WeakSet()
+        app._completion_browsers.add(self)
+
+        def active():
+            return (app.active_host and not self.closed and generation == self._completion_generation
+                    and current())
+
+        def finish(percent):
+            control._completion_generation = generation
+            publish(percent)
+
+        self._completion_pending[key] = target, active, finish
+        if len(self._completion_pending) > 24:
+            self._completion_pending.popitem(last=False)
+        if self._completion_task is None or self._completion_task.done():
+            self._completion_task = self._spawn(self._load_completion(app))
+
+    async def _load_completion(self, app):
+        from .document_completion import load_percentage
+
+        while self._completion_pending and not self.closed:
+            key, (target, active, finish) = self._completion_pending.popitem(last=False)
+            self._completion_current = key
+            try:
+                if active():
+                    percent = await load_percentage(app, target, active=active)
+                    if active():
+                        finish(percent)
+            finally:
+                self._completion_current = None
+
+    def refresh_completion(self):
+        if not self._show_completion():
+            return
+        self._completion_generation += 1
+        self._completion_pending.clear()
+        if self.mode == 'List':
+            for index in self._visible_rows():
+                self._queue_row_completion(self.native_list.data[index])
+        else:
+            for entry, card, *_ in self._tile_cards.values():
+                self._queue_tile_completion(entry, card)
 
     async def _select_pressed(self, entry, widget, **kwargs):
         if self.on_check_entry is None:
@@ -444,6 +581,7 @@ class FileBrowser(RecycledBrowser):
             self._queue_query(delay=0)
 
     def stop(self):
+        self._completion_pending.clear()
         header = getattr(self, 'location_bar', None)
         if header is not None:
             header.clear_location()
@@ -542,8 +680,18 @@ class FileBrowser(RecycledBrowser):
             self.open_search()
 
     def open_search(self, widget=None, **kwargs):
+        if getattr(self, '_search_navigation', None) is not None:
+            return self._search_navigation
+        if self.on_check_entry is None and self.widget.parent is not None:
+            from .search_panels import FileSearchRoute
+            panel = FileSearchRoute(self)
+            panel.show()
+            return panel
+        return self._open_inline_search()
+
+    def _open_inline_search(self, *, standalone=False):
         if not self.search_open:
-            header = getattr(self, 'location_bar', None)
+            header = None if standalone else getattr(self, 'location_bar', None)
             if header is None or getattr(header, 'native_actions', None) is None:
                 # Inline folder titles/status remain above the expanding search.
                 # The browser body is mounted immediately beneath that header.
@@ -569,6 +717,12 @@ class FileBrowser(RecycledBrowser):
         self._start_local_index()
 
     def close_search(self, widget=None, **kwargs):
+        panel = getattr(self, '_search_navigation', None)
+        if panel is not None and panel.active:
+            return panel.close()
+        return self._close_inline_search()
+
+    def _close_inline_search(self):
         if type(self.search._impl).__module__.startswith('toga_iOS.'):
             # Release keyboard ownership before detaching the focused field.
             self.search._impl.native.resignFirstResponder()

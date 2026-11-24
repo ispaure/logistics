@@ -29,7 +29,7 @@ from features.notebooks.notebook import Notebook
 from features.notebooks.ui.workspace import NotebookWorkspace
 from logistics_build.build_retention import scratch
 from tests.notebooks.webengine_driver import composited_image, javascript, wait_until
-from mobile.palette import css_variables
+from mobile.palette import DARK, LIGHT, css_variables
 
 
 CHECKS = r'''(()=>{try{
@@ -283,8 +283,8 @@ def main(output):
                         report = json.loads(js(view, CHECKS))
                         report.update(presentation=name, mode=mode, width=width, height=height)
                         assert report['success'], report
-                        expected_surface = configured_colors(dark).surface if desktop else (
-                            '#2d3035' if dark else '#fafbfc')
+                        expected_surface = (configured_colors(dark).surface if desktop else
+                                            (DARK if dark else LIGHT)['surface'])
                         assert report['chrome'] == 'rgb' + str(qt.QColor(expected_surface).getRgb()[:3]), report
                         assert contrast_ratio(argb(report['error_color']), argb(expected_surface)) >= 4.5, report
                         # A real viewport resize during a pen stroke waits for cancellation/pen-up.

@@ -103,11 +103,15 @@ def check_canvas_header(view, js, wait, output):
     """The filename, real brush controls and notebook panels survive every size."""
     reports = []
     assert js('window.notebookNativeTools(null)') == 'null'
-    for width, height, rail in [(320, 640, 0), (390, 844, 0), (540, 720, 0),
-                                (669, 951, 80), (951, 669, 80), (1024, 768, 0)]:
+    for width, height, rail, layout in [
+            (320, 640, 0, 'auto'), (390, 844, 0, 'native'), (540, 720, 0, 'auto'),
+            (669, 951, 0, 'native'), (951, 669, 80, 'inline'),
+            (466, 678, 146, 'stacked'), (1024, 768, 0, 'native')]:
         view.resize(width, height)
         wait(lambda: js('innerWidth') == width)
         js(f'window.notebookViewportInsets([{rail},0,0])')
+        assert js(f'window.notebookTitleLayout({json.dumps(layout)})')
+        js(f'document.querySelector(\'header [aria-label="Notebook actions"]\').hidden = {json.dumps(layout != "auto")}')
         report = json.loads(js("""JSON.stringify((()=>{
             const rect=id=>$(id).getBoundingClientRect().toJSON();
             return {width:innerWidth,title:rect('notebookIdentity'),brush:rect('brushToggle'),
@@ -116,13 +120,27 @@ def check_canvas_header(view, js, wait, output):
                 overflow:document.body.scrollWidth>innerWidth};
         })())"""))
         assert not report['native'] and not report['overflow'], report
-        assert report['title']['width'] >= 96 and report['title']['height'] >= 44, report
         assert report['viewport']['top'] >= report['header']['bottom'], report
-        if width >= 640:
+        if layout == 'native':
+            assert report['title']['width'] == 0 and report['title']['height'] == 0, report
+        elif layout == 'inline':
+            assert report['title']['width'] >= 96 and report['title']['height'] >= 44, report
             assert abs(report['title']['top'] - report['brush']['top']) <= 4, report
             assert report['title']['right'] <= report['brush']['left'], report
+            assert report['header']['width'] < width - rail - 16, report
         else:
+            assert report['title']['width'] >= 96 and report['title']['height'] >= 44, report
             assert report['title']['bottom'] <= report['brush']['top'], report
+        if layout == 'stacked':
+            assert js("""(()=>{
+                const dock=document.querySelector('.mobile-dock'), bounds=dock.getBoundingClientRect();
+                const buttons=[...dock.querySelectorAll('button')].filter(b=>!b.hidden);
+                return buttons.length===7 && buttons.every(b=>{
+                    const r=b.getBoundingClientRect();
+                    return r.width>=44 && r.height>=44 && r.left>=bounds.left && r.right<=bounds.right &&
+                        r.top===buttons[0].getBoundingClientRect().top;
+                });
+            })()"""), report
         reachable = js("""[...document.querySelectorAll('.mobile-tools button')].filter(b=>!b.hidden).every(b=>{
             b.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
             const r=b.getBoundingClientRect();
@@ -136,9 +154,12 @@ def check_canvas_header(view, js, wait, output):
         view.grab().save(str(output / f'canvas-header-{width}.png'))
         for selector, panel in [('#pagesToggle', 'pages'), ('#layersToggle', 'layers'),
                                 ('.view-options', 'view')]:
-            js("document.querySelector('[aria-label=\"Notebook actions\"]').click()")
-            js(f"document.querySelector({json.dumps(selector)}).click()")
-            assert js(f"!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === {json.dumps(panel)}")
+            if layout == 'auto':
+                js("document.querySelector('header [aria-label=\"Notebook actions\"]').click()")
+                js(f"document.querySelector({json.dumps(selector)}).click()")
+            else:
+                js(f"window.notebookNativeAction({json.dumps(panel)})")
+            assert js(f"!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === {json.dumps(panel)}"), (layout, panel)
             js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
         js("$('brushToggle').click()")
         assert js("!$('mobileSheet').hidden && $('mobileSheet').dataset.panel==='brush'")
@@ -149,6 +170,110 @@ def check_canvas_header(view, js, wait, output):
         assert before == js("JSON.stringify($('paper').getBoundingClientRect().toJSON())")
         reports.append(report)
     return reports
+
+
+def check_layer_and_template_controls(view, js, wait, output):
+    view.resize(768, 840)
+    js("window.notebookNativeAction('layers');$('layerName').value='Details';$('addLayer').click()")
+    wait(lambda: js("state.layers.length === 2"))
+    assert js("!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === 'layers'")
+
+    def point(selector, fraction):
+        value = json.loads(js(f"""JSON.stringify((()=>{{
+            const r=document.querySelector({json.dumps(selector)}).getBoundingClientRect();
+            return [r.left+r.width/2, r.top+r.height*{fraction}];
+        }})())"""))
+        return qt.QPoint(*map(int, value))
+
+    target = view.focusProxy()
+    start = point('.layer-row:last-child .layer-grip', .5)
+    stop = point('.layer-row:first-child .layer-grip', .25)
+    QTest.mousePress(target, qt.Qt.MouseButton.LeftButton, pos=start)
+    wait(lambda: js("!!document.querySelector('.layer-dragging')"))
+    QTest.mouseMove(target, stop, delay=30)
+    QTest.mouseRelease(target, qt.Qt.MouseButton.LeftButton, pos=stop)
+    wait(lambda: js("state.layers[0][1] === 'Details'"))
+    assert js("document.querySelector('.layer-row .layer-choice').textContent === 'Details'")
+
+    js("document.querySelector('.layer-remove').click();$('deleteLayerDialog').querySelector('[value=cancel]').click()")
+    assert js("!$('deleteLayerDialog').open && state.layers.length === 2")
+    js("document.querySelector('.layer-remove').click();$('deleteLayerDialog').querySelector('[value=delete]').click()")
+    wait(lambda: js("state.layers.length === 1"))
+    assert js("!$('mobileSheet').hidden && document.querySelector('.layer-remove').disabled")
+
+    js("$('changeTemplate').click()")
+    assert js("""(()=>{
+        const list=$('templateChoices').getBoundingClientRect(), preview=$('templatePreview').getBoundingClientRect();
+        return list.width>0 && preview.left>list.right && !$('pageTemplate').getClientRects().length;
+    })()""")
+    js("""(()=>{
+        const option=document.querySelector('#templateChoices input[value="Logistics Restaurant review"]');
+        option.scrollIntoView({block:'nearest'});
+        option.click();
+    })()""")
+    assert js("$('pageTemplate').value === 'Logistics Restaurant review' && !$('templatePreview').firstChild.hidden")
+    wait(lambda: js("$('templatePreview').firstChild.naturalWidth > 0"))
+    widths = json.loads(js("""JSON.stringify((()=>{
+        const list=$('templateChoices');
+        return [list.clientWidth,list.scrollWidth,
+          ...[...list.querySelectorAll('label')].map(row=>[row.clientWidth,row.scrollWidth])];
+    })())"""))
+    assert widths[1] <= widths[0] and all(scroll <= client for client, scroll in widths[2:]), widths
+    QTest.qWait(120)
+    view.grab().save(str(output / 'template-picker-wide.png'))
+    view.resize(390, 844)
+    wait(lambda: js('innerWidth === 390'))
+    assert js("$('pageTemplate').getClientRects().length && !$('templateChoices').getClientRects().length")
+    assert js("$('pageTemplate').value === 'Logistics Restaurant review'")
+    QTest.qWait(120)
+    view.grab().save(str(output / 'template-picker-narrow.png'))
+    js("window.notebookViewportInsets([0,80,0])")
+    assert js("$('templatePicker').getBoundingClientRect().right <= innerWidth - 80")
+    js("$('cancelTemplate').click();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));$('undo').click()")
+    wait(lambda: js("state.layers.length === 2 && state.layers[0][1] === 'Details'"))
+
+
+def check_paper_appearance(view, js, wait, preferences, book, output):
+    js('window.notebookViewportInsets([0,0,0])')
+    for color, y in [(0, 110), (2, 160), (6, 210)]:
+        js(f"send({{op:'stroke', tool:17, color:{color}, width:3, points:[[620,{y},.5],[790,{y},.5]]}})")
+    wait(lambda: js('window.notebookIdle() && state.strokes.length === 3'))
+    original = book.page(0).to_bytes()
+    js("""(()=>{
+        const source=document.createElement('canvas');
+        source.width=12;source.height=16;
+        const g=source.getContext('2d');
+        g.fillStyle='#204060';g.fillRect(0,0,6,16);
+        g.fillStyle='white';g.fillRect(6,0,6,16);
+        $('pdfBackground').src=state.background=source.toDataURL();
+        $('pdfBackground').hidden=false;
+    })()""")
+    wait(lambda: js("!!$('pdfBackground').naturalWidth"))
+    js("window.notebookNativeAction('view')")
+    assert js("$('paperAppearance').value") == 'system'
+
+    def choose(appearance):
+        js(f"$('paperAppearance').value={json.dumps(appearance)};"
+           "$('paperAppearance').dispatchEvent(new Event('change'))")
+        wait(lambda: js('window.notebookIdle()'))
+        QTest.qWait(110)
+
+    pixels = """JSON.stringify((()=>{
+        const transform=ctx.getTransform();
+        return [[710,110],[710,160],[710,210],[200,260],[1100,260]].map(([x,y])=>
+            [...ctx.getImageData(Math.floor(x*transform.a),Math.floor(y*transform.d),1,1).data].slice(0,3));
+    })())"""
+    choose('dark')
+    assert js('darkNotebookPaper()')
+    assert json.loads(js(pixels)) == [[255,255,255],[0,0,0],[48,74,224],[223,191,159],[0,0,0]]
+    assert Preferences(preferences.path.parent).values['notebook_paper_appearance'] == 'dark'
+    view.grab().save(str(output / 'dark-paper.png'))
+    choose('light')
+    assert not js('darkNotebookPaper()')
+    assert json.loads(js(pixels)) == [[0,0,0],[255,255,255],[48,74,224],[32,64,96],[255,255,255]]
+    choose('system')
+    assert js("darkNotebookPaper() === matchMedia('(prefers-color-scheme: dark)').matches")
+    assert book.page(0).to_bytes() == original
 
 
 def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolbar_only=False, header_only=False):
@@ -180,6 +305,11 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
                     if action['op'] == 'paper-preview':
                         preferences.save(notebook_paper_preview='true' if action['muted'] else 'false')
                         self.runJavaScript(f"window.notebookPaperPreviewUpdate({json.dumps(action['muted'])}, '')")
+                        return
+                    if action['op'] == 'paper-appearance':
+                        value = action['appearance']
+                        preferences.save(notebook_paper_appearance=value)
+                        self.runJavaScript(f"window.notebookPaperAppearanceUpdate({json.dumps(value)}, '')")
                         return
                     if action['op'] == 'page-previews':
                         self.runJavaScript('window.notebookPagePreviews(' + json.dumps(page_previews(book, action['start'])) + ')')
@@ -229,6 +359,8 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             try:
                 assert js("document.querySelector('.notebook-storage svg').getBoundingClientRect().width === 13")
                 reports = check_canvas_header(view, js, wait, output)
+                check_layer_and_template_controls(view, js, wait, output)
+                check_paper_appearance(view, js, wait, preferences, book, output)
                 (output / 'canvas-header-result.json').write_text(json.dumps(
                     dict(success=True, layouts=reports), indent=2))
             finally:

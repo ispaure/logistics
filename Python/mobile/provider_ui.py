@@ -770,7 +770,7 @@ class ProviderUI(FilesUI):
             return result
 
     def show_private_tools(self, widget=None, **kwargs):
-        if not self.cloud_busy:
+        if not self.cloud_busy and getattr(self, 'crypt_tools_view', None) is not None:
             title = 'Comic pages' if self.crypt_reader is not None and self.crypt_reader.kind in {'.cbz', '.zip'} else 'Private document actions'
             self.show_view(self.crypt_tools_view, route='private-tools', title=title)
 

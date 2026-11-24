@@ -131,9 +131,12 @@ def inline_action_group(buttons):
     group = toga.Box(children=buttons, style=Pack(direction=ROW, align_items=CENTER, height=48))
     if type(group._impl).__module__.startswith('toga_iOS.'):
         from rubicon.objc import ObjCClass
+        try:
+            effect = ObjCClass('UIGlassEffect').effectWithStyle(0)
+        except NameError:
+            return group
         for button in buttons:
             bar_control(button)
-        effect = ObjCClass('UIGlassEffect').effectWithStyle(0)
         glass = ObjCClass('UIVisualEffectView').alloc().initWithEffect(effect)
         glass.cornerConfiguration = ObjCClass('UICornerConfiguration').capsuleConfiguration()
         host = group._impl.native
@@ -278,11 +281,8 @@ def sync_screen(app, view, destination, *, returning_to=None):
     else:
         controller, screens = returning_to, ()
     if not screens and hasattr(view, '_destination_actions'):
-        duo_header = getattr(view, '_duo_heading_state', None)
-        if (getattr(view, '_home_inline_unlock', False)
-                or getattr(view, '_home_top_band', None) is not None
-                or getattr(view, '_destination_top_band', None) is not None
-                or (duo_header is not None and not duo_header['native_actions'])):
+        heading = getattr(view, '_destination_heading_state', None)
+        if heading is not None and not heading['native_actions']:
             clear_actions(controller.navigationItem)
             mount_leading(controller, [])
             return
@@ -298,7 +298,8 @@ def sync_screen(app, view, destination, *, returning_to=None):
     if controls is None:
         return
     buttons = list(controls() if callable(controls) else controls)
-    leading = list(getattr(view, '_ios_toolbar_leading', ()))
+    leading = getattr(view, '_ios_toolbar_leading', ())
+    leading = list(leading() if callable(leading) else leading)
     for button in (*buttons, *leading):
         if button.parent is not None:
             button.parent.remove(button)
@@ -319,6 +320,10 @@ def sync_screen(app, view, destination, *, returning_to=None):
     title = getattr(view, '_ios_toolbar_title', None)
     if title is not None:
         controller.navigationItem.title = str(title() if callable(title) else title)
+    if (drawer := getattr(view, '_document_library_drawer', None)) is not None:
+        from .folder_title import mount_title
+        mount_title(drawer.browser.location_bar, controller, drawer.breadcrumb.value or drawer.library_title,
+                    in_pane=drawer._library_split)
 
 
 

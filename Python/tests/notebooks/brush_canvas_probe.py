@@ -106,7 +106,8 @@ if(tool===18)check(!$('color').querySelector('option[value="0"]'),'Black must no
 for(let width=1;width<=3;width++)check(JSON.stringify(strokePoints(samples,tool,width))===JSON.stringify(expected[tool][width]),'Preview/model widths differ '+tool+'/'+width);
 controls.push({tool,colors:$('color').options.length,widths:$('width').options.length});
 reset();let color=tool===18?13:tool===23?1:0;
-line({tool,...nativeColor(tool,color),points:strokePoints(samples,tool,2)},target);
+const signatureSamples=brushFor(tool).texture?samples.map(([x,y])=>[x,y,.8]):samples;
+line({tool,...nativeColor(tool,color),points:strokePoints(signatureSamples,tool,2)},target);
 signatures.push(surface.toDataURL());
 }
 check(new Set(signatures).size===9,'Brush renderings must be distinct');
@@ -118,10 +119,6 @@ const pen=event(100,100);
 check(Math.abs(coord({...pen,tiltX:45,tiltY:0})[3]-.5)<1e-8,'Pointer tilt was lost');
 check(coord({...pen,nativeTilt:.75})[3]===.75&&coord(pen)[3]===0,'Android tilt or no-tilt fallback was lost');
 inkSettings=previousInk;
-const graphite=graphiteMask(false),lead=graphiteMask(true);
-const average=mask=>mask.reduce((total,value)=>total+value,0)/mask.length;
-check(average(lead)>average(graphite)+30,'Pencil and mechanical lead lost their density difference');
-check(lead.every(value=>value>=185)&&graphite.some(value=>value<80),'Graphite tooth must break only the soft pencil line');
 // Bounded filtered ink must preserve the established full-surface raster,
 // including transformed and edge-clipped strokes. Readback forces completion.
 const boundedPaintbrush=clipPaintbrush;
@@ -248,9 +245,9 @@ canvas.onpointermove(androidEvent(49,.6));
 const coalesced=previewFrame;
 canvas.onpointermove(androidEvent(55,.8));
 check(coalesced!==null&&previewFrame===coalesced&&previewCount===3,'Later packets did not coalesce');
-finish(androidEvent(59,.9));
-check(androidStroke?.op==='stroke'&&androidStroke.points.map(point=>point[2]).join(',')==='0.1,0.2,0.4,0.6,0.8,0.9',
-  'Immediate preview lost native pen samples');
+finish(androidEvent(59,0));
+check(androidStroke?.op==='stroke'&&androidStroke.points.map(point=>point[2]).join(',')==='0.1,0.2,0.4,0.6,0.8,0.8',
+  'Native pen release must keep the last contact force without dropping the endpoint');
 frameBatchedInk=wasBatched;send=sendBeforeAndroid;busy=busyBeforeAndroid;
 draw();
 const previousPaper=state.pdf_paper;

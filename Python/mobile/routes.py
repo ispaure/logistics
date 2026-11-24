@@ -70,6 +70,15 @@ class MobileRoutes(Routes):
 
     def uninstall(self):
         if not self._retired:
+            for screens in self.screens.values():
+                for _, panel, _ in reversed(screens):
+                    for child in tuple(panel.children):
+                        retire = getattr(child, '_retire_search_route', None)
+                        if retire is not None:
+                            retire()
+                        drawer = getattr(child, '_document_library_drawer', None)
+                        if drawer is not None:
+                            drawer.retire_library()
             self._retired = True
             self.settings_return_navigation = None
             self.workspace_return = None
@@ -105,14 +114,23 @@ class MobileRoutes(Routes):
             # must not overwrite the folder's original retained viewport.
             self.folders.capture_viewport(target)
         screens = self.screens[target]
+        previous_library = None
+        if route == 'document-library-folder':
+            for name, panel, _ in screens:
+                if name == route and panel.children[0] is not view:
+                    previous_library = panel.children[0]._document_library_drawer
+                    break
         if screens and screens[-1][0].startswith('file-loading:'):
             # The ready reader replaces its loading route. Back goes straight
             # to the retained Home, Documents or workspace screen.
             self.trim(target, len(screens) - 1)
         self.retire_other_presentations(view, target, route)
         super().show(view, destination=destination, route=route, title=title, root=root)
+        if previous_library is not None:
+            previous_library.retire_library()
         if (not root and route is not None and target != origin
-                and route not in ('browser', 'remote-browser', 'workspace-status', 'workspace-browser')):
+                and route not in ('browser', 'remote-browser', 'workspace-status', 'workspace-browser',
+                                  'document-library-folder')):
             # Opening a file/help page is a navigation action. Merely selecting
             # another tab does not call show and must not create this return edge.
             self.origins[target, route] = origin
@@ -177,6 +195,12 @@ class MobileRoutes(Routes):
         self.render(destination)
 
     def trim(self, destination, count, *, native=True):
+        search_retirements = [child._retire_search_route
+            for _, panel, _ in self.screens[destination][count:]
+            for child in panel.children if hasattr(child, '_retire_search_route')]
+        library_retirements = [child._document_library_drawer
+            for _, panel, _ in self.screens[destination][count:]
+            for child in panel.children if hasattr(child, '_document_library_drawer')]
         library = getattr(self.app, 'vault_browser', None)
         action_view = getattr(library, 'file_action_view', None)
         removed_action = action_view is not None and any(
@@ -196,6 +220,10 @@ class MobileRoutes(Routes):
                 if browser is not None:
                     browser._notes_location = None
         super().trim(destination, count, native=native)
+        for retire in search_retirements:
+            retire()
+        for drawer in library_retirements:
+            drawer.retire_library()
         if removed_action or removed_library:
             library.clear_file_action()
         for route in removed:
@@ -250,6 +278,12 @@ class MobileRoutes(Routes):
     def back(self):
         if self._retired:
             return False
+        body = self.body()
+        search = next((getattr(child, '_search_route', None) for child in body.children
+                       if hasattr(child, '_search_route')), None)
+        if search is not None:
+            search.close()
+            return True
         browser = getattr(self.app, 'file_browser', None)
         if (browser is not None and browser.on_check_entry is not None
                 and contains(self.body(), browser.widget)):
@@ -257,9 +291,7 @@ class MobileRoutes(Routes):
         if (self.host.state.destination == 'documents'
                 and not self.screens['documents']
                 and not getattr(self.app.adaptive, 'in_detail', False)
-                and (getattr(self.app, 'documents_search_open', False)
-                     or bool(getattr(self.app, 'documents_query', '').strip()))):
-            self.app.close_document_search()
+                and self.back_from_documents_overview()):
             return True
         library = getattr(self.app, 'vault_browser', None)
         if library is not None and contains(self.body(), getattr(library, 'file_action_view', None)):
@@ -271,7 +303,9 @@ class MobileRoutes(Routes):
             return True
         picker = getattr(self.app, '_editor_picker', None)
         if picker is not None and picker.visible(self.body()):
-            if (picker.location_panel is not None and picker.panel is picker.location_panel and not picker.cloud_busy
+            if getattr(picker.creation_layout, 'template_panel', None) is not None:
+                picker.creation_layout.close_templates()
+            elif (picker.location_panel is not None and picker.panel is picker.location_panel and not picker.cloud_busy
                     and not picker.creation_layout.paired):
                 picker.show_creation_name()
             else:
@@ -307,6 +341,13 @@ class MobileRoutes(Routes):
                     self.folders.restore_viewport(destination, expected)
             self.app.loop.call_soon(restore)
         return handled
+
+    def back_from_documents_overview(self):
+        if (getattr(self.app, 'documents_search_open', False)
+                or bool(getattr(self.app, 'documents_query', '').strip())):
+            return self.invoke_back(self.app.close_document_search)
+        hub = self.app.__dict__.get('_hub_controller')
+        return hub is not None and hub.dismiss_document_selection()
 
     def install(self):
         self._installation = object()
@@ -490,6 +531,9 @@ class MobileRoutes(Routes):
         app, destination = self.app, self.host.state.destination
         body = self.body()
 
+        if any(hasattr(child, '_search_route') or hasattr(child, '_search_folder') for child in body.children):
+            return self.back()
+
         for overlay in tuple(getattr(app, '_speech_overlays', ())):
             if overlay.panel.overlay is overlay:
                 overlay.panel.hide()
@@ -505,6 +549,9 @@ class MobileRoutes(Routes):
             return self.invoke_back(app.toggle_chat_conversations)
 
         picker = getattr(app, '_editor_picker', None)
+        if (picker is not None and picker.visible(body)
+                and getattr(picker.creation_layout, 'template_panel', None) is not None):
+            return self.back()
         if picker is not None and picker.visible(body) and picker.panel is not picker.name_panel:
             if picker.new_folder_form in picker.save_as_view.children and not picker.cloud_busy:
                 return self.invoke_back(picker.hide_new_folder)
@@ -567,9 +614,8 @@ class MobileRoutes(Routes):
 
         if (destination == 'documents' and not self.screens[destination]
                 and not getattr(adaptive, 'in_detail', False)
-                and (getattr(app, 'documents_search_open', False)
-                     or bool(getattr(app, 'documents_query', '').strip()))):
-            return self.invoke_back(app.close_document_search)
+                and self.back_from_documents_overview()):
+            return True
 
         action = app.reader_back_action(body)
         if action is not None:

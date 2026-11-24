@@ -11,6 +11,7 @@ __status__ = "Production"
 
 import asyncio
 from dataclasses import dataclass
+from typing import Callable
 from pathlib import PurePosixPath
 from threading import Event
 from types import SimpleNamespace
@@ -34,6 +35,7 @@ class ArchivePickerAction:
     sources: tuple = ()
     selected: tuple | None = None
     password: str | None = None
+    on_complete: Callable | None = None
 
     @property
     def title(self):
@@ -104,9 +106,9 @@ class ArchiveWorkspace:
     def enabled(self):
         return self.app.active_host and self.app.feature_enabled('archives')
 
-    async def create(self, sources):
+    async def create(self, sources, *, on_complete=None):
         if self.enabled() and sources and not self.app.cloud_busy:
-            action = ArchivePickerAction('archive-create', self, sources[0], sources)
+            action = ArchivePickerAction('archive-create', self, sources[0], sources, on_complete=on_complete)
             await self.app.editor_picker().show_destination('Archive', action)
 
     async def run(self, work, *, completed=lambda result: None):
@@ -360,7 +362,7 @@ class ArchiveWorkspace:
         self.item, self.members, self.password = None, (), ''
         self.dispose_view()
         if visible:
-            self.app.editor_picker().return_from_archive_picker()
+            self.app.editor_picker().return_from_destination_picker()
         self.app.refresh_hub('documents')
 
     def dispose_view(self):

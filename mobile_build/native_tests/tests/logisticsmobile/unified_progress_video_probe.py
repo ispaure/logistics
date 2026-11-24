@@ -292,7 +292,7 @@ class VideoRestartProbe(UnifiedProgressProbe):
                       pid=os.getpid(), cases=cases, evidence=evidence)
         try:
             await until(lambda: not getattr(self, '_startup_in_progress', False), timeout=60)
-            self.preferences.save(restore_last_document='false', clear_unmodified_documents_on_restart='false')
+            self.preferences.save(document_restart='keep_open')
             android = type(self._impl).__module__.startswith('toga_android.')
             local = LOCAL if android else (*LOCAL, EXTERNAL)
             if initial and android:

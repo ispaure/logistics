@@ -19,6 +19,15 @@ def document_route(route):
     return session_route(route) or (route or '').startswith('notes-library:')
 
 
+def document_view(view):
+    return (hasattr(view, '_reader_session_id')
+            or any(document_view(child) for child in getattr(view, 'children', ())))
+
+
+def document_stack(screens):
+    return any(document_route(route) or document_view(panel) for route, panel, _ in screens)
+
+
 def epub_page_back(reader):
     footer = getattr(reader, 'page_footer', None)
     pagination = getattr(footer, 'epub_pagination', None)

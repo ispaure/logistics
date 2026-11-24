@@ -94,7 +94,7 @@ class FilenameDisplayTests(unittest.TestCase):
                     placeholder, = media.children
                     icon = placeholder.layout
                     self.assertEqual(placeholder.browser_entry_kind, 'folder' if entry.container else 'file')
-                    self.assertEqual(icon.content_height, 56)
+                    self.assertEqual((icon.content_width, icon.content_height), (64, 64))
                     self.assertEqual(list(caption.children), [title])
                     self.assertEqual(title.layout.content_width, caption.layout.content_width)
                     self.assertFalse(hasattr(card, '_tile_selection'))
@@ -154,11 +154,19 @@ class FilenameDisplayTests(unittest.TestCase):
         browser.set_entries(provider, '', [dict(path=name, name=name, directory=False)
                                            for name in ('Landscape.jpg', 'Portrait.jpg')])
         browser.show_tiles()
+        row = browser._tile_row_views[0]
+        browser.items.style.layout(SimpleNamespace(width=540, height=600))
+        for card in row.children:
+            media = card.children[0]
+            placeholder, = media.children
+            self.assertAlmostEqual(placeholder.layout.content_left + placeholder.layout.content_width / 2,
+                                   media.layout.content_width / 2, delta=1)
+            self.assertAlmostEqual(placeholder.layout.content_top + placeholder.layout.content_height / 2,
+                                   media.layout.content_height / 2, delta=1)
         for entry, size in zip(browser._tile_entries, ((132, 76), (71, 136))):
             with BytesIO() as data:
                 Image.new('RGB', size).save(data, format='PNG')
                 browser._publish_preview(browser._tile_previews[entry.identity], toga.Image(src=data.getvalue()))
-        row = browser._tile_row_views[0]
         for width in (224, 540, 1024):
             with self.subTest(width=width):
                 browser.items.style.layout(SimpleNamespace(width=width, height=600))

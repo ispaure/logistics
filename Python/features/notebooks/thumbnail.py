@@ -15,14 +15,14 @@ from math import isfinite
 from commonUtils.runtime.operations import check_cancelled
 
 
-def notebook_thumbnail(data, edge, *, cancelled):
+def notebook_thumbnail(data, edge, *, cancelled, dark=False):
     from pypdf import PdfReader, PdfWriter, Transformation
-    from pypdf.generic import DecodedStreamObject, NameObject
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
     from features.pdf.document import MAX_PDF, PDFDocument
-    from .brushes import NATIVE_HIGHLIGHTS, PALETTE
+    from .brushes import BRUSHES, NATIVE_HIGHLIGHTS, PALETTE
     from .notebook import Notebook
     from .previews import page_previews
-    from .templates import available, geometry, settings, template_name
+    from .templates import available, geometry, rule_style, settings, template_name
 
     book = Notebook.read(data, max_bytes=MAX_PDF)
     check_cancelled(cancelled)
@@ -31,7 +31,13 @@ def notebook_thumbnail(data, edge, *, cancelled):
     width, height = scene['width'] * scale, scene['height'] * scale
     page = book.pages[0]
     writer = PdfWriter()
+    if dark:
+        writer.pdf_header = '%PDF-1.4'
     cover = writer.add_blank_page(width, height)
+    fill = f'0 0 {width:g} {height:g} re f'
+    paper_stream = DecodedStreamObject()
+    paper_stream.set_data(f'q 1 g {fill} Q'.encode('ascii'))
+    cover[NameObject('/Contents')] = writer._add_object(paper_stream)
     commands = [f'q {scale:g} 0 0 {-scale:g} 0 {height:g} cm', '1 J 1 j']
     redirect = page.record.get('redir', {}).get('value', -1)
     pdf = book.members.get(book.id + '.pdf')
@@ -48,34 +54,83 @@ def notebook_thumbnail(data, edge, *, cancelled):
     else:
         paper = settings(book, page)
         if paper['visible'] and available(book, page):
-            paths, _ = geometry(template_name(page.template), paper['format'])
-            commands.append('0.65 G 1.5 w')
+            name = template_name(page.template)
+            paths, _ = geometry(name, paper['format'])
+            color, weight = rule_style(name)
+            rgb = [value / 255 for value in bytes.fromhex(color[1:])]
+            if dark:
+                rgb = [1 - value for value in rgb]
+            commands.append(' '.join(f'{value:.4f}' for value in rgb) + f' RG {weight:g} w')
             for path in paths:
                 _, x, y, _, end_x, end_y = path.split()
                 commands.append(f'{x} {y} m {end_x} {end_y} l S')
 
+    highlights = NameObject('/NotebookHighlight')
     for line in scene['items']:
         check_cancelled(cancelled)
-        color = line['color_rgba'] or (NATIVE_HIGHLIGHTS.get(line['color']) if line['tool'] == 18 else None)
-        if color:
-            alpha = color[3] / 255
-            rgb = [1 - alpha + alpha * value / 255 for value in color[:3]]
-        else:
-            rgb = [value / 255 for value in bytes.fromhex(PALETTE.get(line['color'], '#000000')[1:])]
-        commands.append(' '.join(f'{value:.4f}' for value in rgb) + ' RG')
         points = line['points']
+        if not points:
+            continue
+        tool = line['tool']
+        color = line['color_rgba'] or (NATIVE_HIGHLIGHTS.get(line['color']) if tool == 18 else None)
+        rgb = tuple(color[:3]) if color else tuple(bytes.fromhex(PALETTE.get(line['color'], '#000000')[1:]))
+        alpha = color[3] / 255 if color else 1
+        if dark and rgb in {(0, 0, 0), (255, 255, 255)}:
+            rgb = tuple(255 - value for value in rgb)
+        highlight = dark and tool in (5, 18)
+        if highlight:
+            alpha *= .36
+            commands.append(f'q {highlights} gs')
+        if tool in (1, 7, 13, 14):
+            # At cover size the individual teeth average into an ink density.
+            pressure = round(points[0][2] * 32) / 32
+            light_contact = max(0, 1 - ((pressure - .46) / .34) ** 2) ** 2
+            lift = .045 if tool in (7, 13) else .065
+            mid_contact = max(0, min((pressure - .57) / .23, (.9375 - pressure) / .1375))
+            engagement = pressure + (.12 if tool in (7, 13) else .085) * mid_contact
+            contact = max(0, min(1, (engagement + lift * light_contact - .45) / .55))
+            density = .8 * contact ** 2 * (3 - 2 * contact)
+            fade = max(0, min(1, (pressure - .39) / .29))
+            flecks = .1 * max(0, min(1, (pressure - .1) / .15)) * (1 - fade ** 2 * (3 - 2 * fade))
+            alpha *= density + (1 - density) * flecks
+        paper_value = 0 if dark else 1
+        rgb = [paper_value * (1 - alpha) + alpha * value / 255 for value in rgb]
+        commands.append(' '.join(f'{value:.4f}' for value in rgb) + ' RG')
         # The overview has already sampled and ordered the visible ink.
+        width_scale = BRUSHES.get(15 if tool == 2 else tool, {}).get('display_width', 1)
+        path = []
         for first, last in zip(points, points[1:] or points):
             x, y, _, start_width = first
             end_x, end_y, _, end_width = last
             if first is last:
                 end_x += .01  # PDF strokes a dot as a short round-capped segment.
             if all(isfinite(value) for value in (x, y, end_x, end_y, start_width, end_width)):
-                weight = max(.75 / scale, (start_width + end_width) / 2)
-                commands.append(f'{weight:.4f} w {x:.3f} {y:.3f} m {end_x:.3f} {end_y:.3f} l S')
+                weight = max(.75 / scale, (start_width + end_width) * width_scale / 2)
+                segment = f'{x:.3f} {y:.3f} m {end_x:.3f} {end_y:.3f} l'
+                if highlight and start_width == end_width == points[0][3]:
+                    path.append(segment)
+                else:
+                    commands.append(f'{weight:.4f} w {segment} S')
+        if path:
+            weight = max(.75 / scale, points[0][3])
+            commands.append(f'{weight:.4f} w ' + ' '.join(path) + ' S')
+        if highlight:
+            commands.append('Q')
 
     commands.append('Q')
     overlay = writer.add_blank_page(width, height)
+    if dark:
+        blend_modes = DictionaryObject({
+            highlights: DictionaryObject({NameObject('/BM'): NameObject('/Screen')}),
+        })
+        if pdf and redirect >= 0:
+            # Invert only the background, before emitting ink in its display colors.
+            invert = NameObject('/NotebookInvert')
+            blend_modes[invert] = DictionaryObject({NameObject('/BM'): NameObject('/Difference')})
+            commands.insert(0, f'q {invert} gs 1 g {fill} Q')
+        else:
+            commands.insert(0, f'q 0 g {fill} Q')
+        overlay[NameObject('/Resources')][NameObject('/ExtGState')] = blend_modes
     stream = DecodedStreamObject()
     stream.set_data('\n'.join(commands).encode('ascii'))
     overlay[NameObject('/Contents')] = writer._add_object(stream.flate_encode())

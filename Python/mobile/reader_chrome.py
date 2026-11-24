@@ -76,7 +76,7 @@ def sync_document_tabs(app, view, *, fullscreen=False, destination=None):
     Keyboard snapshots must also use the current route's visibility so dismissing
     the keyboard cannot reveal destinations over an open document.
     """
-    from .reader_lifecycle import document_route
+    from .reader_lifecycle import document_stack, document_view
     destination = destination or app.native_host.state.destination
     screens = app.routes.screens[destination]
     details = app.adaptive.detail_routes if destination == 'documents' else ()
@@ -86,17 +86,12 @@ def sync_document_tabs(app, view, *, fullscreen=False, destination=None):
         # the list, including on a collapsed iPhone split controller.
         details = ()
 
-    def document(widget):
-        return (hasattr(widget, '_reader_session_id')
-                or any(document(child) for child in widget.children))
-
     def focused(widget):
         return (getattr(widget, '_focus_navigation', False)
                 or any(focused(child) for child in widget.children))
 
     app._focus_navigation_active = focused(view)
-    hidden = (fullscreen or document(view)
-              or any(document_route(route) for route, *_ in (*screens, *details)))
+    hidden = fullscreen or document_view(view) or document_stack((*screens, *details))
     if app._focus_navigation_active:
         size = app.main_window.size
         hidden = hidden or size.width < 600 or size.height < 500
@@ -115,7 +110,10 @@ def set_document_tabs_hidden(app, hidden):
         if keyboard is not None:
             adapter.keyboard_tab_visibility = (modern, hidden)
         effective = hidden or keyboard is not None
-        if adapter.tabs_hidden() != effective:
+        rail = getattr(adapter, 'destination_rail', None)
+        if rail is not None and rail.active:
+            rail.layout()
+        elif adapter.tabs_hidden() != effective:
             adapter.set_keyboard_tabs_hidden(modern, effective)
     elif hasattr(adapter, 'bottom'):
         bar = adapter.impl.native_navigationview
@@ -198,7 +196,8 @@ class ReaderChrome:
             self.chapter_collapsed = set()
             content = self.chapter_sidebar.view
         self.reading_frame = ReadingFrame(content,
-            [self.reader_header, self.reader_footer], margin=0, restore=self.reader_restore)
+            [self.reader_header, self.reader_footer], margin=0, restore=self.reader_restore,
+            text_overlap=0 if comic else self.page_footer.text_overlap())
         self.library_view = self.reading_frame.widget
         from .document_location import install_document_location
         install_document_location(self.library_view)
@@ -207,6 +206,7 @@ class ReaderChrome:
         self.library_view._native_reader_toolbar = self.reader_header
         self.library_view._native_reader_status = self.book_status
         if not comic:
+            self.library_view._epub_reader = True
             self.library_view._workspace_menu_button = browser
             self.library_view._native_reader_toolbar = self.reader_header
             self.library_view._native_reader_status = self.book_status

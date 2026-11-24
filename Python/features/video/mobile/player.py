@@ -176,6 +176,9 @@ class MobileVideo:
         routes = getattr(self.app, 'routes', None)
         if routes is not None:
             routes.sync_back()
+        if self.app.active_host:
+            from mobile.document_completion import refresh_browsers
+            refresh_browsers(self.app)
 
     @property
     def restricted(self):

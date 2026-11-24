@@ -56,10 +56,10 @@ def profile(widths, pressure=0, exponent=1, *, colors=PEN_COLORS, **style):
 # calligraphy nib behavior approximate the writing tools.
 BRUSHES = {
     17: profile((2, 3.5, 5.25), family='fineliner'),
-    15: profile((2.5, 3.75, 5.75), .34, 3.875, family='ballpoint'),
-    14: profile((2.75, 5.25, 8), .34, family='pencil', texture=True,
+    15: profile((2.5, 3.75, 5.75), .34, 3.875, family='ballpoint', display_width=.9),
+    14: profile((2.75, 5.25, 8), .34, family='pencil', texture=True, default_intensity=80,
                 tilt_widths=(15.75, 31.25, 47), tilt_full=2 / 3),
-    13: profile((3.5, 5.25, 7.75), family='mechanical', texture=True),
+    13: profile((3.5, 5.25, 7.75), family='mechanical', texture=True, default_intensity=95),
     16: profile((5.5, 6.25, 9), .25, family='marker'),
     12: profile((4.5, 8.5, 12.75), family='paintbrush',
                 pressure_widths=((.25, (2, 3.5, 5.25)), (.75, (2, 3.5, 5.25)),
@@ -92,6 +92,11 @@ def expanded_profile(brush):
 
 EXPANDED_BRUSHES = {tool: expanded_profile(brush) for tool, brush in BRUSHES.items()}
 EXPANDED_BRUSHES[17]['widths'] = (6.25, 12.5, 19)
+
+
+def valid_intensity(tool, intensity):
+    return ('default_intensity' in BRUSHES.get(tool, {})
+            and type(intensity) is int and 1 <= intensity <= 100)
 
 
 def native_color(tool, color):

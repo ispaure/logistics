@@ -24,7 +24,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase, skipUnless
 from features.books.mobile.content import chapter_html
 from features.books.mobile.presentation import SCRIPT
-from features.books.mobile.typography import css
+from features.books.mobile.typography import EPUB_TOP_GUTTER, css
 
 NODE = os.environ.get('LOGISTICS_NODE') or shutil.which('node')
 
@@ -43,7 +43,8 @@ class EpubDOMTests(TestCase):
                 script = script.replace('window.location.href =', 'window.syntheticNotification =')
                 with TemporaryDirectory() as directory:
                     path = Path(directory) / 'fixture.json'
-                    path.write_text(json.dumps(dict(html=html, script=script, compactMargin=margin)))
+                    path.write_text(json.dumps(dict(html=html, script=script, compactMargin=margin,
+                                                    topGutter=EPUB_TOP_GUTTER)))
                     result = subprocess.run([NODE, str(Path(__file__).with_name('epub_index_dom.cjs')), str(path)],
                                             capture_output=True, text=True, timeout=40)
                     self.assertEqual(result.returncode, 0, result.stderr)

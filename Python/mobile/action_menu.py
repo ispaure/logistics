@@ -33,7 +33,7 @@ _COMMAND_ICONS = {
     'Pages and search': 'find', 'Appearance': 'appearance', 'Fullscreen': 'fullscreen',
     'Fit comic page': 'fit', 'Fit image': 'fit', 'Save a copy': 'duplicate_file',
     'Save As': 'duplicate_file', 'Export': 'send_file', 'Close document': 'close',
-    'Edit metadata': 'edit', 'Open / Metadata': 'view', 'Reader tools': 'contents',
+    'Edit metadata': 'edit', 'Reader tools': 'contents',
     'Browse documentation': 'contents', 'Parent folder page': 'up', 'Reading mode': 'fullscreen',
 }
 
@@ -318,7 +318,7 @@ DOCUMENT_GROUPS = (
      'Chapters and bookmarks…', 'Comic pages…', 'Pages and search',
      'Find and replace…', 'Find in this page…', 'Find in chapter…', 'Read aloud…'),
     ('Appearance…', 'Fullscreen', 'Reading mode', 'Fit comic page', 'Fit image'),
-    ('File actions…', 'Reader tools…', 'Open / Metadata…', 'Rename document…',
+    ('File actions…', 'Reader tools…', 'Rename document…',
      'Edit metadata…', 'Info…', 'Save', 'Save a copy', 'Save As…', 'Export…'),
     ('Open beside another document', 'Show in folder', 'Show cached copy in folder',
      'New document', 'Open from Files…', 'Import…'),

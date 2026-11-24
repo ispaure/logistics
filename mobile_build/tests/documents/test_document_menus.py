@@ -239,7 +239,8 @@ class DocumentMenuTests(TestCase):
             hub.build_home()
             row_button = next(candidate for candidate in hub._home_recent_buttons
                               if candidate.text == second.name)
-            home_button = row_button.parent.children[1]
+            title_controls = row_button.parent
+            home_button = title_controls.parent.children[1]
             self.assertEqual(home_button.text, '⋯')
             self.assertEqual(home_button._impl._surface_roles, ('transparent', 'accent', False))
             self.assertNotIn('All documents', dict(home_button.document_actions.load_actions()))

@@ -82,20 +82,24 @@ const {chromium} = require('playwright');
    for(const viewport of [{width:390,height:844},{width:844,height:390},{width:1200,height:800},
                           {width:800,height:1200}]){
     await page.setViewportSize(viewport);
-    await page.waitForFunction(({width,height})=>
+    await page.waitForFunction(({width,height,topGutter})=>
      innerWidth===width && innerHeight===height &&
-      Math.abs(document.body.firstElementChild.getBoundingClientRect().height-height)<.5,viewport);
+      Math.abs(document.body.firstElementChild.getBoundingClientRect().height-height+topGutter)<.5,
+      {...viewport,topGutter:fixture.topGutter});
     const box=await page.evaluate(()=>{
      reader.setMotion(false);reader.seek(0);
      const css=getComputedStyle(document.body),view=document.body.firstElementChild.getBoundingClientRect();
      return {top:view.top,bottom:view.bottom,height:innerHeight,heading:document.querySelector('h1').getBoundingClientRect().top,left:parseFloat(css.paddingLeft),
-       right:parseFloat(css.paddingRight),font:parseFloat(css.fontSize),line:parseFloat(css.lineHeight)};
+       right:parseFloat(css.paddingRight),font:parseFloat(css.fontSize),line:parseFloat(css.lineHeight),
+       orphans:getComputedStyle(document.querySelector('p')).orphans,
+       widows:getComputedStyle(document.querySelector('p')).widows};
     });
-    assert.equal(box.top,0,'The page must begin close to the native header');
-    assert.equal(box.heading,0,'Pagination must not restore the chapter heading top margin');
+    assert.equal(box.top,fixture.topGutter,'The page must reserve its top gutter');
+    assert.equal(box.heading,box.top,'Pagination must not restore the chapter heading top margin');
     assert.equal(box.bottom,box.height,'The page must use the height above the native footer');
     assert.equal(box.left,fixture.compactMargin);assert.equal(box.right,fixture.compactMargin);
     assert.equal(box.font,24);assert.equal(box.line,36);
+    assert.equal(box.orphans,'1');assert.equal(box.widows,'1');
     await checkMeasurement();
     await page.evaluate(()=>reader.turn(1));
     assert(await page.evaluate(()=>reader.pagination().index>0),'The taller page must still turn');

@@ -87,12 +87,11 @@ Logistics, use **Save a copy** to preserve your edits and the saved version
 under separate names.
 
 During ordinary editing, Logistics periodically stores a recovery draft.
-An entry marked **Recovered draft** has edits to review and save. If a
+An entry marked **Recovered** in **Documents → Recent** has edits to review and save. If a
 restored item is unavailable, choose **Try again** after fixing access.
-**Remove from open documents** removes its session entry only. The default
-**Close saved documents on restart** leaves unsaved drafts and conflicts
-available for recovery. **Restore last document**, also on by default,
-reopens the last eligible ordinary file. Session-only files require an unlock, and private
+**Remove from open documents** removes its session entry only. All
+[restart options](../settings/settings.md#document-restoration) leave recoverable
+drafts available. Session-only files require an unlock, and private
 text drafts are available only for the active session. Save those drafts
 before locking the source.
 

@@ -325,6 +325,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             value = dict(page=index, resource=reader.pages[index], half=self.comic_navigation.half)
         else:
             value = dict(page=index, resource=reader.spine[index], offset=offset)
+            self.page_footer.checkpoint_epub_progress(value)
             self.book_record = dict(self.book_record, location=dict(path=reader.spine[index], offset=offset))
         if value != self._book_location:
             self._book_location = value

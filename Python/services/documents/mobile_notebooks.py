@@ -232,6 +232,10 @@ def present(app, panel, *, destination=None):
     install_document_location(panel.view, copies=panel.document.resource if panel.document is not None else None)
     panel.view._native_reader_title = lambda: notebook_title(panel) if panel.editor is not None else ''
     panel.view._document_path = lambda: notebook_location(panel)
+    if type(panel.view._impl).__module__.startswith('toga_android.') and not hasattr(panel, 'native_actions'):
+        if app._impl.native.getSupportActionBar() is not None:
+            install_notebook_controls(panel)
+            panel.view._notebook_title_layout = 'native'
     app.show_view(panel.view, destination=destination, route='notebook:' + session.id,
                   title=notebook_title(panel))
     if panel.web is None:
@@ -242,20 +246,22 @@ def present(app, panel, *, destination=None):
     app.refresh_document_list()
 
 
-def remember_notebook(app, panel):
+def remember_notebook(app, panel, *, replacing=None):
     session, document = panel.session, panel.document
     resource = document.resource if document is not None else None
+    if document is not None:
+        session.dirty = document.dirty
     if session.transient:
         return
-    if resource is None:
-        app.recent_documents.remember(session)
-        return
-    path = Path(resource.provider.root) / resource.path
-    session.title = path.name
-    session.history_source = app.recent_documents.normalize_source(dict(type='local', path=str(path.resolve())))
-    app.recent_documents.remember_file(session, session.history_source)
-    if not app.recent_documents.error:
-        app.recent_documents.forget('notebook', session.resource)
+    if resource is not None:
+        path = Path(resource.provider.root) / resource.path
+        session.title = path.name
+        session.history_source = app.recent_documents.normalize_source(dict(type='local', path=str(path.resolve())))
+    elif document is not None and document.source_unavailable:
+        binding = app.recent_documents.notebook_binding(session.resource)
+        if binding is not None:
+            session.history_source, session.title, _ = binding
+    app.recent_documents.remember(session, replacing=replacing)
 
 
 def notebook_title(panel):
@@ -314,9 +320,6 @@ def close_notebook(app, key, choice, *, leaving_reader=False):
             return False
     if panel is not None and panel.document is not None and panel.document.dirty and not panel.session.transient:
         app.recent_documents.remember(panel.session)
-        source = getattr(panel.session, 'history_source', None)
-        if source is not None and not app.recent_documents.error:
-            app.recent_documents.forget('file-reference', app.recent_documents.reference_id(source))
     app.workspace.close(key, guard=lambda session: True)
     panels(app).pop(key, None)
     if panel is not None:
@@ -427,8 +430,6 @@ def prepare_notebook_lock(app, *, discard=False):
 
 def install_notebook_controls(panel):
     """Native reader chrome is host composition, independent of the canvas."""
-    if not type(panel.view._impl).__module__.startswith('toga_iOS.'):
-        return
     import toga
     from mobile.control_icons import icon_button
     import json

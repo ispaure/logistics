@@ -22,13 +22,14 @@ from .appearance import list_button
 from .adaptive_workspace import AdaptiveWorkspace
 from .file_drawer import FileDrawer, detach
 from .navigation import DESTINATION_ITEMS
+from .ui_metrics import TOUCH_TARGET
 from .workspace_policy import WorkspaceSelection, session_view
 
 DESTINATION_LABELS = {key: label for key, label, *_ in DESTINATION_ITEMS}
 
 
 def menu_button(callback, label='Browse files'):
-    button = toga.Button('☰', on_press=callback, style=Pack(width=52, height=52))
+    button = toga.Button('☰', on_press=callback, style=Pack(width=TOUCH_TARGET, height=TOUCH_TARGET))
     button._workspace_menu_label = label
     if type(button._impl).__module__.startswith('toga_iOS.'):
         from rubicon.objc import ObjCClass, SEL
@@ -38,9 +39,9 @@ def menu_button(callback, label='Browse files'):
         # A scroll starting on this control must not open a drawer on touch-down.
         native.removeTarget(native, action=SEL('onPress:'), forControlEvents=1)
         native.addTarget(native, action=SEL('onPress:'), forControlEvents=1 << 6)
-        from .appearance import paint_surface
+        from .appearance import surface
         button._impl._native_glass_control = True
-        paint_surface(button._impl, 0)
+        surface(button, radius=0, background='transparent', foreground='text', outlined=False)
         symbol = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(22, weight=5)
         native.setPreferredSymbolConfiguration(symbol, forImageInState=0)
         native.accessibilityLabel = label
@@ -179,7 +180,9 @@ def _mount_reader_trailing(app, view, controller, key, projections):
     # Replacing identical native groups during keyboard/layout notifications
     # cancels UIKit's in-progress menu presentation. Refresh only changed data.
     if projections.get(key) != state:
-        mount_actions(controller, view, buttons)
+        # Let UIKit place each action, including More, in the visible bar.
+        # Its overflow remains available when system UI takes the space.
+        mount_actions(controller, view, buttons, overflow=False)
         projections[key] = state
     app._reader_toolbar_state = state
     return geometry
@@ -282,19 +285,15 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         nested = (bool(self.app.routes.screens[destination])
                   or len(list(navigation.viewControllers)) > 1)
         if not nested and not hasattr(view, '_native_reader_buttons') and getattr(item, 'title', None):
-            # A destination label belongs to its tab/rail, not a second heading.
-            # Reader and native Back/More controllers retain their own titles.
+            # The shared root header owns the destination title.
             item.title = ''
         if getattr(view, '_reader_top_band_state', None) is not None:
             if not bool(navigation.isNavigationBarHidden()):
                 navigation.setNavigationBarHidden(True, animated=False)
             return
         if not self.app.routes.screens[destination] and hasattr(view, '_destination_actions'):
-            duo_header = getattr(view, '_duo_heading_state', None)
-            projected = (getattr(view, '_home_top_band', None) is not None
-                         or getattr(view, '_destination_top_band', None) is not None
-                         or (duo_header is not None and not duo_header['native_actions']))
-            hidden = projected or not bool(view._ios_toolbar_buttons())
+            heading = getattr(view, '_destination_heading_state', None)
+            hidden = not (heading and heading['native_actions'] and view._ios_toolbar_buttons())
             if bool(navigation.isNavigationBarHidden()) != hidden:
                 navigation.setNavigationBarHidden(hidden, animated=False)
             return
@@ -341,7 +340,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                       else adapter.navigation[index].view)
             bounds, insets = native.bounds.size, native.safeAreaInsets
             if bounds.width > 0:
-                available = float(bounds.width - insets.left - insets.right)
+                rail = getattr(adapter, 'destination_rail', None)
+                left, right = (rail.content_insets(native) if rail is not None and rail.active
+                               else (insets.left, insets.right))
+                available = float(bounds.width - left - right)
         elif (adapter is not None and getattr(adapter, 'mode', None) == 'rail'
               and adapter.impl.native_navigationview.getVisibility() != 8):
             density = self.app._impl.native.getResources().getDisplayMetrics().density
@@ -353,6 +355,11 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         return max(1, int(available) - margin)
 
     def prepare(self, view, destination, route=None, root=False):
+        if destination == 'files' and not root and self.app.routes.apple:
+            from .reader_lifecycle import document_route, document_view
+            if document_route(route) or document_view(view):
+                from .destination_actions import detach_workspace_heading
+                detach_workspace_heading(self.app)
         # A retained session can be opened from another tab. Unwrap its old
         # workspace chrome before applying the new destination's presentation.
         frame = getattr(view, '_workspace_frame', None)
@@ -393,6 +400,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                     and not getattr(view, '_hub_sections', False)
                     and not getattr(view, '_standalone_markdown', False) and
                     not getattr(view, '_documents_overview', False) and
+                    not getattr(view, '_documents_browser', False) and
                     (root or route in ('editor', 'browser', 'remote-browser', 'workspace-status', 'workspace-browser')
                      or (route or '').startswith('private:')))
         if eligible and not hasattr(view, '_workspace_frame'):
@@ -500,6 +508,9 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 for panel in (self.app.native_host.bodies[key], self.app.routes.body(key)):
                     if panel.style.width != width:
                         panel.style.width = width
+            rail = getattr(adapter, 'destination_rail', None)
+            if rail is not None:
+                rail.layout()
             self.layout_width = self.width()
             self.wide = self.layout_width >= 640
             from .action_menu import refresh_document_menus
@@ -541,6 +552,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                         frame.render()
                         frame.finish_transition(transition)
                 self.last_layout = layout
+            if hasattr(self.app, 'documents_sections'):
+                self.app.reflow_documents_hub()
             android = type(self.app._impl).__module__.startswith('toga_android.')
             if view is not None:
                 self.app.refresh_reader_exit(view)
@@ -569,11 +582,6 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             reserve_navigation(self.app)
             if hasattr(self.app, 'home_sections'):
                 self.app.reflow_home()
-            if hasattr(self.app, 'documents_sections'):
-                self.app.reflow_documents_hub()
-            if view is not None:
-                from .destination_actions import align_duo_heading
-                align_duo_heading(view)
             from .transfer_status import refresh as refresh_sync_status
             refresh_sync_status(self.app, destination)
             dismiss = getattr(view, '_workspace_status_dismiss', None)
@@ -797,8 +805,9 @@ class WorkspaceFrame:
     def _folder_prompt(self):
         if not hasattr(self, 'folder_placeholder'):
             self.folder_placeholder = toga.Box(
-                children=[toga.Label('Choose a workspace', style=Pack(margin=16, text_align=CENTER))],
-                style=Pack(direction=COLUMN, flex=1, align_items=CENTER, justify_content=CENTER))
+                children=[toga.Label('Choose a workspace',
+                    style=Pack(height=TOUCH_TARGET + 4, margin=(0, 16), text_align=CENTER))],
+                style=Pack(direction=COLUMN, flex=1, align_items=CENTER))
         return self.folder_placeholder
 
     def mount_native_folder_prompt(self):

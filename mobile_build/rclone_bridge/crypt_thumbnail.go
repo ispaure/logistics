@@ -20,7 +20,8 @@ import (
 )
 
 func nativeThumbnail(ctx context.Context, data []byte, width, height int) (map[string]string, error) {
-	if width < 1 || height < 1 || width > 512 || height > 512 {
+	const maxThumbnailEdge = 1024
+	if width < 1 || height < 1 || width > maxThumbnailEdge || height > maxThumbnailEdge {
 		return nil, errors.New("invalid thumbnail dimensions")
 	}
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))

@@ -16,12 +16,13 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 
-from .appearance import accessible_name, batch_surfaces, list_button, surface
+from .appearance import accessible_name, batch_surfaces, list_button, selection_row, surface
 from .control_icons import icon_button, button_icons
 from .hub_controls import (
-    DocumentThumbnails, PanelGrid, append_document_group_rows, document_group, document_list,
-    empty_document_row, retire_document_actions, source_title, text_document_kind,
+    DocumentCardMedia, PanelGrid, append_document_group_rows, document_group, document_list,
+    empty_document_row, library_discovery_heading, retire_document_actions, source_title, text_document_kind,
 )
+from .recent_documents import MAX_RECENT
 from .ui_metrics import TOUCH_TARGET, WRAPPED_FILENAME_ROW_HEIGHT
 
 
@@ -32,72 +33,152 @@ COLLECTION_FONT = 13
 FILENAME_FONT = 15
 
 
-def library_heading_style():
-    return Pack(font_size=COLLECTION_FONT, font_weight='bold', margin_top=8, margin_bottom=8)
+def library_heading_style(*, font_size=19):
+    return Pack(font_size=font_size, font_weight='bold', margin_top=8, margin_bottom=8)
 
 
 def library_folder_button(record, on_press):
     from .browser_ui import middle_filename
 
-    button = list_button(toga.Button(record['name'], on_press=on_press,
-        style=Pack(height=TOUCH_TARGET, font_size=FILENAME_FONT, font_weight='bold')))
+    button = toga.Button(record['name'], on_press=on_press,
+        style=Pack(height=TOUCH_TARGET, font_size=FILENAME_FONT, font_weight='bold'))
+    # These rows switch between a transparent surface and a selection fill.
+    button._impl._content_inset = 8
+    list_button(button)
     middle_filename(button)
     return button
 
 
-def library_folder_row(button, record):
+def library_folder_row(button, record, *, category=None):
     source = record['source']
-    glyph = 'storage_unlocked' if source.endswith(' - Encrypted Copy') else 'storage_local'
-    return source_title(button, [(glyph, source)], text='Encrypted library' if glyph == 'storage_unlocked' else 'Local library')
+    folder = record['location'][1] if 'location' in record else record['folder']
+    row = button
+    if source.endswith(' - Encrypted Copy'):
+        row = source_title(button, [('storage_unlocked', source)], text='Encrypted library')
+    row._document_library_key = (category, source, folder)
+    return row
 
 
 class DocumentsHub:
     """Presentation methods share the HubController state and service contract."""
+    def visible_library_drawer(self):
+        routes = self.app.routes
+        body = routes.body('documents')
+        page = next(iter(body.children), None)
+        return getattr(page, '_document_library_drawer', None)
+
     def reflow_documents_hub(self):
         from commonUtils.ui.native.forms import fit_text
         from .fold_layout import division
         from .pane_layout import panes
 
+        if self.main_window is None:
+            return
         body = self._document_collection_body
         width = self.adaptive.content_width('documents', margin=32)
-        height = self.main_window.size.height
-        fold = division(self.app, body)
-        searching = self.document_search.parent is not None
+        viewport = self.main_window.size
+        drawer = self.visible_library_drawer()
+        fold = division(self.app, drawer.page if drawer is not None else body)
+        searching = self.document_search.parent is self.app._documents_status_row
         split = fold.vertical if fold is not None else width >= COLLECTION_SPLIT_WIDTH
-        allocation = panes(width, height, fold=fold, leading_fraction=.43)
+        allocation = panes(width, viewport.height, fold=fold, leading_fraction=.43)
         selector_width = allocation.leading if split else width
         gap = allocation.gap if split or fold is not None else 0
         result_width = width - selector_width - gap if split else width
         wrapped = selector_width < TABS_BREAKPOINT
+        fit_text(self.documents_sections._document_unlock_hint, selector_width)
 
-        title_visible = self.documents_sections._destination_body_heading.parent is not None
-        geometry = (split, wrapped, searching, selector_width, fold, gap, title_visible)
+        nav = self._document_collection_navigation
+        nav_host = drawer.library_sidebar if drawer is not None and split else body
+        if nav.parent is not nav_host:
+            nav.parent.remove(nav)
+            if nav_host is body:
+                body.insert(0, nav)
+            else:
+                nav_host.add(nav)
+        if drawer is not None:
+            drawer.layout_library(nav, selector_width, gap, split=split)
+        self.mark_document_library(drawer.library_key if drawer is not None and split else None)
+        self.documents_sections._bottom_scrolls = (self._document_results_scroll,)
+        if split and nav_host is body:
+            self.documents_sections._bottom_scrolls += (nav,)
+
+        geometry = (split, wrapped, searching, selector_width, fold, gap, nav_host is body)
         if geometry != self._document_collection_geometry:
             self._document_collection_geometry = geometry
             body.style.direction = ROW if split else COLUMN
-            nav = self._document_collection_navigation
             detail = self._document_collection_detail
+            nav.style.flex = 0 if nav_host is body else 1
             if split:
                 del nav.style.height
-                nav.style.width = selector_width
+                if nav_host is body:
+                    nav.style.width = selector_width
+                else:
+                    del nav.style.width
             else:
                 del nav.style.width
                 # Both panes scroll independently when a horizontal fold fixes
                 # the space above the crease, including in a short window.
                 nav.style.height = (fold.y if fold is not None else
-                    (52 if title_visible else 0) + (0 if searching else (TOUCH_TARGET + 4) * (2 if wrapped else 1)))
-            detail.style.margin_left = gap if split else 0
+                    0 if searching else (TOUCH_TARGET + 4) * (2 if wrapped else 1))
+            detail.style.margin_left = gap if split and nav_host is body else 0
             detail.style.margin_top = gap if not split else 0
             self._layout_document_tabs(wrapped)
+        use_companion = split and not searching
+        target = self._document_collection_header if use_companion else self._document_results_pane
+        if self.document_results.parent is not target:
+            self.document_results.parent.remove(self.document_results)
+            target.add(self.document_results)
+        companion = self._document_selection
+        if not use_companion or self.documents_view == 'Libraries':
+            # Libraries use the retained folder route; only document cards
+            # have a preview mounted in the collection overview itself.
+            self._document_companion.clear()
+        elif companion.parent is not self._document_companion:
+            self._document_companion.clear()
+            self._document_companion.add(companion)
+
+        # Mount only the active viewport. Retaining two flex children, even
+        # with one excluded from display, can halve the native browser's height.
+        detail = self._document_collection_detail
+        active = self._document_companion if use_companion else self._document_results_scroll
+        inactive = self._document_results_scroll if use_companion else self._document_companion
+        if inactive.parent is detail:
+            detail.remove(inactive)
+        if active.parent is not detail:
+            detail.add(active)
+
+        # Pack's display flag only changes allocation. Hide the native view too:
+        # otherwise a pane retains its last frame and can cover the library list
+        # after rotating or opening search on the Duo.
+        self._document_results_scroll.style.update(
+            display='none' if use_companion else 'pack',
+            visibility='hidden' if use_companion else 'visible')
+        self._document_companion.style.update(
+            display='pack' if use_companion else 'none',
+            visibility='visible' if use_companion else 'hidden')
 
         # Fit status and source text to the allocated pane, including after a
         # fold or search transition, without letting it expand the viewport.
         def fit(widget):
             if isinstance(widget, toga.Label):
-                fit_text(widget, max(1, int(result_width) - 32))
+                fit_text(widget, max(1, int(selector_width if use_companion else result_width) - 32))
             for child in widget.children:
                 fit(child)
         fit(self.document_results)
+
+    def mark_document_library(self, key):
+        def visit(row):
+            if hasattr(row, '_document_library_key'):
+                selected = row._document_library_key == key
+                if selected != getattr(row, '_document_library_selected', False):
+                    selection_row(row, selected)
+                    row._document_library_selected = selected
+                return
+            for child in row.children:
+                visit(child)
+
+        visit(self.document_libraries_list)
 
     def _layout_document_tabs(self, wrapped):
         mode = 'wrapped' if wrapped else 'tabs'
@@ -125,6 +206,9 @@ class DocumentsHub:
 
     def build_documents_hub(self):
         from commonUtils.ui.native.event_loop import DebouncedCallback
+        previous_search = getattr(self, '_document_search_route', None)
+        if previous_search is not None and previous_search.active:
+            previous_search.close()
         previous = getattr(self, '_document_search_delay', None)
         if previous is not None:
             previous.cancel()
@@ -179,6 +263,12 @@ class DocumentsHub:
             self.documents_view = 'Libraries'
         for name in COLLECTIONS:
             def choose(widget=None, name=name, **kwargs):
+                if self.documents_view != name:
+                    drawer = self.visible_library_drawer()
+                    if drawer is not None and not drawer.cancel_browser():
+                        return
+                    from .haptics import feedback
+                    feedback(widget)
                 self.documents_view = name
                 self.document_library = None
                 self.show_document_collection()
@@ -187,24 +277,31 @@ class DocumentsHub:
             accessible_name(button, name)
             self.document_view_buttons[name] = button
 
-        title = toga.Label('Documents', style=Pack(font_size=30, font_weight='bold', margin_bottom=8))
-        box._destination_body_heading = title
-        self._document_collection_header = toga.Box(children=[title, self.document_views],
+        self._document_collection_header = toga.Box(children=[self.document_views],
                                                     style=Pack(direction=COLUMN))
         self._document_collection_navigation = toga.ScrollContainer(horizontal=False,
             content=self._document_collection_header)
         box._duo_heading_pane = self._document_collection_navigation
-        self._document_collection_title = toga.Label(self.documents_view,
-            style=Pack(font_size=16, font_weight='bold', margin_bottom=8))
-        results = toga.Box(children=[self._document_collection_title, self.document_results],
+        results = toga.Box(children=[self.document_results],
                            style=Pack(direction=COLUMN, margin=(8, 0, 16, 0)))
+        self._document_results_pane = results
+        self._document_results_scroll = toga.ScrollContainer(horizontal=False, content=results, style=Pack(flex=1))
+        self._document_companion = toga.Box(style=Pack(direction=COLUMN, flex=1))
+        self._document_selection = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=8))
+        self._document_selection._clear_return_selection = self._document_selection.clear
+        self._document_preview_collection = None
         self._document_collection_detail = toga.Box(children=[self.app._documents_status_row,
-            toga.ScrollContainer(horizontal=False, content=results, style=Pack(flex=1))],
+            self._document_results_scroll, self._document_companion],
             style=Pack(direction=COLUMN, flex=1))
         self._document_collection_body = toga.Box(
             children=[self._document_collection_navigation, self._document_collection_detail],
             style=Pack(direction=COLUMN, flex=1))
-        box.add(self._document_collection_body)
+        from commonUtils.ui.native.forms import FittedLabel
+        box._document_unlock_hint = FittedLabel('Unlock encrypted copies to include their libraries.',
+            style=Pack(font_size=12, margin_bottom=8, display='none', visibility='hidden'))
+        box.add(box._document_unlock_hint, self._document_collection_body)
+        from .scroll_edges import fill_bottom
+        fill_bottom(box, self._document_results_scroll)
         from .document_search import DocumentSearch
         from commonUtils.ui.native.presentation import allow_label_to_shrink
         self._documents_search_location = empty_document_row('')
@@ -227,25 +324,8 @@ class DocumentsHub:
     def show_document_collection(self):
         if not hasattr(self, 'document_results'):
             return
-        query = bool(getattr(self, 'documents_query', '').strip())
-        searching = query or getattr(self, 'documents_search_open', False)
-        status = self.app._documents_status_row
-        if searching and self.document_search.parent is None:
-            status.add(self.document_search)
-        elif not searching and self.document_search.parent is status:
-            status.remove(self.document_search)
-        parent = self.document_views.parent
-        if searching and parent is not None:
-            parent.remove(self.document_views)
-        elif not searching and parent is None:
-            self._document_collection_header.add(self.document_views)
-        self._document_collection_title.text = 'Search results' if searching else self.documents_view
-        result_box = self.document_results.parent
-        title = self._document_collection_title
-        if searching and title.parent is None:
-            result_box.insert(0, title)
-        elif not searching and title.parent is result_box:
-            result_box.remove(title)
+        # Search owns a separate retained route; collection panes stay intact.
+        searching = False
         library = getattr(self, 'document_library', None)
         for name, section in (('Notes', self.document_notes_list), ('Books', self.document_books_list),
                               ('Comics', self.document_comics_list), (None, self.document_saved_list)):
@@ -260,6 +340,9 @@ class DocumentsHub:
         if list(self.document_results.children) != [selected]:
             self.document_results.clear()
             self.document_results.add(selected)
+        if not searching and self.documents_view != self._document_preview_collection:
+            self._document_preview_collection = self.documents_view
+            self._document_selection.clear()
         discover = not getattr(self.app, '_startup_in_progress', False)
         if discover and not searching and self.documents_view == 'Libraries' and not self._document_libraries_ready:
             self.populate_document_libraries()
@@ -267,11 +350,41 @@ class DocumentsHub:
             from .favourites import populate
             retire_document_actions(self.document_favourites_list)
             self.document_favourites_list.clear()
-            populate(self.app, self.document_favourites_list, heading=False, row_font=FILENAME_FONT, allow_remove=True)
-        previews = getattr(selected, '_document_thumbnails', None)
+            populate(self.app, self.document_favourites_list, heading=False, row_font=FILENAME_FONT,
+                     allow_remove=True, select=self.select_document_card)
+        previews = getattr(selected, '_document_card_media', None)
         if previews is not None:
             previews.start()
         self.reflow_documents_hub()
+
+    async def select_document_card(self, collection, title, open_document):
+        """Keep the collection visible and put the selected file's action on the right."""
+        if (getattr(self, '_document_collection_body', None) is None
+                or self._document_collection_body.style.direction != ROW or self.documents_view != collection
+                or self.app.native_host.state.destination != 'documents'):
+            return await open_document()
+        detail = self._document_selection
+        detail.clear()
+        from commonUtils.ui.native.presentation import allow_label_to_shrink
+        from .control_icons import icon_button
+        name = toga.Label(title, style=Pack(font_size=23, font_weight='bold', margin=(12, 8)))
+        allow_label_to_shrink(name)
+        back = icon_button('back', 'Back to documents', on_press=self.dismiss_document_selection)
+        detail.add(toga.Box(children=[back, toga.Box(style=Pack(flex=1))], style=Pack(direction=ROW)),
+                   name, toga.Button('Open', on_press=open_document, style=Pack(height=48, margin=(0, 8))))
+
+    def dismiss_document_selection(self, widget=None, **kwargs):
+        detail = getattr(self, '_document_selection', None)
+        if (detail is None or not detail.children or detail.parent is not self._document_companion
+                or self._document_companion.parent is not self._document_collection_detail):
+            return False
+        detail.clear()
+        return True
+
+    async def browse_document_library(self, storage, *, provider, folder, title, category=None):
+        drawer = self.adaptive.browser('documents')
+        return await drawer.show_main_browser(storage, folder=folder, title=title, provider=provider,
+                                              library_key=(category, storage, folder))
 
     def populate_document_libraries(self):
         self._document_libraries_ready = True
@@ -280,19 +393,18 @@ class DocumentsHub:
                  title_style=library_heading_style(), row_font=FILENAME_FONT)
         self.populate_book_libraries()
         self.document_comics_list.clear()
-        self.document_comics_list.add(toga.Label('Comics', style=library_heading_style()))
         if not self.app.feature_enabled('comics'):
-            self.document_comics_list.add(empty_document_row('Comics is disabled.'))
+            self.document_comics_list.add(toga.Label('Comics', style=library_heading_style()),
+                                          empty_document_row('Comics is disabled.'))
             return
         catalog = self.app.reader_manager().catalog
         target = self.document_comics_list
-        target.add(empty_document_row('Finding libraries…'))
+        finish = library_discovery_heading(target, 'Comics', library_heading_style())
         async def discover():
             await catalog.refresh_library_folders()
             if target is not self.document_comics_list or not self.app.active_host:
                 return
-            target.clear()
-            target.add(toga.Label('Comics', style=library_heading_style()))
+            finish()
             rows = []
             for record in catalog.library_records:
                 if not self.app.library_folder_visible(record):
@@ -300,7 +412,7 @@ class DocumentsHub:
                 async def open_library(widget=None, record=record, **kwargs):
                     if self.app.checkpoint():
                         await catalog.library_host.open_folder(record, destination='documents')
-                rows.append(library_folder_row(library_folder_button(record, open_library), record))
+                rows.append(library_folder_row(library_folder_button(record, open_library), record, category='Comics'))
             target.add(document_list(rows, 'No Comics libraries found.', outlined=True))
             if 'could not' in catalog.book_status.text:
                 target.add(empty_document_row(catalog.book_status.text))
@@ -319,12 +431,11 @@ class DocumentsHub:
         if old is not None:
             old.cancel()
         target.clear()
-        target.add(toga.Label('Books', style=library_heading_style()))
         if not app.feature_enabled('books'):
-            target.add(empty_document_row('Books is disabled.'))
+            target.add(toga.Label('Books', style=library_heading_style()),
+                       empty_document_row('Books is disabled.'))
             return
-        status = empty_document_row('Finding libraries…')
-        target.add(status)
+        finish = library_discovery_heading(target, 'Books', library_heading_style())
         cancel = Event()
 
         async def discover():
@@ -352,14 +463,14 @@ class DocumentsHub:
                         except (OSError, ValueError) as error:
                             await app.main_window.dialog(toga.InfoDialog('Could not open library', str(error)))
                             return False
-                        return await self.adaptive.browser('documents').show_main_browser(
-                            record['source'], folder=folder, title=record['name'], provider=provider, library=True)
+                        return await self.browse_document_library(record['source'], folder=folder,
+                            title=record['name'], provider=provider, category='Books')
 
                 button = library_folder_button(record, open_library)
                 source = record['source']
                 accessible_name(button, f'{source} / {location[1]}' if location[1] else source)
-                rows.append(library_folder_row(button, record))
-            target.remove(status)
+                rows.append(library_folder_row(button, record, category='Books'))
+            finish()
             target.add(document_list(rows, 'No Books libraries found.', outlined=True))
             if failures:
                 target.add(empty_document_row('Some local folders could not be checked.'))
@@ -394,7 +505,6 @@ class DocumentsHub:
 
     def publish_document_search(self, hits, failures, *, finished=True, checked_localcrypt_cache=False):
         from .browser_ui import entry_icon, wrapped_filename
-        from .file_items import native_menu, reference_actions
 
         target = self.document_search_results
         published = getattr(self, '_document_search_published', 0)
@@ -404,39 +514,22 @@ class DocumentsHub:
                 if not self.app.checkpoint():
                     return
                 if hit.get('directory'):
-                    from .document_search import reveal_search_hit
-                    return await reveal_search_hit(self.app, hit)
+                    from .search_panels import visit_document_folder
+                    return await visit_document_folder(self.app, hit)
                 if source['type'] == 'managed':
                     return self.app.stored_document_opener(source['resource'])()
                 if source['type'] == 'notebook':
                     from features.notebooks.mobile.documents import open_notebook
                     return await open_notebook(self.app, key=source['resource'])
-                from .document_sources import reopen_file
+                from .document_search import open_search_file
                 try:
-                    await reopen_file(self.app, source)
+                    await open_search_file(self.app, hit)
                 except (OSError, ValueError) as error:
                     await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
             button = list_button(toga.Button(hit['name'], on_press=open_result,
                 style=Pack(height=WRAPPED_FILENAME_ROW_HEIGHT, flex=1, font_size=FILENAME_FONT)))
             wrapped_filename(button)
-            kinds = [('storage_unlocked', 'Unlocked LocalCrypt')] if hit['private'] else [('storage_local', 'Local file')]
-            more = icon_button('more', 'File actions for ' + hit['name'])
-            actions = [('Open folder' if hit.get('directory') else 'Open', open_result)]
-            if hit['source']['type'] in {'local', 'crypt'}:
-                async def reveal(widget=None, hit=hit, **kwargs):
-                    from .document_search import reveal_search_hit
-                    try:
-                        return await reveal_search_hit(self.app, hit)
-                    except (OSError, ValueError) as error:
-                        await self.main_window.dialog(toga.InfoDialog('Could not show file', str(error)))
-                actions.append(('Show in folder', reveal))
-            def load_actions(actions=tuple(actions), hit=hit, more=more):
-                direct = [] if hit.get('directory') else reference_actions(
-                    self.app, hit['source'], hit['name'], dict(kind='file'), anchor=more)
-                return [*actions, *direct]
-            native_menu(self.app, more, load_actions)
-            self._document_search_menus.append(more.document_actions)
-            row = toga.Box(children=[entry_icon(hit.get('directory', False)), source_title(button, kinds), more],
+            row = toga.Box(children=[entry_icon(hit.get('directory', False)), button],
                            style=Pack(direction=ROW, align_items=CENTER))
             rows.append(row)
         if rows:
@@ -460,26 +553,70 @@ class DocumentsHub:
             target.add(empty_document_row('Some local locations could not be searched.'))
         self.reflow_documents_hub()
 
-    def open_document_search(self, widget=None, **kwargs):
+    def open_document_search(self, widget=None, *, scope=None, destination='documents', **kwargs):
+        from .search_panels import SearchRoute
+        if not hasattr(self, 'document_search'):
+            self.build_documents_hub()
+        panel = getattr(self, '_document_search_route', None)
+        if panel is not None and panel.active:
+            if panel.destination == destination and self._documents_file_search.scope == scope:
+                panel.show()
+                return panel
+            panel.close()
+            if panel.active:
+                return False
+        self._documents_file_search.scope = scope
+        self.document_search.placeholder = ('Search rclone copies' if scope == 'copies' else
+                                           'Search files on this device' if scope == 'device' else 'Search local documents')
         self.documents_search_open = True
-        self.show_document_collection()
+        if self.document_search_results.parent is not None:
+            self.document_search_results.parent.remove(self.document_search_results)
+        if self.document_search.parent is not None:
+            self.document_search.parent.remove(self.document_search)
+        results = self._document_search_scroll = toga.ScrollContainer(
+            horizontal=False, content=self.document_search_results, style=Pack(flex=1))
+        content = toga.Box(children=[self.document_search, results], style=Pack(direction=COLUMN, flex=1))
+        panel = self._document_search_route = SearchRoute(self.app, content, destination=destination,
+                                                         retire=self._retire_document_search)
+        from .scroll_edges import fill_bottom
+        fill_bottom(panel.view, results)
         if not self.documents_query.strip():
             self.clear_document_search_results()
             self.document_search_results.add(empty_document_row('Search filenames in all local folders.'))
-        self.app.adaptive.render()
+        panel.show()
         self.document_search.focus()
+        return panel
 
-    def close_document_search(self, widget=None, **kwargs):
+    def _retire_document_search(self):
+        self._document_search_route = None
+        scroll = getattr(self, '_document_search_scroll', None)
+        if scroll is not None:
+            # Scroll content has a native container, not a Toga parent. Release
+            # that owner before a later search attaches the retained results.
+            scroll.content = None
+            self._document_search_scroll = None
         self._documents_file_search.stop_local_search()
+        self._document_search_delay.cancel()
         self.document_search.value = ''
         self._document_search_delay.cancel()
         self.documents_search_open = False
+        self._document_query_started = None
         self.clear_document_search_results()
+        for widget in (self.document_search, self.document_search_results):
+            if widget.parent is not None:
+                widget.parent.remove(widget)
         self.show_document_collection()
-        self.app.adaptive.render()
+
+    def close_document_search(self, widget=None, **kwargs):
+        panel = getattr(self, '_document_search_route', None)
+        if panel is not None and panel.active:
+            panel.close()
+        else:
+            self._retire_document_search()
 
     def search_documents(self, widget, **kwargs):
         self.documents_query = widget.value
+        self._document_query_started = None
         self._documents_file_search.stop_local_search()
         self.clear_document_search_results()
         if widget.value.strip():
@@ -506,9 +643,11 @@ class DocumentsHub:
         from .workspace import Session
         query = getattr(self, 'documents_query', '').strip().casefold()
         if query:
-            self.clear_document_search_results()
-            self.show_document_search_progress()
-            self._documents_file_search.start(query)
+            if getattr(self, '_document_query_started', None) != query:
+                self._document_query_started = query
+                self.clear_document_search_results()
+                self.show_document_search_progress()
+                self._documents_file_search.start(query)
             self.show_document_collection()
             return
         self._documents_file_search.stop_local_search()
@@ -525,13 +664,18 @@ class DocumentsHub:
         self.document_recent_list.add(toga.Box(children=[toga.Box(style=Pack(flex=1)), clear],
             style=Pack(direction=ROW, align_items=CENTER)))
         rows = []
-        previews = self.document_recent_list._document_thumbnails = DocumentThumbnails(self.app)
+        previews = self.document_recent_list._document_card_media = DocumentCardMedia(self.app)
+        show_archive = owner is not None and owner.enabled() and owner.item is not None
+        history_slots = MAX_RECENT - int(show_archive)
         for session, summary in recent:
+            if len(rows) >= history_slots:
+                break
             if (owner is not None and owner.item is not None and session.kind == 'archive'
                     and owner.matches_reference(session.source)):
                 continue
-            rows.append(self.recent_row(session, summary, wrap_name=True, show_source=True, previews=previews))
-        if owner is not None and owner.enabled() and owner.item is not None:
+            rows.append(self.recent_row(session, summary, wrap_name=True, show_source=True,
+                                        previews=previews, collection='Recent'))
+        if show_archive:
             rows.append(toga.Box(children=[
                 toga.Button(owner.name, on_press=lambda widget: owner.present(), style=Pack(height=48, flex=1)),
                 toga.Button('×', on_press=owner.close, style=Pack(height=48)),
@@ -558,7 +702,7 @@ class DocumentsHub:
             row.document_button.style.font_size = FILENAME_FONT
         if rows:
             self.document_saved_list.add(
-                toga.Label('Saved files', style=library_heading_style()), document_group(rows))
+                toga.Label('Saved files', style=library_heading_style(font_size=COLLECTION_FONT)), document_group(rows))
         self.show_document_collection()
 
     async def open_document_category(self, category):

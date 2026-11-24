@@ -8,7 +8,7 @@ lives, whether its source is locked and whether it is read-only.
 
 ## Return to something you opened
 
-**Recent** in Documents lists open files alongside files you can reopen. Open
+**Recent** in Documents lists up to 20 items, including open files and files you can reopen. Open
 entries keep their current reader or editor, including unsaved edits, and show
 an **Open** badge. Use their close control to close a view. Home previews up to
 three recent items, and **See all** opens Recent in Documents. Filenames on both
@@ -18,11 +18,20 @@ screens can wrap to two lines.
 [Books](../../features/books/user_mobile/library.md) libraries. Use the shortcuts
 under **Your libraries** on Home to go straight to Notes, Books or Comics.
 Select **Libraries** again to see every library. **Saved files** lists
-app-managed text files and notebooks outside Recent. A storage icon and
-caption identify the source beneath the file name. Home, Favourites and Recent
+app-managed text files and notebooks outside Recent. Library rows show their
+names, with a caption for encrypted libraries. A storage icon and caption
+identify the source beneath individual file names. Home, Favourites and Recent
 show thumbnails for supported local files.
-In a wide window, Documents keeps its tabs on the left and shows
-the selected collection on the right.
+When a saved credential ZIP can be unlocked, Documents shows the Unlock
+button and a hint above Libraries, Favourites and Recent. Unlocking all
+available ZIPs removes both.
+In a wide window, Documents keeps its libraries and document lists on the left.
+Select a Books or Comics library to browse its files. Use the folder toolbar to
+search, switch between tiles and rows, or select items for available file actions.
+Back to a parent folder keeps the current layout. The selected library stays on
+the left when there is room for both panes. Rotating keeps the current folder,
+including any subfolder. Select a Notes library to open its Notes Library view. Select
+a favourite or recent document to open it from the right pane.
 If a Recent entry fails, find the file in its current folder,
 reconnect its remote, or unlock its credential.
 
@@ -36,8 +45,28 @@ shows those it verifies on storage. It then checks for new files and adds
 matches as it finds them. The status shows the current location, phase, and
 how many names have been checked in that location during the current pass.
 Search reports locations it could not access. Tap **×** to leave search.
+Search opens in its own panel with one **×** control. Tap a file to open it;
+closing the reader returns to the same populated results. Tap a matching
+folder to browse it and its subfolders. Back retraces those folder visits to
+the search panel, where **×** returns to the collection or original folder.
+File Browser search uses the same behavior and opens files directly without
+row action menus. In Workspaces, the local subtabs also offer search before
+selecting a folder: **On My Phone/Tablet** searches device files, while
+**Rclone copies** searches available local copies, including unlocked copies.
+If a Markdown result belongs to a Notes Library, choose **Open in Notes Library**
+or **Open in Regular Viewer**. An **Always Open** option remembers the choice for
+future results. Change or reset it under **Settings → Markdown → Notes Library
+files from search**.
 
-From a document or search result with a browsable source, choose
+EPUBs, comics, PDFs and videos show their reading or playback percentage on
+document cards, above the File Browser row menu and in the upper-right of tiles.
+**0%** is gray, progress is blue, and **100%** is green. Use the file's action
+menu to mark a document read or unread, or a video watched or unwatched.
+Marking a book or comic read opens it at the
+end next time. Marking it unread resets its position to the start. A completed
+video stays at **100%** during a replay. Built-in help stays out of Recent.
+
+From a document with a browsable source, choose
 **••• → Show in folder** to select it in Workspaces. The document remains
 open. For a locked source, use **Unlock LocalCrypt** on Home, Workspaces
 or Documents before browsing its files.

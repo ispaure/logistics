@@ -38,20 +38,47 @@ def mount_actions(header, controller):
 def mount(header, controller, title):
     if not type(header._impl).__module__.startswith('toga_iOS.'):
         return
-    header.use_native_title()
+    mount_title(header, controller, title)
     mount_actions(header, controller)
+
+
+def mount_title(header, controller, title, *, in_pane=False):
+    """Place the shared folder identity in UIKit's bar or above its detail list."""
+    header.use_native_title()
     width = max(44, min(220, float(header.window._impl.native.bounds.size.width) - 216))
     header.status.style.font_size = 17 * .75
     identity = next(child for child in header.storage_identity.children if hasattr(child, 'text'))
     kinds = tuple(header._storage_kinds)
-    state = (title, identity.text, kinds, width, header.folder_location)
+    state = (title, identity.text, kinds, width, header.folder_location, in_pane)
     if getattr(header, '_folder_title_state', None) != state:
         from .document_location import bind_apple_hold
         header._folder_title_view = storage_title(title, identity.text, kinds, width)
         bind_apple_hold(header, header._folder_title_view, lambda owner: owner.show_location(name=title))
         header._folder_title_state = state
-    if getattr(controller.navigationItem, 'titleView', None) != header._folder_title_view:
-        controller.navigationItem.titleView = header._folder_title_view
+    item = controller.navigationItem
+    bar_title = '' if in_pane else title
+    if getattr(item, 'title', None) != bar_title:
+        item.title = bar_title
+    pane_title = getattr(header, '_folder_pane_title', None)
+    if in_pane:
+        import toga
+        from toga.style import Pack
+        from .document_location import place_title_in_header
+
+        if getattr(item, 'titleView', None) is not None:
+            item.titleView = None
+        if pane_title is None:
+            # Match the clearance the Workspaces navigation bar leaves around
+            # this title when the same view is hosted directly in the pane.
+            pane_title = header._folder_pane_title = toga.Box(style=Pack(margin_top=17, margin_bottom=28))
+        if pane_title.parent is None:
+            header.insert(0, pane_title)
+        place_title_in_header(pane_title, header._folder_title_view, identity.text)
+    else:
+        if pane_title is not None and pane_title.parent is header:
+            header.remove(pane_title)
+        if getattr(item, 'titleView', None) != header._folder_title_view:
+            item.titleView = header._folder_title_view
     header._native_title_mounted = True
     header.refresh_status()
 
@@ -79,7 +106,16 @@ def storage_title(title, text, kinds, width, *, leading=False, bold=False, title
     if not text:
         return label
     view = ObjCClass('UIView').alloc().initWithFrame(CGRect((0, 0), (width, storage_title_height(text))))
-    view.addSubview(label)
+    # Inline reader toolbars give the title a taller slot than its two labels.
+    # Keep the filename and storage caption centered together in either owner.
+    content = ObjCClass('UIView').alloc().initWithFrame(view.bounds)
+    content.translatesAutoresizingMaskIntoConstraints = False
+    view.addSubview(content)
+    content.leadingAnchor.constraintEqualToAnchor(view.leadingAnchor).active = True
+    content.trailingAnchor.constraintEqualToAnchor(view.trailingAnchor).active = True
+    content.centerYAnchor.constraintEqualToAnchor(view.centerYAnchor).active = True
+    content.heightAnchor.constraintEqualToConstant(storage_title_height(text)).active = True
+    content.addSubview(label)
     scroll = ObjCClass('UIScrollView').alloc().initWithFrame(CGRect((0, 22), (width, 15)))
     scroll.autoresizingMask = 2
     scroll.showsHorizontalScrollIndicator = False
@@ -95,7 +131,7 @@ def storage_title(title, text, kinds, width, *, leading=False, bold=False, title
         image = icon(name)._impl.native.imageWithRenderingMode(2)
         indicator = ObjCClass('UIImageView').alloc().initWithImage(image)
         indicator.contentMode = 1
-        indicator.tintColor = apple_color(name if name.startswith('folder_') else 'accent')
+        indicator.tintColor = apple_color(name if name.startswith('folder_') else 'file_icon')
         indicator.widthAnchor.constraintEqualToConstant(12).active = True
         indicator.heightAnchor.constraintEqualToConstant(12).active = True
         row.addArrangedSubview(indicator)
@@ -121,5 +157,5 @@ def storage_title(title, text, kinds, width, *, leading=False, bold=False, title
     row.widthAnchor.constraintGreaterThanOrEqualToAnchor(scroll.frameLayoutGuide.widthAnchor).active = True
     row.heightAnchor.constraintEqualToConstant(15).active = True
     subtitle.setContentCompressionResistancePriority(1000, forAxis=0)
-    view.addSubview(scroll)
+    content.addSubview(scroll)
     return view

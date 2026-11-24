@@ -26,10 +26,14 @@ from .local_search import search_location_label
 from .local_sources import PhoneFiles, device_files_label
 
 
-def scan_local_documents(app, query, *, cancelled=lambda: False, progress=None):
+def scan_local_documents(app, query, *, cancelled=lambda: False, progress=None, scope=None):
     with ExitStack() as cleanup:
         roots = app.ordinary_file_roots(include_collections=False)
-        if local_read_available(app) and app.feature_enabled('rclone'):
+        if scope == 'device':
+            roots.pop('Local files', None)
+        elif scope == 'copies':
+            roots = {'Local files': roots.get('Local files')}
+        if scope != 'device' and local_read_available(app) and app.feature_enabled('rclone'):
             roots.update(app.existing_crypt_locations())
             linked = app.linked_crypt_locations()
             # Discovery opens these providers before traversal starts. Retire
@@ -38,10 +42,10 @@ def scan_local_documents(app, query, *, cancelled=lambda: False, progress=None):
                 if hasattr(provider, 'close'):
                     cleanup.callback(provider.close)
             roots.update(linked)
-        return _scan_locations(app, roots, query, cancelled=cancelled, progress=progress)
+        return _scan_locations(app, roots, query, cancelled=cancelled, progress=progress, include_saved=scope is None)
 
 
-def _scan_locations(app, roots, query, *, cancelled, progress):
+def _scan_locations(app, roots, query, *, cancelled, progress, include_saved=True):
     failures, hits, seen = [], [], set()
 
     def run(location, listing, load_match, phase, *, cache_pass=False):
@@ -111,6 +115,8 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
         for location in locations:
             run(location, location.live, location.reuse, 'checking_storage')
     check_cancelled(cancelled)
+    if not include_saved:
+        return hits, failures
     # Legacy saved drafts have no public collection path, but are local files.
     from commonUtils.search.names import matches_name, search_terms
     terms = search_terms(query)
@@ -196,11 +202,39 @@ async def reveal_search_hit(app, hit):
     return await show_folder_location(app, dict(provider=provider, key=source['key']))
 
 
+async def open_search_file(app, hit):
+    from .document_sources import local_document_path, reopen_file
+    from .obsidian import open_search_note
+    source = hit['source']
+
+    async def regular():
+        return await reopen_file(app, source)
+
+    if PurePosixPath(hit['name']).suffix.lower() not in {'.md', '.markdown'} or source['type'] not in {'local', 'crypt'}:
+        return await regular()
+    if source['type'] == 'local':
+        from commonUtils.runtime.resources.local import LocalFiles
+        physical = local_document_path(app, source['path'])
+        count = len(PurePosixPath(hit['path']).parts)
+        if not count or count > len(physical.parents):
+            return await regular()
+        provider, path, release = LocalFiles(physical.parents[count - 1]), hit['path'], lambda: None
+    else:
+        from .file_items import _resolve_reference
+        item, release = await asyncio.to_thread(_resolve_reference, app, source)
+        provider, path = item.provider, item.path
+    try:
+        return await open_search_note(app, provider, path, regular=regular)
+    finally:
+        release()
+
+
 class DocumentSearch:
     def __init__(self, app, publish, publish_progress):
         self.app, self.publish = app, publish
         self.publish_progress = publish_progress
         self.task = None
+        self.scope = None
         self.listing = FolderListing(active=lambda: app.active_host,
             context=lambda: app.documents_query.strip(), location=lambda: None,
             credentials=lambda: (getattr(app, 'cloud_client', None),
@@ -214,6 +248,7 @@ class DocumentSearch:
 
     def start(self, query):
         self.stop_local_search()
+        scope = self.scope
         work = self.listing.begin()
         last_report = float('-inf')
         last_location = ''
@@ -248,8 +283,10 @@ class DocumentSearch:
         async def search():
             nonlocal finished
             try:
-                hits, failures = await asyncio.to_thread(scan_local_documents, self.app, query,
-                                                         cancelled=work.cancel.is_set, progress=report)
+                options = dict(cancelled=work.cancel.is_set, progress=report)
+                if scope is not None:
+                    options['scope'] = scope
+                hits, failures = await asyncio.to_thread(scan_local_documents, self.app, query, **options)
                 finished = True
                 if self.listing.accepts(work, private=True):
                     self.publish(hits, failures, checked_localcrypt_cache=checked_localcrypt_cache)

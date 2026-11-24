@@ -52,10 +52,10 @@ class MobileUITests(unittest.TestCase):
             app.settings_navigation.sections['App']
             app.settings_navigation.sections['Text']
             app.text_font_size_choice.value = '20'
-            app.restore_choice.value = False
+            app.settings_navigation.sections['App'].restart_choice.value = 'Start at Home'
             app.save_preferences()
             self.assertEqual(app.preferences.values['text_font_size'], '20')
-            self.assertEqual(app.preferences.values['restore_last_document'], 'false')
+            self.assertEqual(app.preferences.values['document_restart'], 'home')
             app.show_documents(destination='documents')
             first = app.current.id
             self.assertEqual(app.native_host.state.destination, 'documents')

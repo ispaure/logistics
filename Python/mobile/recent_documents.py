@@ -10,12 +10,13 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import json
+from pathlib import Path
 from time import time_ns
 from commonUtils.persistence import atomic_write_json
 from .workspace import Session, uuid, KINDS, PROVIDERS
 from hashlib import sha256
 
-MAX_RECENT = 10
+MAX_RECENT = 20
 MAX_HISTORY_BYTES = 64 * 1024
 REFERENCE_KINDS = KINDS | {'video', 'archive'}
 
@@ -56,34 +57,43 @@ class RecentDocuments:
         from services.documents.progress_identity import normalize_local_reference
         return normalize_local_reference(self.private_root, source)[0]
 
-    def notebook_file_reference(self, item):
-        """Upgrade clean, file-backed notebook history from a recovery UUID."""
-        if item['provider'] != 'notebook':
-            return item
-        from pathlib import Path
+    def notebook_binding(self, resource):
+        """Read the filename and draft state through the ordinary notebook binding."""
         from types import SimpleNamespace
         from services.documents.mobile_storage import notebook_source_binding
         try:
             root, binding = notebook_source_binding(
-                SimpleNamespace(root=self.private_root / 'notebooks'), item['resource'])
+                SimpleNamespace(root=self.private_root / 'notebooks'), resource)
+            if binding is not None:
+                path = root / binding['path']
+                source = self.normalize_source(dict(type='local', path=str(path.resolve())))
+                return source, path.name, bool(binding.get('dirty'))
         except (OSError, ValueError, KeyError, TypeError):
+            pass
+        return None
+
+    def notebook_file_reference(self, item):
+        """Upgrade clean, file-backed notebook history from a recovery UUID."""
+        if item['provider'] != 'notebook':
             return item
-        if binding is None or binding.get('dirty'):
+        binding = self.notebook_binding(item['resource'])
+        if binding is None or binding[2]:
             return item
-        path = root / binding['path']
-        source = dict(type='local', path=str(path.resolve()))
+        source, title, _ = binding
         return dict(item, provider='file-reference', resource=self.reference_id(source),
-                    title=Path(path).name, source=source)
+                    title=title, source=source)
 
     def normalize_items(self, items):
+        from services.documents.help_history import is_documentation
         result, seen = [], set()
         for item in sorted(items, key=lambda item: item.get('opened', 0), reverse=True):
-            item = self.notebook_file_reference(item)
             if item['provider'] == 'file-reference':
                 from services.documents.catalog import relocated_title
                 from services.documents.progress_identity import normalize_local_reference
                 before = item['source']
                 source, opener = normalize_local_reference(self.private_root, before, item.get('opener'))
+                if is_documentation(source, private_root=self.private_root):
+                    continue
                 if opener is not None:
                     item = dict(item, opener=opener)
                 title = relocated_title(item['title'], before, source) if source != before else item['title']
@@ -94,11 +104,20 @@ class RecentDocuments:
                 seen.add(identity)
         return result
 
-    def remember(self, session):
+    def remember(self, session, *, replacing=None):
         if session is None or self.error:
             return
         items = [item for item in self.items
-                 if (item['provider'], item['resource']) != session.identity]
+                 if (item['provider'], item['resource']) not in (session.identity, replacing)]
+        source = getattr(session, 'history_source', None) if session.provider == 'notebook' else None
+        if source is not None and not session.transient:
+            from services.documents.help_history import is_documentation
+            if is_documentation(source, private_root=self.private_root):
+                return
+            reference = self.reference_id(source)
+            items = [item for item in items if not (
+                item['provider'] == 'file-reference' and item['kind'] == 'notebook'
+                and item['resource'] == reference and 'opener' not in item)]
         if not session.transient and session.provider in PROVIDERS:
             item = dict(provider=session.provider, resource=session.resource, kind=session.kind, opened=time_ns())
             if self.items and self.items[0]['provider'] == session.provider and self.items[0]['resource'] == session.resource and self.items[0]['kind'] == session.kind:
@@ -110,9 +129,24 @@ class RecentDocuments:
             self.items = items
 
     def sessions(self):
+        history = sorted([*self.private_items, *self.items], key=lambda item: item.get('opened', 0), reverse=True)
+        # A legacy file row may be newer than its notebook row. Keep its
+        # position, but use the notebook identity so reopening can recover edits.
+        bindings = {}
+        notebooks = {}
+        for item in history:
+            if item['provider'] == 'notebook':
+                binding = self.notebook_binding(item['resource'])
+                if binding is not None:
+                    bindings[item['resource']] = binding
+                    notebooks.setdefault(self.reference_id(binding[0]), item)
+
         sessions = []
         seen = set()
-        for item in sorted([*self.private_items, *self.items], key=lambda item: item.get('opened', 0), reverse=True):
+        for item in history:
+            opened = item.get('opened', 0)
+            if item['provider'] == 'file-reference' and item['kind'] == 'notebook' and 'opener' not in item:
+                item = notebooks.get(item['resource'], item)
             identity = item['provider'], item['resource']
             if identity in seen or len(sessions) >= MAX_RECENT:
                 continue
@@ -121,7 +155,9 @@ class RecentDocuments:
             session = Session(id='', **values)
             session.source = item.get('source')
             session.history_opener = item.get('opener')
-            session.opened_at = item.get('opened', 0)
+            session.opened_at = opened
+            if item['provider'] == 'notebook' and item['resource'] in bindings:
+                session.source, session.title, session.dirty = bindings[item['resource']]
             sessions.append(session)
         return sessions
 
@@ -182,6 +218,9 @@ class RecentDocuments:
             return
         from services.documents.progress_identity import normalize_local_reference
         source, opener = normalize_local_reference(self.private_root, source, opener)
+        from services.documents.help_history import is_documentation
+        if is_documentation(source, private_root=self.private_root):
+            return
         item = dict(provider='file-reference', resource=self.reference_id(source, session.kind),
                     kind=session.kind, title=session.title, source=source, opened=time_ns())
         if opener is not None:
@@ -210,14 +249,14 @@ class RecentDocuments:
             raise ValueError('Recent history could not be read; it was preserved.')
         items = []
         for item in self.items:
-            item = self.notebook_file_reference(item)
-            before = item.get('source')
+            candidate = self.notebook_file_reference(item)
+            before = candidate.get('source')
             after = relocated_source(before, source, destination) if before is not None else before
             if before is not after:
                 if after is None:
                     continue
-                item = dict(item, source=after, resource=self.reference_id(after, item['kind']),
-                            title=relocated_title(item['title'], before, after, names=names))
+                item = dict(candidate, source=after, resource=self.reference_id(after, candidate['kind']),
+                            title=relocated_title(candidate['title'], before, after, names=names))
                 if 'opener' in item:
                     item['opener'] = relocated_opener(item['opener'], source, destination)
             items.append(item)

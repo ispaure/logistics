@@ -192,7 +192,7 @@ def _library_button(request, library, status, row_font):
     accessible_name(button, f'{caption} · {source}' if root else source)
     if row_font is not None:
         from .hub_controls import source_title
-        return source_title(button, kinds[-1:], text='Encrypted library' if encrypted else 'Local library')
+        return source_title(button, kinds[-1:], text='Encrypted library') if encrypted else button
     return button_icons(button, kinds)
 
 
@@ -210,10 +210,11 @@ def _show_libraries(request, rows, status, row_font, libraries, had_errors):
     status.text = 'Some locations could not be checked.' if had_errors else ''
 
 
-async def _run_discovery(request, rows, status, row_font):
+async def _run_discovery(request, rows, status, row_font, finish):
     try:
         libraries, had_errors = await asyncio.to_thread(_discover, request)
         if request.is_current():
+            finish()
             _show_libraries(request, rows, status, row_font, libraries, had_errors)
     except (asyncio.CancelledError, OperationCancelled):
         return
@@ -226,26 +227,24 @@ def _fit_status_label(app, key, label):
 
 
 def populate(app, container, *, title='Notes Library', refresh=True, title_style=None, row_font=None):
+    from .hub_controls import library_discovery_heading
+
     container.clear()
-    container.add(toga.Label(title, style=title_style or
-                             Pack(font_size=19, font_weight='bold', margin_top=16, margin_bottom=8)))
+    title_style = title_style or Pack(font_size=19, font_weight='bold', margin_top=16, margin_bottom=8)
     if not app.feature_enabled('notes_library'):
-        container.add(toga.Label('Notes Library is disabled.'))
+        container.add(toga.Label(title, style=title_style), toga.Label('Notes Library is disabled.'))
         return
+    finish = library_discovery_heading(container, title, title_style, font_size=12)
     rows = toga.Box(style=Pack(direction='column'))
-    status = FittedLabel('Looking for libraries…', style=Pack(font_size=12))
+    status = FittedLabel('', style=Pack(font_size=12))
     container.add(rows, status)
     _fit_status_label(app, 'notes-discovery-status', status)
-    if app.home_unlock_candidates():
-        unlock_hint = FittedLabel('Unlock encrypted copies to include their libraries.', style=Pack(font_size=12))
-        container.insert(0, unlock_hint)
-        _fit_status_label(app, 'notes-discovery-unlock', unlock_hint)
 
     token = app._notes_discovery_token = object()
     _cancel_scan_task(app)
     client = getattr(app, 'cloud_client', None)
     request = _DiscoveryRequest(app, token, client, getattr(client, 'generation', None))
-    app._notes_discovery_task = app.loop.create_task(_run_discovery(request, rows, status, row_font))
+    app._notes_discovery_task = app.loop.create_task(_run_discovery(request, rows, status, row_font, finish))
 
     async def create(widget=None, **kwargs):
         if request.is_current():

@@ -29,6 +29,7 @@ from .ui_metrics import CONTROL_TEXT, TOUCH_TARGET
 _TILE_TITLE_INSET = 8
 _TILE_PREVIEW_HEIGHT = 192
 _TILE_CAPTION_HEIGHT = 52
+_MAX_THUMBNAIL_EDGE = 1024  # Native image bridge limit.
 
 
 def _style_tile_title(button):
@@ -189,7 +190,7 @@ class FileDetailsPanel(toga.Box):
 
 
 class LocalFileBrowser(FileBrowser):
-    TILE_ROW_HEIGHT = _TILE_PREVIEW_HEIGHT + _TILE_CAPTION_HEIGHT + 8  # Card margins.
+    TILE_ROW_HEIGHT = _TILE_PREVIEW_HEIGHT + _TILE_CAPTION_HEIGHT + FileBrowser.COMPLETION_HEIGHT + 8
     TILE_OVERSCAN = 1
 
     def __init__(self, **kwargs):
@@ -198,6 +199,7 @@ class LocalFileBrowser(FileBrowser):
         self._preview_update = None
         self._preview_jobs = {}
         self._preview_completed = set()
+        self._tile_preview_sizes = {}
         self._tile_selecting = False
         self.details_panel = None
         self._tile_previews = {}
@@ -220,11 +222,21 @@ class LocalFileBrowser(FileBrowser):
             self.details_panel.hide()
         previous = self.thumbnails
         if previous is not None and (previous.provider is not source.provider
-                                     or previous.password != source.password):
+                                     or previous.password != source.password
+                                     or previous.dark_notebooks != source.dark_notebooks):
             self.icons.clear()
+            self._tile_preview_sizes.clear()
             self.work.decoded.clear()
         self._reset_previews()
         self.thumbnails = source
+
+    def refresh_notebook_thumbnails(self, dark):
+        if self.thumbnails is None or self.thumbnails.dark_notebooks == dark:
+            return
+        self.thumbnails.dark_notebooks = dark
+        self._reset_previews()
+        self._clear_previews()
+        self._schedule_previews()
 
     def show_details_panel(self, owner):
         if self.details_panel is not None:
@@ -258,11 +270,16 @@ class LocalFileBrowser(FileBrowser):
                     panel.overlay_height = min(560, panel.overlay_height + 164)
                     panel.overlay.reposition()
 
-        cached = self.icons.get((entry.identity, entry.revision))
+        key = entry.identity, entry.revision
+        cached = self.icons.get(key)
         if cached:
             publish(cached)
         else:
-            self._spawn(self.work.thumbnail(entry, source.load, publish,
+            def publish_details(data):
+                self._tile_preview_sizes.pop(key, None)
+                publish(data)
+
+            self._spawn(self.work.thumbnail(entry, source.load, publish_details,
                 epoch=epoch, cancelled=self.cancelled))
 
     def set_previews_visible(self, visible):
@@ -278,11 +295,12 @@ class LocalFileBrowser(FileBrowser):
     def pause_search_work(self):
         self.set_previews_visible(False)
         if self.thumbnails is not None and self.thumbnails.private:
-            self._clear_private_previews()
+            self._clear_previews()
         super().pause_search_work()
 
-    def _clear_private_previews(self):
+    def _clear_previews(self):
         self.icons.clear()
+        self._tile_preview_sizes.clear()
         self.work.decoded.clear()
         for row in self._list_thumbnail_rows.values():
             row.thumbnail = False
@@ -293,6 +311,7 @@ class LocalFileBrowser(FileBrowser):
             if preview is not placeholder:
                 preview.image = None
                 box.remove(preview)
+                box.style.direction = COLUMN
                 box.add(placeholder)
 
     def _reset_previews(self):
@@ -312,6 +331,7 @@ class LocalFileBrowser(FileBrowser):
             uninstall(self)
         self.set_previews_visible(False)
         self._reset_previews()
+        self._tile_preview_sizes.clear()
         self.thumbnails = self.details = None
         self._mode_anchor = None
         super().stop()
@@ -410,40 +430,26 @@ class LocalFileBrowser(FileBrowser):
             position = index * self.native_list.appearance.row_height
         self.vertical_position = position
 
-    def _visible_rows(self):
-        impl = self.native_list._impl
-        if type(impl).__module__.endswith('_android'):
-            first, last = impl.native.getFirstVisiblePosition(), impl.native.getLastVisiblePosition()
-            return range(max(0, first), min(len(self._list_entries), last + 1))
-        if type(impl).__module__.endswith('_ios'):
-            paths = impl.native.indexPathsForVisibleRows
-            return sorted(int(path.row) for path in paths) if paths is not None else ()
-        return ()
-
     def _publish_list_rows(self):
         self.native_list.observe_rows = bool(self.thumbnails and self.thumbnails.enabled)
         super()._publish_list_rows()
 
     def _row_visible(self, row):
+        super()._row_visible(row)
         # Native adapters call during binding. Read the finished viewport on the next turn.
         self._schedule_previews()
 
     def _tile_card(self, entry):
         card = super()._tile_card(entry)
-        image_box, button = card.children
+        image_box, button = card.children[-2:]
         # Reserve the same caption position for a row of different aspect ratios.
         # The media view can use the full width inside this shared height cap.
-        image_box.style.update(direction=ROW, height=_TILE_PREVIEW_HEIGHT,
-                               margin_left=4, margin_right=4)
+        image_box.style.update(height=_TILE_PREVIEW_HEIGHT, margin_left=4, margin_right=4)
         placeholder = image_box.children[0]
-        if getattr(placeholder, 'browser_entry_kind', None) is not None:
-            inset = (_TILE_PREVIEW_HEIGHT - placeholder.style.height) // 2
-            placeholder.style.margin_top = placeholder.style.margin_bottom = inset
         if self.thumbnails is not None and self.thumbnails.supports(entry):
             self._tile_previews[entry.identity] = image_box, placeholder
         controls = [button]
         if self.on_item_actions is not None:
-            backend = type(button._impl).__module__
             selecting = self.on_check_entry is not None
             if selecting:
                 circle = card._tile_selection = icon_button('select_item', '',
@@ -459,11 +465,7 @@ class LocalFileBrowser(FileBrowser):
             card.add(card._tile_caption)
             if selecting:
                 self._show_tile_selection(entry, card)
-            else:
-                for control in (card.children[0], button):
-                    self._attach_tile_hold(control, entry)
-            if backend.startswith('toga_iOS.'):
-                card._impl.native.accessibilityElements = [control._impl.native for control in controls]
+        self._bind_tile_press(entry, card, button, controls)
         binding = getattr(self._tile_scroll, '_file_key_binding', None)
         if binding is not None and button.factory.Button.__module__.startswith('toga_android.'):
             # All tile controls dispatch to the same browser and transfer
@@ -504,15 +506,27 @@ class LocalFileBrowser(FileBrowser):
         apply_icon(card._tile_selection, 'selected_item' if state else 'select_item',
                    ('Deselect ' if state else 'Select ') + name)
 
-    def _attach_tile_hold(self, control, entry):
-        backend = type(control._impl).__module__
+    def _bind_tile_press(self, entry, card, button, controls):
+        backend = type(button._impl).__module__
         if backend.startswith('toga_android.'):
-            from .native.file_drag_android import attach_tile_hold
-            control._tile_hold = attach_tile_hold(self, control._impl.native, entry)
-        elif backend.startswith('toga_iOS.') and isinstance(control, toga.Button):
+            from android.view import View
+            from .native.file_drag_android import TileClick, attach_tile_hold
+
+            native = card._impl.native
+            card._tile_click = TileClick(button.on_press)
+            native.setOnClickListener(card._tile_click)
+            native.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO)
+            # The caption button handles its own tap. Other tile content is
+            # passive, so Android dispatches those presses to the card.
+            if self.on_item_actions is not None and self.on_check_entry is None:
+                for control in (card, button):
+                    control._tile_hold = attach_tile_hold(self, control._impl.native, entry, native)
+        elif backend.startswith('toga_iOS.'):
             from .native.file_drag_ios import attach_accessibility_action
 
-            control._tile_hold = attach_accessibility_action(self, control._impl.native, entry)
+            card._impl.native.accessibilityElements = [control._impl.native for control in controls]
+            if self.on_item_actions is not None and self.on_check_entry is None:
+                button._tile_hold = attach_accessibility_action(self, button._impl.native, entry)
 
     @property
     def can_show_tile_actions(self):
@@ -539,11 +553,15 @@ class LocalFileBrowser(FileBrowser):
 
     def _retire_tile(self, identity):
         _, card, *_ = self._tile_cards[identity]
-        button, image = self.buttons[identity], card.children[0]
-        for control in (image, button):
+        button = self.buttons[identity]
+        backend = type(button._impl).__module__
+        if backend.startswith('toga_android.'):
+            card._impl.native.setOnClickListener(None)
+            card._tile_click = None
+        for control in (card, button):
             if getattr(control, '_tile_hold', None) is None:
                 continue
-            if type(control._impl).__module__.startswith('toga_android.'):
+            if backend.startswith('toga_android.'):
                 control._tile_hold[2]()
                 control._impl.native.setOnLongClickListener(None)
                 control._impl.native.setOnTouchListener(None)
@@ -599,6 +617,26 @@ class LocalFileBrowser(FileBrowser):
         return {id(box): (self._tile_cards[identity][0], (box, placeholder))
                 for identity, (box, placeholder) in self._tile_previews.items()}
 
+    def _tile_thumbnail_size(self):
+        # Use the widest two-column layout this display can fit so a cached
+        # cover stays sharp when the viewport expands or the device rotates.
+        impl = self._tile_scroll._impl
+        backend = type(impl).__module__
+        if backend.startswith('toga_android.'):
+            metrics = impl.native.getResources().getDisplayMetrics()
+            width = max(metrics.widthPixels, metrics.heightPixels) / 2
+            height = impl.scale_in(_TILE_PREVIEW_HEIGHT)
+        elif backend.startswith('toga_iOS.'):
+            from rubicon.objc import ObjCClass
+            screen = ObjCClass('UIScreen').mainScreen
+            scale = float(screen.scale)
+            bounds = screen.bounds.size
+            width = max(bounds.width, bounds.height) * scale / 2
+            height = _TILE_PREVIEW_HEIGHT * scale
+        else:
+            width = height = _TILE_PREVIEW_HEIGHT
+        return tuple(max(1, min(_MAX_THUMBNAIL_EDGE, round(edge))) for edge in (width, height))
+
     def _update_previews(self):
         self._preview_update = None
         source = self.thumbnails
@@ -607,42 +645,53 @@ class LocalFileBrowser(FileBrowser):
         if not source.can_publish():
             self._reset_previews()
             if source.private:
-                self._clear_private_previews()
+                self._clear_previews()
             return
         targets = self._preview_targets()
         self._preview_completed.intersection_update(targets)
         for token, cancelled in self._preview_jobs.items():
             if token not in targets:
                 cancelled.set()
+        size = self._tile_thumbnail_size() if self.mode == 'Tiles' else None
+        for key in self._tile_preview_sizes.keys() - self.icons.keys():
+            self._tile_preview_sizes.pop(key)
         for token, (entry, target) in targets.items():
             if token in self._preview_completed or token in self._preview_jobs:
                 continue
             if self.mode == 'List' and target.thumbnail:
                 continue
             key = entry.identity, entry.revision
-            if key in self.icons:
+            if key in self.icons and (size is None or self._tile_preview_sizes.get(key) == size):
                 self.icons.move_to_end(key)
                 self._publish_preview(target, toga.Image(src=self.icons[key]))
                 self._preview_completed.add(token)
             elif len(self._preview_jobs) < 2:
                 cancelled = self._preview_jobs[token] = Event()
-                self._spawn(self._load_preview(source, entry, target, token, cancelled))
+                self._spawn(self._load_preview(source, entry, target, token, cancelled, size))
         # Native rows notify entry but don't expose an exit callback. Retire
         # out-of-view work even when a scroll exits into unsupported rows.
         if self._preview_jobs:
             self._schedule_previews(.06)
 
-    async def _load_preview(self, source, entry, target, token, cancelled):
+    async def _load_preview(self, source, entry, target, token, cancelled, size):
+        key = entry.identity, entry.revision
+
+        def load(row, default_size, is_cancelled):
+            return source.load(row, size or default_size, is_cancelled)
+
         def publish(data):
+            self._tile_preview_sizes.pop(key, None)
             if (not self._previews_visible or source is not self.thumbnails or not source.can_publish()
                     or token not in self._preview_targets()):
                 # The shared cache writes before calling publish. Discard a
                 # result that left its viewport or lost access during decoding.
-                self.icons.pop((entry.identity, entry.revision), None)
+                self.icons.pop(key, None)
                 return
+            if size is not None:
+                self._tile_preview_sizes[key] = size
             self._publish_preview(target, toga.Image(src=data))
         try:
-            await self.work.thumbnail(entry, source.load, publish, epoch=self.epoch, cancelled=cancelled)
+            await self.work.thumbnail(entry, load, publish, epoch=self.epoch, cancelled=cancelled)
         finally:
             self._preview_jobs.pop(token, None)
             if not cancelled.is_set():
@@ -659,6 +708,7 @@ class LocalFileBrowser(FileBrowser):
                 # second native image view only for a successful decode.
                 preview = toga.ImageView(image, style=Pack(flex=1, height=_TILE_PREVIEW_HEIGHT))
                 box.clear()
+                box.style.direction = ROW
                 box.add(preview)
             else:
                 box.children[0].image = image

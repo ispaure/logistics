@@ -23,8 +23,10 @@ DARK = dict(window='#23262c', surface='#2d3035', alternate='#34373c',
             text='#eef1f7', muted='#a6b0c0', border='#52555a', primary=DEFAULT_ACCENT_COLOR, accent=DEFAULT_ACCENT_COLOR, hover='#3d4045')
 LIGHT.update(control_border='#7b8493', destructive='#c62828')
 DARK.update(control_border='#858c99', destructive='#ff8a80')
+LIGHT.update(reading_active='#245bab', reading_complete='#1c6b43')
+DARK.update(reading_active='#8cb8ff', reading_complete='#8cd3a9')
 for colors in (LIGHT, DARK):
-    colors.update(file_icon=FILE_ICON_BLUE, destructive_fill='#d32f2f', on_destructive='#ffffff')
+    colors.update(destructive_fill='#d32f2f', on_destructive='#ffffff')
 LIGHT.update(tree_guide='#a8b2c1')
 DARK.update(tree_guide='#737f90')
 
@@ -33,6 +35,8 @@ DARK.update(tree_guide='#737f90')
 from services.folders.appearance import LOCK_LIGHT, LOCK_DARK
 LIGHT.update(LOCK_LIGHT)
 DARK.update(LOCK_DARK)
+LIGHT['file_icon'] = FILE_ICON_BLUE
+DARK['file_icon'] = LOCK_DARK['folder_unlocked']
 
 
 # Chat uses neutral layers like the conversation drawer, independent of Slate's
@@ -47,6 +51,11 @@ DARK.update(chat_background='#000000', chat_panel='#141414', chat_selected='#222
 for colors in (LIGHT, DARK):
     colors.update(settings_background=colors['window'], settings_group=colors['surface'],
                   settings_separator=colors['border'])
+
+MOBILE_LIGHT = dict(LIGHT, chat_background=LIGHT['window'])
+MOBILE_DARK = dict(DARK, window='#0e1013', surface='#191c21', alternate='#22262c',
+                   chat_background='#0b0d10')
+MOBILE_DARK.update(settings_background=MOBILE_DARK['window'], settings_group=MOBILE_DARK['surface'])
 
 
 from commonUtils.ui.appearance.colors import argb as argb
@@ -83,34 +92,36 @@ def notes_selection_color(accent, surface):
     return '#' + bytes(round(a * .16 + b * .84) for a, b in zip(*colors)).hex()
 
 
-for colors in (LIGHT, DARK):
+for colors in (LIGHT, DARK, MOBILE_LIGHT, MOBILE_DARK):
     colors['notes_selection'] = notes_selection_color(colors['accent'], colors['surface'])
 
 
 def set_accent(hue=DEFAULT_ACCENT[0], saturation=DEFAULT_ACCENT[1]):
     """Change only accent roles; semantic artwork and lock colors are independent."""
     hue, saturation = validate_accent(hue, saturation)
-    for colors, color in zip((LIGHT, DARK), accent_colors(hue, saturation)):
+    light, dark = accent_colors(hue, saturation)
+    for colors, color in ((LIGHT, light), (DARK, dark), (MOBILE_LIGHT, light), (MOBILE_DARK, dark)):
         colors['accent'] = color
         colors['primary'] = color
         colors['notes_selection'] = notes_selection_color(color, colors['surface'])
 
-def css_variables(mode='system'):
+def css_variables(mode='system', *, mobile=False):
     if mode not in ('system', 'light', 'dark'):
         raise ValueError('Unknown appearance mode.')
+    light, dark = (MOBILE_LIGHT, MOBILE_DARK) if mobile else (LIGHT, DARK)
     def variables(colors):
         return ';'.join(f'--{key}:{value}' for key, value in colors.items())
     base = (':root{color-scheme:' + ('light dark' if mode == 'system' else mode) + ';'
-            + variables(DARK if mode == 'dark' else LIGHT) + '}')
-    return base + ('@media(prefers-color-scheme:dark){:root{' + variables(DARK) + '}}'
+            + variables(dark if mode == 'dark' else light) + '}')
+    return base + ('@media(prefers-color-scheme:dark){:root{' + variables(dark) + '}}'
                    if mode == 'system' else '')
 
 
-def themed_chapter(content, mode):
+def themed_chapter(content, mode, *, mobile=False):
     """Style the sanitized chapter without changing its offline content policy."""
     if mode not in ('system', 'light', 'dark'):
         return content
-    return content.replace('</style>', css_variables(mode)
+    return content.replace('</style>', css_variables(mode, mobile=mobile)
         + 'html,body{background:var(--window);color:var(--text)}</style>', 1)
 
 

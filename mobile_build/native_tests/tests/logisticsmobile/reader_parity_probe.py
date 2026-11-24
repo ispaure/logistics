@@ -105,15 +105,17 @@ class ReaderProbe(LogisticsMobile):
 
     async def return_from_epub_settings(self, owner, *, native_back=False):
         origin = owner.presentation_destination
-        assert self.native_host.state.destination == 'settings'
-        assert self.routes.screens['settings'][-1][0] == 'epub-settings'
+        assert self.native_host.state.destination == origin
+        assert self.routes.screens[origin][-1][0].endswith(f':{owner.session.id}:appearance')
+        assert self._document_tabs_hidden
         if native_back and self.routes.apple:
-            navigation = self.native_host.adapter.navigation_for('settings')
+            navigation = self.native_host.adapter.navigation_for(origin)
             navigation.popViewControllerAnimated(True)
         else:
             assert self.routes.back()
         await self.until(lambda: self.native_host.state.destination == origin
                          and self.visible_reader() == owner.session.id)
+        assert self._document_tabs_hidden
         await self.until(lambda: not getattr(owner, '_epub_return_pending', False))
         task = getattr(owner, '_epub_resume_task', None)
         if task is not None:

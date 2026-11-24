@@ -138,3 +138,14 @@ class DocumentTypeDialog(DocumentDialog):
                 native.dismiss()
         future.add_done_callback(finished)
         return future
+
+
+class SearchNoteOpenDialog(DocumentTypeDialog):
+    def __init__(self):
+        super().__init__(choices=(
+            ('Open in Notes Library', 'notes'), ('Open in Regular Viewer', 'viewer'),
+            ('Always Open in Notes Library', 'remember-notes'),
+            ('Always Open in Regular Viewer', 'remember-viewer'),
+        ))
+        self.title = 'Open note from search'
+        self.message = 'You can change the default in Settings → Markdown.'

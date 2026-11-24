@@ -9,9 +9,12 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
+from pathlib import Path
+from weakref import WeakSet
+
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import CENTER, COLUMN, ROW
 
 from .appearance import surface, template_icon
 from .hub_icons import icon
@@ -38,7 +41,7 @@ def source_caption(kinds, *, row=None, text=None):
         symbol = template_icon(toga.ImageView(icon(name), style=Pack(width=12, height=12, margin_right=4)))
         accessible_name(symbol, label)
         row.add(surface(symbol, radius=0, background='transparent',
-            foreground=name if name.startswith('folder_') else 'accent', eink_outlined=False))
+            foreground=name if name.startswith('folder_') else 'file_icon', eink_outlined=False))
     if SHOW_SOURCE_TEXT and (text or kinds):
         if text is None:
             names = {name for name, _ in kinds}
@@ -54,47 +57,123 @@ def source_caption(kinds, *, row=None, text=None):
 
 def source_title(button, kinds, *, text=None):
     caption = button._source_caption = source_caption(kinds, text=text)
-    return toga.Box(children=[button, caption], style=Pack(direction=COLUMN, flex=1))
+    impl = button._impl
+    backend = type(impl).__module__
+    if backend.startswith('toga_iOS.'):
+        impl.native.contentVerticalAlignment = 2  # UIControlContentVerticalAlignmentBottom
+    elif backend.startswith('toga_android.'):
+        from android.view import Gravity
+        impl.native.setGravity(Gravity.START | Gravity.BOTTOM)
+    # Balance the empty space above the bottom-aligned title below the caption,
+    # so the two text lines sit together beside the thumbnail and row actions.
+    caption.style.margin_top = -2
+    caption.style.margin_bottom = 17
+    return toga.Box(children=[button, caption], style=Pack(direction=COLUMN, flex=1, justify_content=CENTER))
 
 
-class DocumentThumbnails:
-    """Load local artwork in order, scoped to the lifetime of one retained list."""
+def completion_caption(percent):
+    role = 'muted' if percent == 0 else 'reading_complete' if percent == 100 else 'reading_active'
+    return f'{percent}%', role
+
+
+def make_completion_badge():
+    return toga.Label('', style=Pack(width=56, height=18, text_align='right',
+                                    font_size=12, font_weight='bold', margin_right=4))
+
+
+def paint_completion_badge(badge, percent):
+    badge.text, role = completion_caption(percent)
+    surface(badge, radius=0, background='transparent', foreground=role,
+            outlined=False, eink_outlined=False)
+
+
+class DocumentCardMedia:
+    """Load artwork and progress for the cards in one retained list."""
 
     def __init__(self, app):
         from threading import Event
+        from .browser_preview import dark_notebook_thumbnails
 
         self.app = app
-        self.pending = []
+        self.pending_artwork = []
+        self.notebook_artwork = []
+        self.dark_notebooks = dark_notebook_thumbnails(app)
+        self.notebook_appearance_revision = 0
+        self.pending_progress = []
         self.cancelled = Event()
+
+    def completion_badge(self, target):
+        if target is None:
+            return None
+        badge = make_completion_badge()
+        self.pending_progress.append((target, badge))
+        return badge
 
     def artwork(self, reference, kind, *, width=72, height=72):
         from .browser_preview import PREVIEW_SUFFIXES
-        from pathlib import Path
         from toga.style.pack import CENTER
 
         glyph = {'notebook': 'nav_notebooks', 'notes': 'markdown', 'archive': 'archives'}.get(kind, kind)
         placeholder = template_icon(toga.ImageView(icon(glyph), style=Pack(width=24, height=24)))
         artwork = toga.Box(children=[toga.Box(style=Pack(flex=1)), placeholder, toga.Box(style=Pack(flex=1))],
             style=Pack(direction=ROW, align_items=CENTER, width=width, height=height,
-                       margin_left=4, margin_right=8))
+                       margin=(3, 8, 3, 4)))
         artwork._document_artwork = True
         native = type(self.app._impl).__module__.startswith(('toga_iOS.', 'toga_android.'))
         if (native and reference and reference.get('type') == 'local'
                 and Path(reference.get('path', '')).suffix.lower() in PREVIEW_SUFFIXES):
-            self.pending.append((reference['path'], artwork, placeholder, width, height))
+            row = (reference['path'], artwork, placeholder, width, height)
+            self.pending_artwork.append(row)
+            if Path(reference['path']).suffix.lower() == '.rmdoc':
+                if not hasattr(self.app, '_notebook_card_media'):
+                    self.app._notebook_card_media = WeakSet()
+                self.app._notebook_card_media.add(self)
+                self.notebook_artwork.append(row)
         return surface(artwork, radius=8, background='hover', eink_outlined=False)
 
     def start(self):
-        if not self.pending:
-            return
-        pending, self.pending = self.pending, []
-        self.app.loop.create_task(self._load(pending))
+        if self.pending_artwork:
+            pending, self.pending_artwork = self.pending_artwork, []
+            self.app.loop.create_task(self._load_artwork(pending, self.dark_notebooks, self.notebook_appearance_revision))
+        if self.pending_progress:
+            pending_progress, self.pending_progress = self.pending_progress, []
+            self.app.loop.create_task(self._load_progress(pending_progress))
 
     def cancel(self):
         self.cancelled.set()
-        self.pending.clear()
+        self.pending_artwork.clear()
+        self.pending_progress.clear()
+        self.notebook_artwork.clear()
 
-    async def _load(self, pending):
+    def refresh_notebook_thumbnails(self, dark):
+        if not self.active() or dark == self.dark_notebooks:
+            return
+        self.dark_notebooks = dark
+        self.notebook_appearance_revision += 1
+        for _, artwork, placeholder, _, _ in self.notebook_artwork:
+            cover = getattr(artwork, '_document_cover', None)
+            if cover is not None:
+                artwork.remove(cover)
+                artwork.insert(1, placeholder)
+                artwork._document_cover = None
+        if self.notebook_artwork and not self.pending_artwork:
+            self.app.loop.create_task(self._load_artwork(list(self.notebook_artwork), dark,
+                                                       self.notebook_appearance_revision))
+
+    def active(self):
+        return self.app.active_host and not self.cancelled.is_set()
+
+    async def _load_progress(self, pending):
+        from .document_completion import load_percentage
+        for target, badge in pending:
+            if not self.active():
+                return
+            percent = await load_percentage(self.app, target, active=self.active)
+            if percent is not None and self.active():
+                paint_completion_badge(badge, percent)
+                badge.style.display = 'pack'
+
+    async def _load_artwork(self, pending, dark, revision):
         import asyncio
         from commonUtils.runtime.operations import OperationCancelled
         from commonUtils.runtime.resources.local import LocalFiles
@@ -104,15 +183,18 @@ class DocumentThumbnails:
         def load(path, width, height):
             physical = local_document_path(self.app, path)
             provider = LocalFiles(physical.parent)
-            return LocalThumbnails(provider, local_image_bridge(), '').load(
+            return LocalThumbnails(provider, local_image_bridge(), '', dark_notebooks=dark).load(
                 provider.entry(physical.name), (width * 2, height * 2), self.cancelled.is_set)
 
         for path, artwork, placeholder, width, height in pending:
-            if self.cancelled.is_set() or not self.app.active_host:
+            if not self.active():
                 return
+            notebook = Path(path).suffix.lower() == '.rmdoc'
+            if notebook and revision != self.notebook_appearance_revision:
+                continue
             try:
                 data = await asyncio.to_thread(load, path, width, height)
-                if data and not self.cancelled.is_set() and self.app.active_host:
+                if data and self.active() and (not notebook or revision == self.notebook_appearance_revision):
                     cover = toga.Image(src=data)
                     scale = min(width / cover.width, height / cover.height)
                     image = toga.ImageView(cover, style=Pack(width=max(1, round(cover.width * scale)),
@@ -122,6 +204,19 @@ class DocumentThumbnails:
                     artwork._document_cover = image
             except (OSError, ValueError, RuntimeError, OperationCancelled):
                 continue
+
+def card_trailing(badge, tools):
+    if badge is None or not tools:
+        return tools
+    menu, *other_tools = tools
+    # Tuck the caption into the blank space above the glyph while retaining
+    # the full overflow touch target. Align it to the menu even with Close beside it.
+    badge.style.update(width=menu.style.width, text_align='center', margin_right=0, margin_bottom=-16,
+                       display='none')
+    surface(menu, radius=0, background='transparent', foreground='text', eink_outlined=False)
+    return [toga.Box(children=[badge, menu], style=Pack(direction=COLUMN, align_items=CENTER)),
+            *other_tools]
+
 
 def text_document_kind(name):
     return 'markdown' if name.lower().endswith(('.md', '.markdown')) else 'text'
@@ -188,6 +283,23 @@ def empty_document_row(text):
                    radius=0, background='transparent', foreground='muted',
                    outlined=False, eink_outlined=False)
 
+
+def library_discovery_heading(section, title, style, *, font_size=13):
+    heading = toga.Label(title, style=style)
+    status = empty_document_row('– Looking for libraries…')
+    status.style.update(font_size=font_size, margin_bottom=0, margin_left=8)
+    row = toga.Box(children=[heading, status], style=Pack(direction=ROW, align_items='center'))
+    section.add(row)
+
+    def finish():
+        index = list(section.children).index(row)
+        row.remove(heading)
+        section.remove(row)
+        section.insert(index, heading)
+
+    return finish
+
+
 def document_list(rows, empty_text, *, outlined=False):
     return document_group(rows, outlined=outlined) if rows else empty_document_row(empty_text)
 
@@ -196,7 +308,7 @@ def retire_document_actions(widget):
     menu = getattr(widget, 'document_actions', None)
     if menu is not None:
         menu.dispose()
-    previews = getattr(widget, '_document_thumbnails', None)
+    previews = getattr(widget, '_document_card_media', None)
     if previews is not None:
         previews.cancel()
     for child in widget.children:
@@ -266,12 +378,8 @@ class HubSections(toga.Box):
         from .pane_layout import panes
         fold = division(app, self)
         width = app.adaptive.content_width(destination, margin=0)
-        if type(self._impl).__module__.startswith('toga_iOS.'):
-            measured = float(self._impl.native.bounds.size.width)
-            if measured > 0:
-                # A retained landscape hub can still report its old width
-                # after its destination returns to a portrait viewport.
-                width = min(width, measured)
+        # The navigation container owns the current safe width. This retained
+        # view can still have its previous orientation's bounds during reflow.
         paired = fold is not None or width >= 580
         if paired != self.paired:
             if self.trailing.parent is not None:

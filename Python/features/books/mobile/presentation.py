@@ -421,6 +421,7 @@ class ChapterBridge:
             if action in {'position', 'next', 'previous'} and 0 <= offset <= 16 * 1024 * 1024:
                 query = parse_qs(urlsplit(url).query)
                 self.offset = offset
+                self.at_end = query.get('end', ['0'])[0] == '1'
                 if action in {'next', 'previous'}:
                     self.wheel_time = None
                     try:
@@ -438,7 +439,6 @@ class ChapterBridge:
                             self.on_pagination(self.pagination_state)
                 except (KeyError, ValueError, IndexError):
                     pass
-                self.at_end = parse_qs(urlsplit(url).query).get('end', ['0'])[0] == '1'
                 if self.on_event:
                     self.on_event(action, offset)
         elif url.startswith('reader-link:') and self.on_link:
@@ -518,6 +518,11 @@ def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None, m
                 getattr(native.scrollView, edge).hidden = True
         native.scrollView.scrollEnabled = False
         native.scrollView.bounces = False
+        # A full paragraph gap can push the next line off a short page.
+        # Keep type and heading spacing while saving space between paragraphs.
+        compact_spacing = ('<style>@media (orientation:landscape) and (max-height:400px)'
+                           '{[data-logistics-pages] p:has(+ p){margin-bottom:.75em}}</style>')
+        content = content.replace('</head>', compact_spacing + '</head>', 1)
     elif backend.startswith('toga_android.'):
         native.setVerticalScrollBarEnabled(False)
         native.setHorizontalScrollBarEnabled(False)

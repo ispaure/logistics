@@ -9,7 +9,7 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
-from .brushes import BRUSHES
+from .brushes import BRUSHES, valid_intensity
 
 
 def open_notebook_progress(book, root, *, resource=None, draft_path=None, app=None):
@@ -34,6 +34,11 @@ def restore_notebook_progress(editor, saved):
         tool: color for tool, brush in BRUSHES.items()
         if type(color := colors.get(str(tool))) is int and color in brush['colors']
     } if isinstance(colors, dict) else {}
+    intensities = saved.get('brush_intensities')
+    editor.brush_intensities = {
+        tool: intensity for tool in BRUSHES
+        if valid_intensity(tool, intensity := intensities.get(str(tool)))
+    } if isinstance(intensities, dict) else {}
 
 
 def page_index(book, saved):
@@ -51,4 +56,5 @@ def page_location(editor):
 
 def notebook_progress_state(editor, location=None):
     return dict(page_location(editor) if location is None else location,
-                brush_colors=editor.brush_colors.copy(), eraser_kind=editor.eraser_kind)
+                brush_colors=editor.brush_colors.copy(), brush_intensities=editor.brush_intensities.copy(),
+                eraser_kind=editor.eraser_kind)

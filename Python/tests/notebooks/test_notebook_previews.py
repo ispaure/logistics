@@ -19,6 +19,27 @@ from features.notebooks.previews import BATCH, BATCH_POINTS, POINTS, page_previe
 
 
 class PagePreviewTests(unittest.TestCase):
+    def test_file_thumbnail_dark_paper_dims_highlight_over_writing(self):
+        from PySide6.QtGui import QImage
+        from features.notebooks.thumbnail import notebook_thumbnail
+        from features.pdf.annotation import notebook_from_pdf
+        from tests.readers.test_pdf_reader import pdf_bytes
+
+        for book in (Notebook.new(), notebook_from_pdf(pdf_bytes(), 'PDF')):
+            ink = book.page(0)
+            ink.add([[300, 468, .8], [1100, 468, .8]], tool=17, width=3)
+            ink.add([[300, 468, .8], [1100, 468, .8]], tool=18, color=13)
+            scene = ink.to_bytes()
+            data = book.to_bytes()
+            light, dark = [QImage.fromData(notebook_thumbnail(data, 320, cancelled=lambda: False, dark=mode))
+                           for mode in (False, True)]
+            x = dark.width() // 2
+            self.assertGreater(light.pixelColor(x, 90).red(), 245)
+            self.assertLess(dark.pixelColor(x, 90).red(), 10)
+            self.assertLess(dark.pixelColor(x, 78).red(), 100)
+            self.assertGreater(dark.pixelColor(x, 79).red(), 150)
+            self.assertEqual(ink.to_bytes(), scene)
+
     def test_round_trip_ink_beyond_nominal_page_is_visible_in_editor_and_overview(self):
         from features.notebooks.editor import Editor
         from features.notebooks.ink import HEIGHT, MAX_NOTEBOOK_HEIGHT

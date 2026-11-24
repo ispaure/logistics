@@ -9,7 +9,7 @@ __status__ = "Production"
 
 from weakref import ref
 
-from rubicon.objc import CGPoint, ObjCClass, ObjCProtocol, SEL, objc_method, objc_property
+from rubicon.objc import CGPoint, ObjCClass, ObjCProtocol, SEL, UIEdgeInsets, objc_method, objc_property
 
 from commonUtils.ui.native.keyboard import native_value
 
@@ -95,25 +95,49 @@ class BrowserFileDrag(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureR
     menu_timer = objc_property(object)
 
     @objc_method
+    def tapTile_(self, gesture) -> None:
+        drag = self.owner()
+        browser = drag.browser() if drag is not None else None
+        if browser is not None and browser.mode == 'Tiles':
+            entry, _ = browser_item(drag, gesture)
+            if entry is not None:
+                browser.buttons[entry.identity].on_press()
+
+    @objc_method
     def gestureRecognizer_shouldReceiveTouch_(self, gesture, touch) -> bool:
         drag = self.owner()
         if drag is None:
             return False
         browser = drag.browser()
-        if browser is None or not (browser.can_show_tile_actions or drag.context() is not None):
+        if browser is None or browser.closed:
+            return False
+        view = native_value(touch.view)
+        if gesture.isKindOfClass(ObjCClass('UITapGestureRecognizer')):
+            return (browser.mode == 'Tiles' and view is not None
+                    and view.isDescendantOfView(browser._tile_scroll._impl.native)
+                    and not view.isKindOfClass(ObjCClass('UIControl')))
+        if not (browser.can_show_tile_actions or drag.context() is not None):
             return False
         listing = browser.native_list if browser.mode == 'List' else browser._tile_scroll
-        view = native_value(touch.view)
         return view is not None and bool(view.isDescendantOfView(listing._impl.native))
 
     @objc_method
     def gestureRecognizerShouldBegin_(self, gesture) -> bool:
         drag = self.owner()
         browser = drag.browser() if drag is not None else None
-        if browser is None or not (browser.can_show_tile_actions or drag.context() is not None):
+        if browser is None or browser.closed:
             return False
-        entry, _ = browser_item(drag, gesture, lifting=True)
+        lifting = not gesture.isKindOfClass(ObjCClass('UITapGestureRecognizer'))
+        if lifting and not (browser.can_show_tile_actions or drag.context() is not None):
+            return False
+        entry, _ = browser_item(drag, gesture, lifting=lifting)
         return entry is not None
+
+    @objc_method
+    def gestureRecognizer_shouldRecognizeSimultaneouslyWithGestureRecognizer_(self, gesture, other) -> bool:
+        # The listing also recognizes taps to focus its keyboard shortcuts.
+        tap_class = ObjCClass('UITapGestureRecognizer')
+        return gesture.isKindOfClass(tap_class) and other.isKindOfClass(tap_class)
 
     @objc_method
     def holdFile_(self, gesture) -> None:
@@ -145,7 +169,7 @@ class BrowserFileDrag(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureR
                 browser = drag.browser()
                 card = browser._tile_cards.get(entry.identity) if browser is not None else None
                 if self.token is not None and card is not None:
-                    lift_preview(self, card[1]._impl.native, window, gesture)
+                    lift_preview(self, card[1]._impl.native, window, gesture, tile=True)
             if self.token is None:
                 return
             if self.preview is not None:
@@ -181,10 +205,17 @@ class BrowserFileDrag(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureR
 
 
 
-def lift_preview(delegate, view, window, gesture):
+def lift_preview(delegate, view, window, gesture, *, tile=False):
     if view is None:
         return
-    preview = view.snapshotViewAfterScreenUpdates(False)
+    if tile:
+        # Toga places a Box and its image/title in the container as siblings.
+        # Capture the tile's rectangle from the rendered hierarchy.
+        rect = view.convertRect(view.bounds, toView=window)
+        preview = window.resizableSnapshotViewFromRect(
+            rect, afterScreenUpdates=False, withCapInsets=UIEdgeInsets(0, 0, 0, 0))
+    else:
+        preview = view.snapshotViewAfterScreenUpdates(False)
     if preview is not None:
         preview.userInteractionEnabled = False
         preview.accessibilityElementsHidden = True
@@ -194,6 +225,7 @@ def lift_preview(delegate, view, window, gesture):
         window.addSubview(preview)
         delegate.preview = preview
         move_preview(preview, gesture)
+
 
 class TileAccessibilityAction(ObjCClass('NSObject')):
     browser = objc_property(object)
@@ -226,6 +258,10 @@ def install(owner, browser):
     gesture = ObjCClass('UILongPressGestureRecognizer').alloc().initWithTarget(delegate, action=SEL('holdFile:'))
     gesture.delegate = delegate
     gesture.minimumPressDuration = .45
+    tap = ObjCClass('UITapGestureRecognizer').alloc().initWithTarget(delegate, action=SEL('tapTile:'))
+    tap.delegate = delegate
+    tap.cancelsTouchesInView = False
+    tap.requireGestureRecognizerToFail(gesture)
     # An empty folder replaces the list or tiles. The gesture stays on their
     # shared parent so it can continue across that replacement.
     # The native list's controller mounts its table separately from the Box.
@@ -233,12 +269,15 @@ def install(owner, browser):
     # recognizer to the active listing and ignores other controls and screens.
     native = owner.main_window._impl.native
     native.addGestureRecognizer(gesture)
+    browser._tile_scroll._impl.native.addGestureRecognizer(tap)
     browser.native_list._impl.native.dragInteractionEnabled = False
-    browser._file_drag_delegate = native, delegate, gesture
+    browser._file_drag_delegate = native, delegate, tap, gesture
 
 
 def uninstall(browser):
-    native, delegate, gesture = browser._file_drag_delegate
+    native, delegate, tap, gesture = browser._file_drag_delegate
+    browser._tile_scroll._impl.native.removeGestureRecognizer(tap)
+    tap.delegate = None
     gesture.enabled = False
     native.removeGestureRecognizer(gesture)
     gesture.delegate = None

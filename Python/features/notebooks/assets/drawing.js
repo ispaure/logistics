@@ -31,6 +31,7 @@ function brushFor(tool) {
 
 let normalWidth = '2', rememberBrushOptions = true;
 const colorByBrush = new Map(Object.entries(state.brush_colors || {}).map(([tool, color]) => [Number(tool), color]));
+const intensityByBrush = new Map(Object.entries(state.brush_intensities || {}).map(([tool, value]) => [Number(tool), value]));
 let paletteBrush;
 function brushOptions() {
   const tool = Number($('tool').value), brush = brushFor(tool), color = $('color');
@@ -60,6 +61,11 @@ function chosenInk() {
     width: Number($('width').value),
     layer: $('layer').value
   }
+}
+
+function fixedBrushPressure(tool) {
+  const intensity = intensityByBrush.get(tool) ?? brushFor(tool).default_intensity;
+  return intensity === undefined ? fallbackPressure : intensity / 100;
 }
 
 function nativeColor(tool, color) {
@@ -112,17 +118,23 @@ function strokePoints(samples, tool, width) {
   return samples.map((p, i) => strokePoint(samples, i, tool, width))
 }
 
-function inkColor(s) {
+function darkNotebookPaper() {
+  return document.body.classList.contains('dark-notebook-paper');
+}
+
+function inkColor(s, dark = false) {
   let rgba = s.color_rgba,
     hex = palette[s.color] || '#000000',
     rgb = rgba ? rgba.slice(0, 3) : s.tool === 18 && state.native_highlights[s.color] ? state.native_highlights[s.color].slice(0, 3) : [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  if (dark && (rgb.every(value => value === 0) || rgb.every(value => value === 255)))
+    rgb = rgb.map(value => 255 - value);
   if ($('grayscale').checked) {
     let gray = Math.round(.2126 * rgb[0] + .7152 * rgb[1] + .0722 * rgb[2]);
     rgb = [gray, gray, gray]
   }
   return {
     rgb,
-    alpha: rgba ? rgba[3] / 255 : 1
+    alpha: (rgba ? rgba[3] / 255 : 1) * (dark && brushFor(s.tool).family === 'highlighter' ? .36 : 1)
   };
 }
 
@@ -139,7 +151,8 @@ function swatchColor(tool, color) {
 }
 const grainCache = new Map();
 const grainCacheLimit = 24;
-const graphiteMasks = new Map();
+const graphiteTileSize = 128;
+const graphiteTooth = new Map();
 
 function graphiteNoise(x, y, seed) {
   let value = Math.imul(x ^ seed, 0x45d9f3b) ^ Math.imul(y, 0x27d4eb2d);
@@ -147,38 +160,57 @@ function graphiteNoise(x, y, seed) {
   return ((value ^ (value >>> 16)) >>> 0) / 4294967296
 }
 
-function graphiteMask(mechanical) {
-  if (graphiteMasks.has(mechanical)) return graphiteMasks.get(mechanical);
-  // Original graphite deposition, not a tablet texture or captured brush asset.
-  // Fine tooth sits over a smooth paper field. The field wraps at its boundary,
-  // so repeated tiles have no seam or the former tiny diagonal dot lattice.
-  const side = 128, cells = 8, spacing = side / cells,
-    seed = mechanical ? 173 : 419, mask = new Uint8ClampedArray(side * side),
-    field = Array.from({length: cells * cells}, (_, i) => graphiteNoise(i % cells, Math.floor(i / cells), 827));
-  for (let y = 0; y < side; y++) {
-    const cy = Math.floor(y / spacing), fy = (y % spacing) / spacing,
-      sy = fy * fy * (3 - 2 * fy);
-    for (let x = 0; x < side; x++) {
-      const cx = Math.floor(x / spacing), fx = (x % spacing) / spacing,
-        sx = fx * fx * (3 - 2 * fx),
-        top = field[cy * cells + cx] * (1 - sx) + field[cy * cells + (cx + 1) % cells] * sx,
-        bottom = field[((cy + 1) % cells) * cells + cx] * (1 - sx) + field[((cy + 1) % cells) * cells + (cx + 1) % cells] * sx,
-        paper = top * (1 - sy) + bottom * sy,
-        tooth = graphiteNoise(x, y, seed),
-        deposit = .68 * tooth + .32 * graphiteNoise(x + 1, y, seed);
-      // A soft lead leaves more paper visible where the tooth is low. Keep
-      // the mechanical lead continuous, with finer and shallower variation.
-      const opacity = mechanical ? .74 + .2 * deposit + .05 * paper :
-        .30 + .38 * deposit + .23 * paper - .28 * Math.max(0, 1 - deposit * 5);
-      mask[y * side + x] = Math.round(opacity * 255)
-    }
-  }
-  graphiteMasks.set(mechanical, mask);
-  return mask
+function paperRelief(cells, seed) {
+  const grid = Array.from({length: cells * cells}, (_, i) =>
+    graphiteNoise(i % cells, Math.floor(i / cells), seed));
+  const spacing = graphiteTileSize / cells;
+  return (x, y) => {
+    const col = Math.floor(x / spacing), row = Math.floor(y / spacing);
+    const nextCol = (col + 1) % cells, nextRow = (row + 1) % cells;
+    const fx = (x % spacing) / spacing, fy = (y % spacing) / spacing;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const top = grid[row * cells + col] * (1 - sx) + grid[row * cells + nextCol] * sx;
+    const bottom = grid[nextRow * cells + col] * (1 - sx) + grid[nextRow * cells + nextCol] * sx;
+    return top * (1 - sy) + bottom * sy;
+  };
 }
 
-function grain(target, rgb, mechanical) {
-  const key = rgb.join(',') + ':' + Number(mechanical);
+function graphiteRelief(mechanical) {
+  if (graphiteTooth.has(mechanical)) return graphiteTooth.get(mechanical);
+  // A coarse paper field groups the deposits. Two finer scales leave irregular
+  // bare pores even where the lead is dark. Mechanical lead uses smaller teeth.
+  const side = graphiteTileSize, heights = new Uint8ClampedArray(side * side);
+  const fine = new Uint8ClampedArray(side * side);
+  const coarse = paperRelief(8, 827);
+  const clumps = paperRelief(mechanical ? 32 : 16, mechanical ? 173 : 419);
+  const pores = paperRelief(64, mechanical ? 641 : 263);
+  for (let y = 0; y < side; y++) {
+    for (let x = 0; x < side; x++) {
+      const grit = graphiteNoise(x, y, mechanical ? 3407 : 1009);
+      const relief = mechanical
+        ? .08 * coarse(x, y) + .34 * clumps(x, y) + .36 * pores(x, y) + .22 * grit
+        : .14 * coarse(x, y) + .39 * clumps(x, y) + .29 * pores(x, y) + .18 * grit;
+      // Deep, small pores remain visible inside a firmly drawn stroke.
+      const pit = Math.max(0, .14 - grit) * (mechanical ? 1.25 : 1.9);
+      const index = y * side + x;
+      heights[index] = (relief - pit) * 255;
+      fine[index] = .75 * 255 * graphiteNoise(x, y, mechanical ? 1937 : 2503) + .25 * heights[index];
+    }
+  }
+  const tooth = {heights, fine};
+  graphiteTooth.set(mechanical, tooth);
+  return tooth;
+}
+
+function graphiteLevel(pressure) {
+  // Quantize after native pressure rounding so saved and live ink use the
+  // same tile.
+  return Math.round(Math.round(pressure * 255) * 32 / 255);
+}
+
+function grain(target, rgb, mechanical, pressure = .5) {
+  const level = graphiteLevel(pressure);
+  const key = rgb.join(',') + ':' + Number(mechanical) + ':' + level;
   if (grainCache.has(key)) {
     const pattern = grainCache.get(key);
     grainCache.delete(key);
@@ -186,34 +218,65 @@ function grain(target, rgb, mechanical) {
     return pattern
   }
   const tile = document.createElement('canvas');
-  tile.width = tile.height = 128;
-  const g = tile.getContext('2d'), image = g.createImageData(128, 128),
-    mask = graphiteMask(mechanical);
-  for (let i = 0; i < mask.length; i++) {
+  const side = tile.width = tile.height = graphiteTileSize;
+  const g = tile.getContext('2d'), image = g.createImageData(side, side);
+  const {heights, fine} = graphiteRelief(mechanical), strength = level / 32;
+  // Side shading uses the broader stored pencil footprint and a softer
+  // contact transition. The fixed-width lead deposits more sharply.
+  const lightContact = Math.max(0, 1 - ((strength - .46) / .34) ** 2) ** 2;
+  // Mid-pressure strokes fill more of the paper tooth. Keep isolated
+  // flecks at light pressure and leave firm deposits at full density.
+  const midContact = Math.max(0, Math.min((strength - .57) / .23, (.9375 - strength) / .1375));
+  const engagement = strength + (mechanical ? .12 : .085) * midContact;
+  const threshold = mechanical
+    ? .91 - .69 * engagement ** 1.65 - .045 * lightContact
+    : .85 - .64 * engagement ** 1.55 - .065 * lightContact;
+  const transition = mechanical ? .10 : .16;
+  // At light pressure, individual grains take dark flecks before broader
+  // patches of paper take graphite. Their contribution fades as coverage grows.
+  const fleckFade = Math.max(0, Math.min(1, (strength - .39) / .29));
+  const fleckWeight = 1 - fleckFade ** 2 * (3 - 2 * fleckFade);
+  const fleckThreshold = .98 - (mechanical ? .195 : .215) * Math.min(1, strength / .25);
+  for (let i = 0; i < heights.length; i++) {
     const index = i * 4;
+    const height = heights[i] / 255;
+    const contact = Math.max(0, Math.min(1, (height - threshold) / transition));
+    let opacity = contact * contact * (3 - 2 * contact) * (.68 + .32 * height);
+    if (fleckWeight > 0) {
+      const fleck = Math.max(0, Math.min(1, (fine[i] / 255 - fleckThreshold) / .025));
+      opacity += (1 - opacity) * fleckWeight * fleck;
+    }
     image.data[index] = rgb[0];
     image.data[index + 1] = rgb[1];
     image.data[index + 2] = rgb[2];
-    image.data[index + 3] = mask[i]
+    image.data[index + 3] = 255 * opacity;
   }
   g.putImageData(image, 0, 0);
   const pattern = target.createPattern(tile, 'repeat');
-  // A tile spans 64 native page units. Its origin stays on the page through
-  // zoom and between incremental draft recoloring and completed-stroke paint.
-  pattern.setTransform(new DOMMatrix().scale(.5));
+  // Keep tooth fixed to the paper through zoom and between draft and redraw.
+  pattern.setTransform(new DOMMatrix().scale(.75 - .24 * midContact));
   grainCache.set(key, pattern);
   if (grainCache.size > grainCacheLimit) grainCache.delete(grainCache.keys().next().value);
   return pattern
 }
 
+function graphitePaint(target, rgb, mechanical, pressure) {
+  // Filtering fine, sparse flecks into the surrounding paper makes them
+  // disappear at writing size. The context's saved state restores smoothing.
+  if (graphiteLevel(pressure) <= 10) target.imageSmoothingEnabled = false;
+  return grain(target, rgb, mechanical, pressure);
+}
+
 function warmSelectedGraphite() {
-  // Selection, palette clicks and grayscale changes happen before a fresh pen
-  // contact. Build their cached material here, never in a pointer-move hook.
+  // Prewarm the known input levels. A pressure-sensitive pen can choose a
+  // different tile at contact, then keeps that tile throughout the draft.
   if (active !== null) return;
   const tool = Number($('tool').value), brush = brushFor(tool);
   if (!brush.texture) return;
-  const {rgb} = inkColor(nativeColor(tool, Number($('color').value)));
-  grain(ctx, rgb, brush.family === 'mechanical')
+  const {rgb} = inkColor(nativeColor(tool, Number($('color').value)), darkNotebookPaper());
+  const mechanical = brush.family === 'mechanical';
+  grain(ctx, rgb, mechanical);
+  if (state.brush_intensities) grain(ctx, rgb, mechanical, fixedBrushPressure(tool));
 }
 document.addEventListener('click', warmSelectedGraphite);
 document.addEventListener('change', warmSelectedGraphite);
@@ -223,15 +286,16 @@ document.addEventListener('change', warmSelectedGraphite);
 // second document. Reuse the exact path rather than rebuilding every arc on
 // each eraser acknowledgement, scroll/layout redraw or selection update.
 const ribbonCache = new WeakMap();
-function ribbon(target, p) {
-  if (ribbonCache.has(p)) {
-    target.fill(ribbonCache.get(p));
+function ribbon(target, p, widthScale) {
+  const cached = ribbonCache.get(p);
+  if (cached && cached.widthScale === widthScale) {
+    target.fill(cached.path);
     return
   }
   const path = new Path2D();
   for (let i = 0; i < p.length; i++) {
     let b = p[i],
-      r = b[3] / 2;
+      r = b[3] * widthScale / 2;
     path.moveTo(b[0] + r, b[1]);
     path.arc(b[0], b[1], r, 0, Math.PI * 2);
     if (!i) continue;
@@ -242,7 +306,7 @@ function ribbon(target, p) {
     if (!length) continue;
     let nx = -dy / length,
       ny = dx / length,
-      ar = a[3] / 2;
+      ar = a[3] * widthScale / 2;
     // Consistent winding makes the overlapping segment outlines one filled mask.
     path.moveTo(a[0] + nx * ar, a[1] + ny * ar);
     path.lineTo(a[0] - nx * ar, a[1] - ny * ar);
@@ -250,7 +314,7 @@ function ribbon(target, p) {
     path.lineTo(b[0] + nx * r, b[1] + ny * r);
     path.closePath();
   }
-  ribbonCache.set(p, path);
+  ribbonCache.set(p, {path, widthScale});
   target.fill(path);
 }
 
@@ -294,7 +358,7 @@ function geometry(target, p, family, beforePoint = null) {
     target.moveTo(p[0][0], p[0][1]);
     for (let i = 1; i < p.length; i++) target.lineTo(p[i][0], p[i][1]);
     target.stroke();
-  } else ribbon(target, p);
+  } else ribbon(target, p, family === 'ballpoint' ? (brushFor(15).display_width ?? 1) : 1);
 }
 
 const filteredInkBounds = new WeakMap();
@@ -320,7 +384,7 @@ function clipPaintbrush(target, points) {
   target.clip();
 }
 
-function line(s, target = ctx, outline = true) {
+function line(s, target = ctx, outline = true, dark = target === ctx && darkNotebookPaper()) {
   let p = s.points;
   if (!p.length) return;
   let brush = brushFor(s.tool),
@@ -328,19 +392,21 @@ function line(s, target = ctx, outline = true) {
     {
       rgb,
       alpha
-    } = inkColor(s);
+    } = inkColor(s, dark);
   target.save();
   target.fillStyle = target.strokeStyle = colorCss(rgb);
   target.lineCap = 'round';
   target.lineJoin = 'round';
   target.globalAlpha = alpha;
-  if (brush.texture) target.fillStyle = target.strokeStyle = grain(target, rgb, family === 'mechanical');
+  if (brush.texture) {
+    target.fillStyle = target.strokeStyle = graphitePaint(target, rgb, family === 'mechanical', p[0][2]);
+  }
   if (family === 'highlighter') {
-    target.globalCompositeOperation = 'multiply';
+    target.globalCompositeOperation = dark ? 'screen' : 'multiply';
     target.lineCap = 'butt'
   }
   if (family === 'shader') {
-    target.globalCompositeOperation = 'multiply';
+    target.globalCompositeOperation = dark ? 'screen' : 'multiply';
     if (!s.color_rgba) target.globalAlpha = .25
   }
   if (family === 'paintbrush') {
@@ -386,14 +452,14 @@ function strokeBounds(points, padding) {
   return bounds;
 }
 
-function paintOrderedInk(items, target = ctx, showSelection = true, region = null, pictures = null) {
+function paintOrderedInk(items, target = ctx, showSelection = true, region = null, pictures = null, dark = false) {
   const colors = new Map(), runs = [];
   for (const item of items) {
     if (item.corners || !item.points.length || brushFor(item.tool).family !== 'highlighter') {
       runs.push({item});
       continue;
     }
-    const {rgb, alpha} = inkColor(item), key = [...rgb, alpha].join(',');
+    const {rgb, alpha} = inkColor(item, dark), key = [...rgb, alpha].join(',');
     const bounds = highlightBounds(item.points), previous = runs.at(-1);
     if (previous?.key === key) {
       previous.items.push(item);
@@ -412,7 +478,7 @@ function paintOrderedInk(items, target = ctx, showSelection = true, region = nul
     if (run.item) {
       if (run.item.corners) {
         if (!pictures || pictures.has(run.item)) paintPicture(run.item, target, showSelection, pictures?.get(run.item));
-      } else line(run.item, target, showSelection);
+      } else line(run.item, target, showSelection, dark);
       continue;
     }
     const [left, top, right, bottom] = run.bounds;
@@ -455,7 +521,7 @@ function paintOrderedInk(items, target = ctx, showSelection = true, region = nul
     }
     target.save();
     target.resetTransform();
-    target.globalCompositeOperation = 'multiply';
+    target.globalCompositeOperation = dark ? 'screen' : 'multiply';
     target.globalAlpha = run.alpha;
     target.drawImage(scratch, x, y);
     target.restore();
@@ -469,7 +535,19 @@ function intersects([l, t, r, b], [left, top, right, bottom]) {
 
 // The overview uses the same scene painter without any transient pen state,
 // selection decoration or page zoom. Each card owns its asynchronous result.
+const pagePreviewRenders = new WeakMap();
+
+function refreshPagePreviews(container) {
+  for (const image of container.querySelectorAll('img')) {
+    const pending = pagePreviewRenders.get(image);
+    if (pending) paintPagePreview(pending.page, image);
+  }
+}
+
 async function paintPagePreview(page, image) {
+  const dark = darkNotebookPaper();
+  const render = {page};
+  pagePreviewRenders.set(image, render);
   const preview = document.createElement('canvas');
   const scale = 288 / Math.max(page.width, page.height);
   preview.width = Math.max(1, Math.round(page.width * scale));
@@ -503,7 +581,9 @@ async function paintPagePreview(page, image) {
     if (!image.isConnected) return;
     pictures.set(item, picture);
   }
-  paintOrderedInk(page.items, target, false, null, pictures);
+  if (pagePreviewRenders.get(image) !== render) return;
+  if (dark) invertPaper(target, page.width, page.height);
+  paintOrderedInk(page.items, target, false, null, pictures, dark);
   image.src = preview.toDataURL();
 }
 
@@ -611,8 +691,9 @@ function preview(samples) {
     {
       rgb,
       alpha
-    } = inkColor(nativeColor(tool, color));
-  draft.style.mixBlendMode = ['highlighter', 'shader'].includes(family) ? 'multiply' : 'normal';
+    } = inkColor(nativeColor(tool, color), darkNotebookPaper());
+  draft.style.mixBlendMode = ['highlighter', 'shader'].includes(family)
+    ? (darkNotebookPaper() ? 'screen' : 'multiply') : 'normal';
   maskCtx.save();
   maskCtx.fillStyle = maskCtx.strokeStyle = 'white';
   maskCtx.lineCap = family === 'highlighter' ? 'butt' : 'round';
@@ -652,7 +733,7 @@ function preview(samples) {
   draftCtx.setTransform(sx, 0, 0, sy, 0, 0);
   draftCtx.globalCompositeOperation = 'source-in';
   draftCtx.globalAlpha = alpha * (family === 'marker' ? .9 : family === 'paintbrush' ? .85 : 1);
-  draftCtx.fillStyle = brush.texture ? grain(draftCtx, rgb, family === 'mechanical') : colorCss(rgb);
+  draftCtx.fillStyle = brush.texture ? graphitePaint(draftCtx, rgb, family === 'mechanical', points[0][2]) : colorCss(rgb);
   draftCtx.fillRect(left / sx, top / sy, (right - left) / sx, (bottom - top) / sy);
   draftCtx.restore();
 }

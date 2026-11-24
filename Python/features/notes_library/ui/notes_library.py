@@ -101,7 +101,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.new_note_button = qt.QToolButton()
         self.new_folder_button = qt.QToolButton()
         self.collapse_button = qt.QToolButton()
-        for button, icon, label in ((self.new_note_button, 'edit', 'New document'),
+        for button, icon, label in ((self.new_note_button, 'file_add', 'New document'),
                                     (self.new_folder_button, 'folder_add', 'New folder'),
                                     (self.collapse_button, 'collapse', 'Collapse all folders')):
             set_painted_icon(button, ActionArtwork, icon)

@@ -489,7 +489,7 @@ class SettingsUITests(unittest.TestCase):
             self.assertEqual(len(menu_parents), 2)
             self.assertIs(app.settings_navigation, nav)
 
-    def test_wide_menu_defers_all_pages_and_paints_each_row_once(self):
+    def test_wide_menu_opens_app_and_defers_other_pages(self):
         from collections import Counter
         from mobile import appearance
         app = self.make_app()
@@ -503,17 +503,17 @@ class SettingsUITests(unittest.TestCase):
                 patch.object(appearance._surface_painter, 'paint', side_effect=paint):
             app.show_settings(present=False)
         nav = app.settings_navigation
-        self.assertEqual(nav.sections.built, {})
-        self.assertEqual(nav.options.built, {})
-        self.assertFalse(hasattr(app, 'restore_choice'))
-        for button in nav.buttons.values():
+        self.assertEqual(set(nav.sections.built), {'App'})
+        self.assertEqual(set(nav.options.built), {'App'})
+        self.assertEqual(list(nav.detail.children), [nav.options['App']])
+        for title, button in nav.buttons.items():
             self.assertEqual(paints[button._impl], 1)
-            self.assertEqual(button._impl._surface_roles, ('transparent', 'text', False))
+            self.assertEqual(button._impl._surface_roles,
+                             ('hover' if title == 'App' else 'transparent', 'text', False))
             self.assertGreaterEqual(button.style.height, 52)
         nav.choose('Text')
-        self.assertEqual(set(nav.sections.built), {'Text'})
-        self.assertEqual(set(nav.options.built), {'Text'})
-        self.assertFalse(hasattr(app, 'restore_choice'))
+        self.assertEqual(set(nav.sections.built), {'App', 'Text'})
+        self.assertEqual(set(nav.options.built), {'App', 'Text'})
 
     def test_retained_category_skips_fitting_but_messages_and_resize_still_refit(self):
         from mobile.settings.forms import fit_section
@@ -552,10 +552,10 @@ class SettingsUITests(unittest.TestCase):
             nav.choose('Text')
             font = app.text_font_size_choice
             font.value = '23'
-            self.assertFalse(hasattr(app, 'restore_choice'))
+            self.assertNotIn('App', nav.sections.built)
             saved = Preferences(app.private_root).values
             self.assertEqual(saved['text_font_size'], '23')
-            self.assertEqual(saved['restore_last_document'], 'true')
+            self.assertEqual(saved['document_restart'], 'resume')
             nav.choose('About')
             app.loop.run_until_complete(app.build_information_task)
             about.assert_called_once()
@@ -616,17 +616,23 @@ class SettingsUITests(unittest.TestCase):
         self.assertEqual([Preferences(app.private_root).values[key] for key in keys],
                          [DEFAULTS[key] for key in keys])
 
-    def test_restore_settings_do_not_refresh_unrelated_document_lists(self):
+    def test_restart_setting_only_saves_its_own_value_and_recovers_after_failure(self):
         app = self.make_app()
         with patch.object(app.adaptive, 'content_width', return_value=390):
             app.show_settings()
             app.settings_navigation.choose('App')
-            with patch.object(app, 'refresh_document_overview') as documents:
-                app.restore_choice.value = False
-                app.clear_documents_choice.value = False
+            choice = app.settings_navigation.sections['App'].restart_choice
+            self.assertEqual(choice.value, 'Resume last document')
+            with patch.object(app.preferences, 'save', side_effect=OSError('Save failed')):
+                choice.value = 'Start at Home'
+            self.assertEqual(choice.value, 'Resume last document')
+            self.assertEqual(app.settings_status.text, 'Save failed')
+            with patch.object(app, 'refresh_document_overview') as documents, \
+                    patch.object(app.preferences, 'save', wraps=app.preferences.save) as save:
+                choice.value = 'Keep open documents'
                 documents.assert_not_called()
-            self.assertEqual(app.preferences.values['restore_last_document'], 'false')
-            self.assertEqual(app.preferences.values['clear_unmodified_documents_on_restart'], 'false')
+                save.assert_called_once_with(document_restart='keep_open')
+            self.assertEqual(app.preferences.values['document_restart'], 'keep_open')
 
     def test_explanations_follow_options_and_about_stays_at_bottom(self):
         with TemporaryDirectory() as directory:
@@ -634,25 +640,20 @@ class SettingsUITests(unittest.TestCase):
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile', version='0.1.5')
             app.show_settings()
-            app.settings_navigation.sections['App']
+            section = app.settings_navigation.sections['App']
             app.settings_navigation.sections['Text']
             box = app.settings_navigation.sections['About']
-            for switch, title in ((app.restore_choice, 'Restore last document'),
-                                  (app.clear_documents_choice, 'Close saved documents on restart')):
-                label, control = switch.parent.children
-                self.assertEqual(label.text.replace('\n', ' '), title)
-                self.assertIs(control, switch)
-                row = switch.parent
-                group = row.parent
-                section = group.parent
-                self.assertIs(section.children[section.children.index(group) + 1], row._settings_note)
-                self.assertTrue(row._settings_note.text)
-                from mobile.ui_metrics import CAPTION_TEXT, CONTROL_TEXT
-                self.assertEqual(row._settings_note.style.font_size, CAPTION_TEXT)
-                self.assertEqual(label.style.font_size, CONTROL_TEXT)
-                self.assertLess(row._settings_note.style.font_size, label.style.font_size)
-            self.assertEqual(app.restore_choice.parent._settings_note.text.replace('\n', ' '),
-                             'Resume the last active document when the app starts.')
+            choice = section.restart_choice
+            label, control = choice.parent.children
+            self.assertEqual(label.text, 'On restart')
+            self.assertIs(control, choice)
+            self.assertEqual([row.value for row in choice.items],
+                             ['Start at Home', 'Resume last document', 'Keep open documents'])
+            group = choice.parent.parent
+            note = section.children[section.children.index(group) + 1]
+            self.assertEqual(note.text.replace('\n', ' '),
+                             'Saved files stay where they are. Recoverable unsaved drafts stay in Documents → Recent.')
+            self.assertLess(note.style.font_size, label.style.font_size)
             self.assertEqual(list(app.settings_navigation.sections)[-1], 'About')
             self.assertEqual(box.children[0].text, 'About')
             self.assertIs(box.children[1], app.build_version_label)
@@ -660,13 +661,12 @@ class SettingsUITests(unittest.TestCase):
             self.assertIsNotNone(app.build_version_label.style.color)
             from mobile.preferences import Preferences
             for control, key, value, saved in (
-                    (app.restore_choice, 'restore_last_document', False, 'false'),
-                    (app.clear_documents_choice, 'clear_unmodified_documents_on_restart', False, 'false'),
+                    (choice, 'document_restart', 'Start at Home', 'home'),
+                    (choice, 'document_restart', 'Keep open documents', 'keep_open'),
                     (app.text_font_size_choice, 'text_font_size', '23', '23')):
                 control.value = value
                 self.assertEqual(Preferences(app.private_root).values[key], saved)
-            self.assertEqual(app.preferences.values['restore_last_document'], 'false')
-            self.assertEqual(app.preferences.values['clear_unmodified_documents_on_restart'], 'false')
+            self.assertEqual(app.preferences.values['document_restart'], 'keep_open')
 
     def test_about_opens_before_build_information_finishes_and_refits_result(self):
         from threading import Event

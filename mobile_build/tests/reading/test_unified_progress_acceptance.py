@@ -94,6 +94,35 @@ class UnifiedProgressAcceptanceTests(unittest.TestCase):
     def test_epub_home_local_and_fresh_host_share_one_checkpoint(self):
         self.check_entry_points(self.epub)
 
+    def test_epub_appearance_keeps_the_reader_destination_and_tabs_hidden(self):
+        with mobile_app(root=self.root) as app:
+            async def exercise():
+                owner = await self.open_at(app, self.epub, 'home')
+                destination = owner.presentation_destination
+                settings_stack = list(app.routes.screens['settings'])
+                self.assertTrue(app._document_tabs_hidden)
+
+                self.assertTrue(owner.show_provider_layout())
+                self.assertEqual(app.native_host.state.destination, destination)
+                self.assertEqual(app.routes.screens[destination][-1][0],
+                                 f'private:{owner.session.id}:appearance')
+                self.assertEqual(app.routes.screens['settings'], settings_stack)
+                self.assertTrue(app._document_tabs_hidden)
+                section = app.body.children[0].content
+                theme = section.epub_controls['reading_theme']
+                theme.value = 'sepia'
+                self.assertEqual(app.preferences.values['reading_theme'], 'sepia')
+
+                self.assertTrue(app.routes.back())
+                self.assertEqual(app.native_host.state.destination, destination)
+                self.assertEqual(app.visible_reader(), owner.session.id)
+                self.assertTrue(app._document_tabs_hidden)
+                await asyncio.sleep(0)
+                await owner._epub_resume_task
+                self.assertFalse(owner._epub_return_pending)
+
+            app.loop.run_until_complete(exercise())
+
     def test_cbz_home_local_and_fresh_host_share_one_checkpoint(self):
         self.check_entry_points(self.comic)
 

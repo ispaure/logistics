@@ -19,6 +19,17 @@ from html.parser import HTMLParser
 from .epub import resolve_href
 
 MAX_OFFSET = 16 * 1024 * 1024
+TEXT_PROGRESS_METHOD = 'epub-text-v1'
+
+
+def text_completion(starts, index, offset, *, at_end=False):
+    """Compute whole-book progress from the reader's UTF-16 text anchor."""
+    if at_end:
+        return 100
+    if not starts or not starts[-1]:
+        return None
+    start, end = starts[index:index + 2]
+    return min(99, (start + min(max(0, offset), end - start)) * 100 // starts[-1])
 
 
 def valid_location(value):

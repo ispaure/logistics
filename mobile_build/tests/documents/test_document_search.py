@@ -27,6 +27,35 @@ class LocalDocumentSearchTests(TestCase):
     def setUp(self):
         self.app = create_app(self)
 
+    def test_note_search_opening_remembers_one_choice_for_the_whole_library(self):
+        from unittest.mock import AsyncMock, patch
+        from mobile.obsidian import open_search_note
+
+        app = self.app
+        root = app.private_root / 'search-note-fixture'
+        (root / 'Vault/.obsidian').mkdir(parents=True)
+        (root / 'Vault/Sub').mkdir()
+        for name in ('One.md', 'Two.md'):
+            (root / 'Vault/Sub' / name).write_text('# Test')
+        provider = LocalFiles(root)
+        regular = AsyncMock(return_value=True)
+        owner = AsyncMock()
+        owner.open_note.return_value = True
+        dialog = AsyncMock(return_value='remember-notes')
+        with patch.object(app.main_window, 'dialog', dialog), \
+                patch('mobile.obsidian.open_vault', new=AsyncMock(return_value=owner)) as vault:
+            for name in ('One.md', 'Two.md'):
+                result = app.loop.run_until_complete(open_search_note(app, provider, 'Vault/Sub/' + name, regular=regular))
+                self.assertTrue(result)
+            dialog.assert_awaited_once()
+            self.assertEqual(app.preferences.values['notes_search_open'], 'notes')
+            self.assertEqual(vault.await_args.args[2], 'Vault')
+            self.assertEqual(owner.open_note.await_args.args, ('Vault/Sub/Two.md',))
+            regular.assert_not_awaited()
+            app.preferences.save(notes_search_open='viewer')
+            self.assertTrue(app.loop.run_until_complete(open_search_note(app, provider, 'Vault/Sub/One.md', regular=regular)))
+            regular.assert_awaited_once()
+
     def test_local_epub_thumbnail_uses_the_provider_content_revision(self):
         from base64 import b64decode, b64encode
         from unittest.mock import Mock
@@ -88,8 +117,9 @@ class LocalDocumentSearchTests(TestCase):
                       and getattr(w, 'accessible_name', '') == 'Search documents')
         search.on_press()
         self.assertIsNotNone(app.document_search.parent)
-        self.assertEqual(list(app.document_results.children), [app.document_search_results])
-        self.assertIsNone(app.document_views.parent)
+        self.assertEqual(list(app.document_results.children), [app.document_recent_list])
+        self.assertIsNotNone(app.document_views.parent)
+        self.assertTrue(app.routes.screens['documents'][-1][0].startswith('search:'))
         self.assertTrue(app.routes.system_back())
         self.assertEqual(app.native_host.state.destination, 'documents')
         self.assertIsNone(app.document_search.parent)
@@ -97,7 +127,7 @@ class LocalDocumentSearchTests(TestCase):
         self.assertIsNotNone(app.document_views.parent)
         self.assertFalse(app.documents_search_open)
 
-    def test_matching_folders_and_filename_rows_have_browser_actions(self):
+    def test_matching_folders_and_filename_rows_open_directly_without_menus(self):
         import toga
         from mobile_build.tests.workspace.test_hub_documents import widgets
         app = self.app
@@ -117,8 +147,7 @@ class LocalDocumentSearchTests(TestCase):
         self.assertTrue(all(button.style.flex == 1 for button in titles))
         self.assertFalse(any(isinstance(w, toga.Label) and 'Nested/' in w.text for w in rows))
         menus = [w.document_actions for w in rows if hasattr(w, 'document_actions')]
-        self.assertEqual(len(menus), len(hits))
-        self.assertTrue(all('Show in folder' in [name for name, _ in menu.load_actions()] for menu in menus))
+        self.assertEqual(menus, [])
         app.hub_controller().clear_document_search_results()
         self.assertTrue(all(menu.disposed for menu in menus))
 
@@ -271,8 +300,9 @@ class LocalDocumentSearchTests(TestCase):
         self.assertFalse(hasattr(app.body.children[0], '_workspace_frame'))
         self.assertEqual(app.document_search.placeholder, 'Search local documents')
         app.document_view_buttons['Recent'].on_press()
+        app.open_document_search()
         app.document_search.value = 'unique filename'
-        self.assertIsNone(app.document_views.parent)
+        self.assertIsNotNone(app.document_views.parent)
         search = app.hub_controller()._documents_file_search
 
         async def wait():
@@ -295,7 +325,8 @@ class LocalDocumentSearchTests(TestCase):
         self.assertIsNotNone(app.document_views.parent)
         hub = app.hub_controller()
         self.assertIs(app.document_views.parent, hub._document_collection_header)
-        self.assertEqual(hub._document_collection_title.text, 'Recent')
+        self.assertFalse(any(getattr(child, 'text', None) == 'Recent'
+                             for child in hub._document_results_pane.children))
         self.assertEqual(list(app.document_results.children), [app.document_recent_list])
 
     def test_collections_keep_their_rows_and_controls_across_width_and_fold_changes(self):
@@ -346,6 +377,47 @@ class LocalDocumentSearchTests(TestCase):
             self.assertEqual(detail.style.margin_top, 0)
             self.assertEqual(list(app.document_view_buttons.values()), controls)
             self.assertEqual(list(app.document_results.children), [app.document_recent_list])
+
+    def test_rotating_collections_and_opening_search_hide_the_inactive_native_pane(self):
+        from unittest.mock import Mock
+
+        app = self.app
+        app.show_documents_hub()
+        hub = app.hub_controller()
+        results = hub._document_results_scroll
+        companion = hub._document_companion
+        with (patch.object(app.adaptive, 'content_width', return_value=900) as width,
+              patch('mobile.fold_layout.division', return_value=None),
+              patch.object(results._impl, 'set_hidden', Mock()) as hide_results,
+              patch.object(companion._impl, 'set_hidden', Mock()) as hide_companion):
+            app.reflow_documents_hub()
+            hide_results.assert_called_with(True)
+            hide_companion.assert_called_with(False)
+            self.assertIs(app.document_results.parent, hub._document_collection_header)
+            self.assertEqual(list(hub._document_collection_detail.children),
+                             [app._documents_status_row, companion])
+
+            # A compact portrait layout must not leave the empty browser's
+            # native frame painted over the now full-height collection list.
+            width.return_value = 440
+            app.reflow_documents_hub()
+            hide_results.assert_called_with(False)
+            hide_companion.assert_called_with(True)
+            self.assertEqual(list(companion.children), [])
+            self.assertIs(app.document_results.parent, hub._document_results_pane)
+            self.assertEqual(list(hub._document_collection_detail.children),
+                             [app._documents_status_row, results])
+
+            width.return_value = 900
+            app.reflow_documents_hub()
+            hide_results.assert_called_with(True)
+            hide_companion.assert_called_with(False)
+            app._documents_status_row.add(app.document_search)
+            app.reflow_documents_hub()
+            hide_results.assert_called_with(False)
+            hide_companion.assert_called_with(True)
+            self.assertEqual(list(companion.children), [])
+            self.assertIs(app.document_results.parent, hub._document_results_pane)
 
     def test_replaced_query_and_credentials_cannot_publish_late_worker(self):
         app = self.app
@@ -438,16 +510,23 @@ class LocalDocumentSearchTests(TestCase):
         (root.parent / 'remoteConfig.ini').write_text('[LogisticsComics]\nlibraries=Local Comics\n')
         app.show_documents_hub()
         app.document_view_buttons['Libraries'].on_press()
+        from mobile_build.tests.workspace.test_hub_documents import widgets, labels
+        import toga
+        for section, title, status_size in ((app.document_notes_list, 'Notes', 12),
+                                             (app.document_books_list, 'Books', 13),
+                                             (app.document_comics_list, 'Comics', 13)):
+            heading = next(w for w in widgets(section) if getattr(w, 'text', '') == title)
+            self.assertEqual(labels(heading.parent), [title, '– Looking for libraries…'])
+            self.assertEqual(heading.style.font_size, 19)
+            self.assertEqual(heading.parent.children[1].style.font_size, status_size)
         async def wait():
             await app._notes_discovery_task
             await app.hub_controller()._document_comics_discovery
             await app.hub_controller()._document_books_discovery
         app.loop.run_until_complete(wait())
-        from mobile_build.tests.workspace.test_hub_documents import widgets, labels
-        import toga
         self.assertEqual([w.text for w in app.document_notes_list.children if isinstance(w, toga.Label)][:1], ['Notes'])
         self.assertEqual(labels(app.document_comics_list)[0], 'Comics')
-        self.assertEqual(labels(app.document_books_list), ['Books', 'Local library', 'Local library'])
+        self.assertEqual(labels(app.document_books_list), ['Books'])
         book_rows = [w for w in widgets(app.document_books_list) if isinstance(w, toga.Button)]
         self.assertEqual([row.text for row in book_rows], ['Calibre', 'More Books'])
         libraries = [w.text for w in widgets(app.document_libraries_list) if isinstance(w, toga.Button)]

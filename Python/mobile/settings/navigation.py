@@ -43,7 +43,7 @@ class SettingsPages(Mapping):
 class SettingsNavigation(toga.Box):
     """Window-local categories with native compact routes and retained wide panes."""
     def __init__(self, app, sections):
-        super().__init__(style=Pack(direction=ROW, flex=1))
+        super().__init__(style=Pack(direction=COLUMN, flex=1))
         self.owner = app
         from ..appearance import surface, list_button
         def build(value):
@@ -101,7 +101,8 @@ class SettingsNavigation(toga.Box):
                               radius=0, background='settings_background', outlined=False, eink_outlined=False)
         surface(menu, radius=0, background='settings_background', outlined=False, eink_outlined=False)
         surface(self.sidebar, radius=0, background='settings_background', outlined=False, eink_outlined=False)
-        self.add(self.sidebar)
+        self.panes = toga.Box(children=[self.sidebar], style=Pack(direction=ROW, flex=1))
+        self.add(self.panes)
 
     @staticmethod
     def detach(view):
@@ -199,7 +200,7 @@ class SettingsNavigation(toga.Box):
                 self.detach(status)
                 section.add(status)
         for title, button in self.buttons.items():
-            selected = bool(self.wide and self.detail_requested and title == self.selected)
+            selected = bool(self.wide and title == self.selected)
             if getattr(button, '_settings_selected', None) == selected:
                 continue
             button.style.font_weight = 'bold' if selected else 'normal'
@@ -233,7 +234,7 @@ class SettingsNavigation(toga.Box):
         app = self.owner
         width = app.adaptive.content_width('settings', margin=0, full=True)
         screens = app.routes.screens['settings']
-        panel = screens[-1][1] if screens else self
+        panel = screens[-1][1] if screens else self.panes
         fold = division(app, panel)
         was_wide = self.wide
         if fold is not None and fold.vertical:
@@ -249,7 +250,7 @@ class SettingsNavigation(toga.Box):
         sidebar_width = fold.x if fold is not None and fold.vertical else min(320, max(240, width * .32))
         allocation = panes(width, panel.layout.content_height or 1, fold=fold, browser_priority=True)
         stacked = fold is not None and not fold.vertical
-        self.style.direction = COLUMN if stacked else ROW
+        self.panes.style.direction = COLUMN if stacked else ROW
         gap = fold.width if fold is not None and fold.vertical else 0
         self.detail.style.margin_left = gap
         self.detail.style.margin_top = fold.height if stacked else 0
@@ -269,6 +270,8 @@ class SettingsNavigation(toga.Box):
         if self.sidebar.content is None:
             self.sidebar.content = self._menu
         if self.wide:
+            if not self.detail_requested:
+                self.selected = next(iter(self.sections))
             self.sidebar.style.flex = 0
             # A partially folded Duo uses the physical seam, including rail/safe areas.
             self.sidebar.style.width = width if stacked else sidebar_width
@@ -277,10 +280,10 @@ class SettingsNavigation(toga.Box):
                 app.routes.trim('settings', len(screens) - 1)
                 app.routes.render('settings')
             if self.detail.parent is None:
-                self.add(self.detail)
+                self.panes.add(self.detail)
             # A nested page can still own the compact category beneath it. Wait
             # for native Back before moving that retained category to the root.
-            if self.detail_requested and not any(screen[0] == 'settings-category' for screen in screens):
+            if not any(screen[0] == 'settings-category' for screen in screens):
                 view = self.options[self.selected]
                 if view.parent is not self.detail:
                     show_body_title(view)
@@ -293,17 +296,17 @@ class SettingsNavigation(toga.Box):
             from toga.style.pack import NONE
             if self.sidebar.style.width != NONE:
                 del self.sidebar.style.width
-            if self.detail.parent is self:
-                self.remove(self.detail)
+            if self.detail.parent is self.panes:
+                self.panes.remove(self.detail)
             if active and not screens and self.detail_requested:
                 self.choose(self.selected)
-        panel = screens[-1][1] if self.wide and screens else self
+        panel = screens[-1][1] if self.wide and screens else self.panes
         if self.sidebar.parent is not panel:
             if not self._sidebar_position:
                 self._sidebar_position = self.sidebar.vertical_position
             old_panel = self.sidebar.parent
             self.detach(self.sidebar)
-            if old_panel is not None and old_panel is not self:
+            if old_panel is not None and old_panel is not self.panes:
                 old_panel.style.direction = COLUMN
             panel.insert(0, self.sidebar)
         if self._sidebar_position:
@@ -312,11 +315,11 @@ class SettingsNavigation(toga.Box):
                     self.sidebar.vertical_position = self._sidebar_position
                     self._sidebar_position = 0
             app.loop.call_soon(restore)
-        self.sidebar.style.margin_right = gap if panel is not self else 0
-        self.sidebar.style.margin_bottom = fold.height if stacked and panel is not self else 0
+        self.sidebar.style.margin_right = gap if panel is not self.panes else 0
+        self.sidebar.style.margin_bottom = fold.height if stacked and panel is not self.panes else 0
         if screens:
             current = screens[-1][1]
-            current.style.direction = self.style.direction if self.wide else COLUMN
+            current.style.direction = self.panes.style.direction if self.wide else COLUMN
             view = current.children[-1]
             content = view.content if isinstance(view, toga.ScrollContainer) else view
             if isinstance(content, toga.Box) and not category_on_top:
@@ -325,6 +328,6 @@ class SettingsNavigation(toga.Box):
                     fit_section(content, detail_width)
                     current._settings_route_layout = layout
         self._category_on_stack = any(screen[0] == 'settings-category' for screen in screens)
-        self.update_selection(show_detail=(self.wide and self.detail_requested) or category_on_top)
-        if (self.wide and self.detail_requested) or category_on_top:
+        self.update_selection(show_detail=self.wide or category_on_top)
+        if self.wide or category_on_top:
             self.fit_detail(self.selected)

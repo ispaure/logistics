@@ -34,8 +34,9 @@ class NotebookCreationTemplateTests(unittest.TestCase):
         self.assertEqual(picker.operation.notebook_template, 'Logistics Cornell notes')
         picker.creation_type.value = 'Plain text (.txt)'
         self.assertIsNone(controls.parent)
+        self.assertIsNone(picker.notebook_template_button.parent)
         picker.creation_type.value = 'Remarkable Document (.rmdoc)'
-        self.assertIs(controls.parent, picker.name_view)
+        self.assertIs(picker.notebook_template_button.parent, picker.name_view)
         self.assertEqual(controls.template.value, CATALOG['Logistics Cornell notes'])
         self.app.loop.run_until_complete(picker.save_text_destination())
         book = Notebook.read((self.root / 'LocalFiles/Ruled notes.rmdoc').read_bytes())
@@ -84,6 +85,7 @@ class NotebookCreationTemplateTests(unittest.TestCase):
                 finished.set()
 
         async def change_while_loading():
+            picker.show_notebook_template_panel()
             controls.template.value = CATALOG['Logistics Restaurant review']
             while not started.is_set():
                 await asyncio.sleep(.01)
@@ -96,6 +98,7 @@ class NotebookCreationTemplateTests(unittest.TestCase):
             while not finished.is_set():
                 await asyncio.sleep(.01)
             self.assertIsNone(controls.preview.image)
+            picker.creation_layout.close_templates(apply=True)
 
         with patch('features.notebooks.mobile.setup.preview_png', side_effect=render):
             try:
@@ -134,6 +137,33 @@ class NotebookCreationTemplateTests(unittest.TestCase):
         self.assertEqual(picker.operation.notebook_template, 'Blank')
         self.assertEqual(picker.notebook_templates.template.value, CATALOG['Blank'])
         picker.cancel_text_destination()
+
+    def test_dedicated_template_panel_applies_or_restores_choice(self):
+        _, picker = self.choose('Template panel', 'Remarkable Document (.rmdoc)')
+        controls = picker.notebook_templates
+        picker.notebook_template_button.on_press()
+        layout = picker.creation_layout
+        self.assertIs(layout.template_panel.parent, layout)
+        self.assertIs(controls.parent, layout.template_fields)
+        self.assertTrue(picker.visible())
+        controls.fit(700)
+        self.assertIs(controls.template_list.parent, controls.choices)
+        self.assertIsNone(controls.template.parent)
+        controls.template_rows['Logistics Checklist'].on_press()
+        controls.paper_format.value = FORMATS['move']
+        self.app.routes.back()
+        self.assertIsNone(layout.template_panel)
+        self.assertEqual(controls.selection(), ('Blank', 'pro'))
+        picker.notebook_template_button.on_press()
+        controls.fit(360)
+        self.assertIs(controls.template.parent, controls.choices)
+        self.assertIsNone(controls.template_list.parent)
+        controls.set_selection('Logistics Checklist', 'move')
+        layout.close_templates(apply=True)
+        self.assertIn('Checklist', picker.notebook_template_button.text)
+        self.app.loop.run_until_complete(picker.save_text_destination())
+        book = Notebook.read((self.root / 'LocalFiles/Template panel.rmdoc').read_bytes())
+        self.assertEqual(book.pages[0].template, 'Logistics Checklist Move')
 
     def test_retired_template_callback_cannot_change_fresh_creation(self):
         self.app.loop.run_until_complete(self.app.choose_document_type())

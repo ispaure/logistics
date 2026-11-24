@@ -242,7 +242,7 @@ class ReaderParityUITests(unittest.TestCase):
             self.assertIs(owner.provider_epub_view, panel)
             self.assertEqual(panel.offset, 7)
             self.assertTrue(owner.show_provider_layout())
-            app.routes.body('settings').children[-1].content.font_choice.value = "24"
+            app.routes.body(owner.presentation_destination).children[-1].content.font_choice.value = "24"
             self.assertTrue(app.routes.back())
             await __import__("asyncio").sleep(0)
             await owner._epub_resume_task

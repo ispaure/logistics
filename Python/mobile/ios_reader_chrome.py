@@ -167,6 +167,8 @@ def install():
         install_shell_root(adapter, LogisticsShellController)
 
     def dispose(adapter):
+        if (rail := getattr(adapter, 'destination_rail', None)) is not None:
+            rail.close()
         restore_shell_root(adapter)
         original_dispose(adapter)
 
@@ -199,10 +201,19 @@ def install():
                 container.top_inset = container.bottom_inset = 0
                 container.left_inset = container.right_inset = 0
             else:
+                changed = False
+                if container.content is not None:
+                    app = container.content.interface.app
+                    adapter = getattr(getattr(app, 'native_host', None), 'adapter', None)
+                    rail = getattr(adapter, 'destination_rail', None)
+                    if rail is not None and rail.active:
+                        horizontal = rail.content_insets(container.native)
+                        changed = horizontal != (container.left_inset, container.right_inset)
+                        container.left_inset, container.right_inset = horizontal
                 from .ios_system_occlusions import compact_content_top
-                changed = compact_content_top(container)
-                from .home_header import compact_content_top as compact_home
-                changed = compact_home(container) or changed
+                changed = compact_content_top(container) or changed
+                from .destination_actions import compact_content_top as compact_heading
+                changed = compact_heading(container) or changed
                 from .ios_content_background import expand_preview
                 changed = expand_preview(container) or changed
                 from .reading.reader_edges import compact_apple_reader

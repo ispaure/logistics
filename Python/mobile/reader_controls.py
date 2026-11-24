@@ -16,6 +16,8 @@ from .control_icons import icon_button, apply_icon
 from .appearance import accessible_name
 from commonUtils.ui.readers.layout import READER_LAYOUT
 
+PAGE_BUTTON_ICON_SIZE = 18
+
 
 # One comic menu contract; storage adapters only supply supported callbacks.
 COMIC_COMMANDS = (
@@ -96,10 +98,13 @@ class ComicHeader:
 
 
 class ReadingFrame:
-    def __init__(self, content, controls, *, margin=16, restore=None, top_controls=1):
+    def __init__(self, content, controls, *, margin=16, restore=None, top_controls=1, text_overlap=0):
         self.content, self.controls, self.margin = content, list(controls), margin
         self.top_controls = top_controls
         self.restore = restore
+        self.text_overlap = text_overlap
+        if text_overlap:
+            content.style.margin_bottom = -text_overlap
         self.widget = toga.Box(children=[*self.controls[:top_controls], content, *self.controls[top_controls:]],
                                style=Pack(direction=COLUMN, margin=margin, flex=1))
         self.widget._reading_frame = True
@@ -108,6 +113,8 @@ class ReadingFrame:
 
     def set_immersive(self, immersive, *, comic, image=False):
         self.immersive = immersive
+        if self.text_overlap:
+            self.content.style.margin_bottom = 0 if immersive else -self.text_overlap
         for container, control in getattr(self, 'side_controls', ()):
             if immersive and control in container.children:
                 container.remove(control)
@@ -219,6 +226,7 @@ class PageFooter:
         self.book_fraction = 0
         self.epub_pagination = None
         self.epub_book = None
+        self._epub_caption = None
         self.screen_pages_unavailable = False
         if vertical:
             from .reading.reader_progress import VerticalPageSlider
@@ -338,6 +346,15 @@ class PageFooter:
                 self.badge.style.width = width
             if self.spacer.style.width != width:
                 self.spacer.style.width = width
+            self.refresh_epub_caption()
+
+    def text_overlap(self):
+        """Allow text above the visible controls while keeping the full hit row."""
+        offset = getattr(self.slider, '_reader_track_offset', 0)
+        if not offset or self.vertical:
+            return 0
+        artwork = max(PAGE_BUTTON_ICON_SIZE, READER_LAYOUT.thumb_extent)
+        return max(0, READER_LAYOUT.touch_extent // 2 + offset - artwork // 2 - READER_LAYOUT.spacing)
 
     def sync(self, *, comic, count, index, right_to_left=False):
         self.count, self.index, self.rtl = count, index, comic and right_to_left
@@ -348,7 +365,7 @@ class PageFooter:
         from .appearance import surface
         for button, icon, label in ((self.previous, 'forward' if self.rtl else 'back', 'Previous page'),
                                     (self.following, 'back' if self.rtl else 'forward', 'Next page')):
-            apply_icon(button, icon, label, size=18)
+            apply_icon(button, icon, label, size=PAGE_BUTTON_ICON_SIZE)
             surface(button, radius=24, background='transparent', foreground='text')
             if not self.vertical and type(button._impl).__module__.startswith('toga_iOS.'):
                 from rubicon.objc import UIEdgeInsets
@@ -414,7 +431,26 @@ class PageFooter:
         self.slider.max = 1
         self.slider.value = self.book_fraction
         self.slider.enabled = position['fraction'] is not None
-        self.set_progress_text(position['mobile'], position['text'])
+        self._epub_caption = position['mobile'], position['text']
+        self.refresh_epub_caption()
+
+    def refresh_epub_caption(self):
+        if self._epub_caption is None:
+            return
+        mobile, full = self._epub_caption
+        width = self.spacer.style.width
+        from .reading.reader_edges import progress_caption_fits
+        text = full if progress_caption_fits(self.spacer, full, width) else mobile
+        if self.spacer.text != text or getattr(self.spacer, 'accessible_name', None) != full:
+            self.set_progress_text(text, full)
+
+    def checkpoint_epub_progress(self, value):
+        from features.books.locations import TEXT_PROGRESS_METHOD
+
+        if self.epub_pagination is not None:
+            percent = self.epub_pagination.percentage(value['page'], value['offset'])
+            if percent is not None:
+                value.update(percent=percent, percent_method=TEXT_PROGRESS_METHOD)
 
     def chapter_progress(self, index, count, offset=None, length=None):
         if self.epub_pagination is not None:

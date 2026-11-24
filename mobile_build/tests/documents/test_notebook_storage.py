@@ -449,6 +449,58 @@ class NotebookStorageTests(unittest.TestCase):
         self.assertEqual(list((self.root / 'notebooks').glob('**/base.rmdoc')), [])
         self.assertIn('draft retained', panel.status.text)
 
+    def test_recent_notebook_keeps_one_filename_preview_and_recovers_unsaved_edits(self):
+        from mobile.document_sources import document_preview_source
+        from mobile.recent_documents import RecentDocuments
+        from mobile.workspace import Session
+        from services.documents.locations import _shared_local_roots
+        from services.documents.migrations.ios_storage import prepare_storage
+        from services.documents.mobile_locations import _enabled
+
+        documents = Path(self.enterContext(TemporaryDirectory()))
+        prepare_storage(documents, self.root, exclude_backup=lambda path: None,
+                        move=Path.rename, public_layout=True)
+        self.addCleanup(_enabled.discard, self.root)
+        self.addCleanup(_shared_local_roots.pop, self.root, None)
+        source = documents / 'Personal' / 'Baton Rouge.rmdoc'
+        source.parent.mkdir(exist_ok=True)
+        original = Notebook.new('Internal notebook title').to_bytes()
+        source.write_bytes(original)
+        self.assertTrue(self.run_async(open_notebook(self.app, path=source)))
+        panel = self.app.notebook_panel
+        reference = dict(type='local', path='Files://Personal/Baton Rouge.rmdoc')
+        self.stroke(panel)
+        self.app.save_workspace()
+        self.assertEqual(len(self.app.recent_documents.items), 1)
+        [(session, summary)] = self.app.recent_items()
+        self.assertIs(session, panel.session)
+        self.assertEqual(summary, (source.name, 'notebook', ['Unsaved edits']))
+        self.assertEqual(document_preview_source(session), reference)
+        self.assertEqual(source.read_bytes(), original)
+
+        self.assertTrue(self.app.close_session(panel.session.id))
+        # Older builds wrote the file reference after the notebook UUID.
+        history = self.app.recent_documents
+        history.remember_file(Session('', 'notebook', panel.key, 'notebook', title=source.name), reference)
+        self.app.recent_documents = RecentDocuments(history.path.parent, private_root=self.app.private_root)
+        [(session, summary)] = self.app.recent_items()
+        self.assertEqual(summary, (source.name, 'notebook', ['Unsaved edits']))
+        self.assertEqual(document_preview_source(session), reference)
+        self.assertTrue(self.run_async(self.app.recent_opener(session)()))
+        reopened = self.app.notebook_panel
+        self.assertTrue(reopened.document.dirty)
+        self.assertEqual(len(reopened.editor.notebook.page(0).strokes), 1)
+        self.assertEqual(source.read_bytes(), original)
+
+        self.run_async(reopened.perform({'op': 'save'}))
+        self.assertTrue(self.app.close_session(reopened.session.id))
+        self.app.recent_documents.remember_file(
+            Session('', 'notebook', panel.key, 'notebook', title=source.name), reference)
+        [(session, summary)] = self.app.recent_items()
+        self.assertEqual(summary, (source.name, 'notebook', []))
+        self.assertEqual(document_preview_source(session), reference)
+        self.assertEqual(len(Notebook.read(source.read_bytes()).page(0).strokes), 1)
+
     def test_closed_notebook_rename_reopens_the_file_from_recents(self):
         from mobile.document_mutations import prepare_document_mutation
         from mobile.file_operations import FileOperationRequest, retiring_work
@@ -488,10 +540,16 @@ class NotebookStorageTests(unittest.TestCase):
         self.assertIn('Renamed.rmdoc', confirm.call_args.args[0].message)
 
     def test_live_notebook_rename_retains_draft_and_saves_only_to_new_name(self):
+        for private in (False, True):
+            with self.subTest(private=private):
+                self.check_live_notebook_rename(private=private)
+
+    def check_live_notebook_rename(self, *, private):
         from mobile.document_mutations import prepare_document_mutation
         from mobile.file_operations import FileOperationRequest, retiring_work
         from threading import Event
-        panel = self.create()
+
+        panel = self.create(private=private)
         self.stroke(panel)
         original_resource = panel.document.resource
         request = FileOperationRequest('rename', original_resource.provider, original_resource.path, 'Moved.rmdoc')
@@ -505,11 +563,18 @@ class NotebookStorageTests(unittest.TestCase):
         self.assertTrue(panel.document.dirty)
         self.assertEqual(panel.document.resource.path, 'Moved.rmdoc')
         self.assertEqual(len(panel.editor.notebook.page(0).strokes), 1)
+        [(session, summary)] = self.app.recent_items()
+        self.assertIs(session, panel.session)
+        if not private:
+            self.assertEqual(summary, ('Moved.rmdoc', 'notebook', ['Unsaved edits']))
         self.run_async(panel.perform(dict(op='save')))
         self.assertFalse(panel.document.dirty)
-        self.assertFalse(self.provider._physical('Private sketch.rmdoc').exists())
-        with self.provider.open('Moved.rmdoc') as stream:
+        provider = panel.document.resource.provider
+        self.assertFalse(provider._physical('Private sketch.rmdoc').exists())
+        with provider.open('Moved.rmdoc') as stream:
             self.assertEqual(len(Notebook.read(stream.read()).page(0).strokes), 1)
+        self.assertTrue(self.app.close_session(panel.session.id))
+        self.app.recent_documents.clear()
 
     def test_revocation_retires_private_canvas_and_pending_save_as_material(self):
         from features.notebooks.mobile.documents import retire_stale_notebooks
@@ -570,10 +635,11 @@ class NotebookStorageTests(unittest.TestCase):
         self.assertTrue(self.run_async(open_notebook(self.app, resource=resource)))
         panel = self.app.notebook_panel
         self.stroke(panel)
-        key = panel.key
         self.assertTrue(self.app.close_session(panel.session.id))
         folder.rename(self.root / 'disconnected')
-        self.assertTrue(self.run_async(open_notebook(self.app, key=key)))
+        [(session, summary)] = self.app.recent_items()
+        self.assertEqual(summary, ('Source.rmdoc', 'notebook', ['Unsaved edits']))
+        self.assertTrue(self.run_async(self.app.recent_opener(session)()))
         panel = self.app.notebook_panel
         self.assertIsNone(panel.document.resource)
         self.assertTrue(panel.document.dirty)

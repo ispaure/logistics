@@ -72,7 +72,7 @@ class NotebookPageProgressTests(unittest.TestCase):
         self.assertEqual(state, dict(page_id=book.pages[1].id, images=[paste['src']] * 2, dirty=True))
         self.assertEqual(path.read_bytes(), original)
 
-    def test_home_and_local_reopen_visible_page_and_brush_colors_without_writing_ink(self):
+    def test_home_and_local_reopen_visible_page_and_brush_settings_without_writing_ink(self):
         app, _, _ = create_storage_notebook_app(self)
         run = app.loop.run_until_complete
         folder = app.private_root / 'Downloads' / 'Nested'
@@ -88,6 +88,8 @@ class NotebookPageProgressTests(unittest.TestCase):
         panel = app.notebook_panel
         panel.web.evaluate_javascript = AsyncMock(return_value=True)
         run(panel.perform({'op': 'brush-color', 'tool': 15, 'color': 6}))
+        run(panel.perform({'op': 'brush-intensity', 'tool': 14, 'intensity': 64}))
+        run(panel.perform({'op': 'brush-intensity', 'tool': 13, 'intensity': 91}))
         run(panel.perform({'op': 'eraser-kind', 'kind': 'whole'}))
         run(panel.perform({'op': 'page', 'index': 2}))
         run(panel.perform({'op': 'brush-color', 'tool': 18, 'color': -1}))
@@ -104,6 +106,7 @@ class NotebookPageProgressTests(unittest.TestCase):
         self.assertIsNot(reopened, panel)
         self.assertEqual(reopened.state()['page_id'], selected)
         self.assertEqual(reopened.state()['brush_colors'], {15: 6, 18: -1})
+        self.assertEqual(reopened.state()['brush_intensities'], {14: 64, 13: 91})
         self.assertEqual(reopened.state()['eraser_kind'], 'whole')
         self.assertFalse(reopened.document.dirty)
         self.assertTrue(app.close_session(reopened.session.id))
@@ -112,6 +115,7 @@ class NotebookPageProgressTests(unittest.TestCase):
         self.assertEqual(app.notebook_panel.state()['page_id'], selected)
         self.assertEqual(app.notebook_panel.state()['eraser_kind'], 'whole')
         self.assertEqual(app.notebook_panel.state()['brush_colors'], {15: 6, 18: -1})
+        self.assertEqual(app.notebook_panel.state()['brush_intensities'], {14: 64, 13: 91})
         self.assertEqual(path.read_bytes(), original)
 
 

@@ -256,7 +256,7 @@ class ReaderSessionTests(unittest.TestCase):
                 app.loop.run_until_complete(app.open_book(record['id']))
                 app.loop.run_until_complete(app.next_book_page())
                 reader_session = app.workspace.active
-                app.preferences.save(restore_last_document='false', clear_unmodified_documents_on_restart='false')
+                app.preferences.save(document_restart='keep_open')
                 app.checkpoint()
                 restored = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
                 self.assertIsNone(restored.pending_reader_restore)
@@ -385,10 +385,14 @@ class ReaderSessionTests(unittest.TestCase):
                 app.show_settings(present=False)
                 settings = app.settings_navigation.sections['EPUB']
                 origin = app.native_host.state.destination
+                settings_stack = list(app.routes.screens['settings'])
                 original = owner.epub_view._chapter_bridge
                 self.assertTrue(owner.show_reader_appearance())
-                self.assertEqual(app.native_host.state.destination, 'settings')
-                page = app.routes.body('settings').children[-1].content
+                self.assertEqual(app.native_host.state.destination, origin)
+                self.assertEqual(app.routes.screens[origin][-1][0], f'reader:{owner.session.id}:appearance')
+                self.assertEqual(app.routes.screens['settings'], settings_stack)
+                self.assertTrue(app._document_tabs_hidden)
+                page = app.routes.body(origin).children[-1].content
                 self.assertEqual(set(page.epub_controls), {'epub_font_size', 'epub_justify', 'reading_font',
                     'line_spacing', 'reading_width', 'reading_margin', 'reading_theme'})
                 from mobile.routes import contains
@@ -408,8 +412,9 @@ class ReaderSessionTests(unittest.TestCase):
                     app.loop.run_until_complete(owner._epub_resume_task)
                 self.assertEqual(app.native_host.state.destination, origin)
                 self.assertEqual(app.visible_reader(), owner.session.id)
+                self.assertTrue(app._document_tabs_hidden)
                 self.assertIsNot(owner.epub_view._chapter_bridge, original)
-                self.assertIn('padding:0 24px', content.call_args.args[1])
+                self.assertIn('padding:8px 24px 0', content.call_args.args[1])
                 self.assertEqual(owner.book_record['position'], 1)
                 self.assertEqual(app.preferences.values['reading_theme'], 'dark')
                 self.assertEqual(settings.epub_controls['reading_theme'].value, 'dark')

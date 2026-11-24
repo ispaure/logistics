@@ -94,8 +94,9 @@ file without moving the reader or adding a cross-tab return edge.
 On compact iOS, the overview keeps its source controls mounted while a folder
 is open. The native Back transition prepares the overview header and
 destination tabs in `willShow`, before the route stack commits in `didShow`.
-A canceled gesture restores the folder's bar policy. When Workspaces moves into
-columns, the source controls move back into the sidebar body.
+A canceled gesture restores the folder's bar policy. In columns, the source
+controls stay in the sidebar. While browsing, the Workspaces heading sits
+above those controls and the current folder owns the right pane's title.
 
 iOS ordinary files and Rclone Copies use the shared guarded rename when both
 roots are on one volume. Different-volume moves use verified streaming. Picker
@@ -114,8 +115,10 @@ See `test_folder_navigation.py` and `test_ios_workspace_columns.py`.
 ## Folder viewport restoration
 
 Capture location before first list. Restore List mode through the native table
-offset and Tiles through its ScrollContainer. Keep the search and route context
-on Back. Workspaces, Documents and Notes use app-private SQLite snapshots for
+offset and Tiles through its ScrollContainer. Before UIKit animates Back,
+render the retained parent preview in the live browser's current mode. Reuse
+the captured scroll offset when its layout matches. Keep the search and route
+context on Back. Workspaces, Documents and Notes use app-private SQLite snapshots for
 ordinary mobile locations, including On My Phone/Tablet. Refresh reruns the
 active keyword/quoted-phrase query and validates result revisions.
 Unlocked LocalCrypt uses its separate session and sealed filename caches.
@@ -130,10 +133,23 @@ and move Favourites and library shortcuts into a separately scrolling pane on
 wide windows or across a physical fold. `DocumentsHub` mounts one collection
 at a time, with Libraries as the default and search above the results. Its
 collection tabs stay horizontal and stay within one pane across a physical
-division. The host owns the
-Duo's right-side navigation and each root's conditional Unlock action.
+division. All five roots use `destination_actions.py` for a title and actions in
+a single header. Portrait titles center in the space before the action group.
+The open Duo uses the measured free strip beside its portrait status controls.
+Landscape centers the title and keeps actions alongside it, with Duo's native
+vertical bar continuing to own its actions. Workspaces mounts the same header
+above its native columns. iPhone slab landscape uses a leading destination rail
+backed by the existing tab controllers. It reclaims UIKit's mirrored margin
+on the clear side of the screen. The rail follows the same tab visibility
+policy for readers and the keyboard. On Android the rail may use the camera's
+side strip when all tab targets fit around the reported cutout.
 Library scans start on entry. Keep the main browser separate from the menu and
-revalidate credentials for retained library shortcuts. Close/Delete refreshes
+revalidate credentials for retained library shortcuts. Books and Comics use
+one retained folder route across width changes. Its wide layout borrows the
+Libraries list, keeping the original library selected as the folder changes.
+On iOS, Documents and Workspaces share the file browser's folder title and
+storage caption. A split Documents layout places the title over its folder pane.
+Notes shortcuts open the Notes Library view in every layout. Close/Delete refreshes
 the visible rows after commit. The [Notes Library guide](../../features/notes_library/development/development.md#mobile-browsing-and-document-lifecycle)
 owns note navigation, scoped browsing and Search return. The
 [Books & Comics guide](../../features/books/development/development.md#find-the-mobile-books--comics-panel)
@@ -223,6 +239,12 @@ fullscreen and keyboard changes, using the incoming destination during native
 selection. Main document Close handles dirty state; secondary tools pop normally.
 UIKit disables interactive pop where it could bypass Close.
 
+EPUB Appearance is a child route in the current reader's destination. Its
+settings save immediately and Back resumes the retained passage with the tab
+bar still hidden. The inline iOS reader bar centers the filename and storage
+caption together. It uses equal touch targets for Close and Contents, and
+keeps Read aloud and More as separate controls.
+
 Fullscreen hides system chrome; only immersive comic images extend beyond
 UIKit safe areas. EPUB retains its margins and a Show reading controls action.
 Reapply horizontal page-swipe ownership after native navigation. The shared
@@ -250,6 +272,7 @@ with native ellipsis for long titles. Keep the centered composer within the
 actual pane and retain the native hamburger. See [Chat ownership](../../features/lm/development/development.md#mobile-ownership).
 
 Settings keeps two independently scrolling panes from 640 usable units.
+The first category fills the detail pane until the user selects a category.
 Widening a compact category remounts its existing controls in the root and
 removes only the category route. Narrowing preserves a deliberately selected
 category. Defer nested-page migration until Back reaches the category.
@@ -328,11 +351,13 @@ Custom content uses the [UIKit reserved-region API](https://developer.apple.com/
 in local coordinates. `control_top_clearance` considers every intersecting
 region. Reclaim inset only for a measured free column. Track window position and
 bar edge as well as dimensions. Native prompts and titles retain their space.
-On Duo, Home, Documents, Workspaces and Settings center their headings in the
-measured top strip above the leading pane when the page has side-by-side panes.
-With a horizontal bar, actions occupy the trailing part of
-the same strip when they fit. Related actions share a glass group, with space
-between groups. With a vertical bar, UIKit owns the actions at the active edge.
+On Duo, Home, Documents, Workspaces and Settings share the title placement
+rules. With side-by-side panes and no inline actions, the title aims for the
+window center within the space clear of system controls and the fold. The
+Workspaces overview title spans the native columns above the sidebar source
+controls when UIKit places actions on the side rail. With inline actions,
+the title centers in the part of the measured strip left by the action
+bubbles. Related actions share a glass group, with space between groups.
 The native bar also handles actions when the strip is too narrow.
 
 `reader_top_band` can project the existing storage title and all native actions
@@ -347,8 +372,8 @@ from interactive page, footer and header geometry.
 On unfolded Duo portrait, Notes Library places Close, Files, the title and
 Links in the measured strip above the article and drawers. Comics aligns its
 Close and actions to the notebook toolbar's centerline. In Workspaces, the
-source selectors sit below the heading, including in the leading pane when
-the browser has two columns. Check optical alignment
+source selectors sit below the heading. In side-by-side layouts, the empty
+detail pane aligns its workspace prompt with the source selectors. Check optical alignment
 against the notebook separately from native hit testing and accessibility labels.
 
 ## Offline documentation wiki

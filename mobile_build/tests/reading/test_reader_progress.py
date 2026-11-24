@@ -46,6 +46,29 @@ class ReaderProgressTests(unittest.TestCase):
         footer.refresh_edges(402)
         self.assertEqual(footer.badge.style.width, 394)
 
+    def test_epub_can_use_the_clear_space_above_the_visible_track(self):
+        from toga.style import Pack
+        from mobile.reader_controls import ReadingFrame
+        from mobile.reading.reader_progress import IOS_TRACK_OFFSET
+
+        footer, _ = self.footer(unit='chapter')
+        self.assertEqual(footer.text_overlap(), 0)
+        footer.slider._reader_track_offset = IOS_TRACK_OFFSET
+        target_height = footer.slider.style.height
+        overlap = footer.text_overlap()
+        self.assertGreaterEqual(overlap, 24)
+        content = toga.Box(style=Pack(flex=1))
+        frame = ReadingFrame(content, [toga.Box(), footer.widget], text_overlap=overlap)
+
+        self.assertEqual(content.style.margin_bottom, -overlap)
+        self.assertEqual(footer.slider.style.height, target_height)
+        self.assertIs(footer.widget.parent, frame.widget)
+        frame.set_immersive(True, comic=False)
+        self.assertEqual(content.style.margin_bottom, 0)
+        frame.set_immersive(False, comic=False)
+        self.assertEqual(content.style.margin_bottom, -overlap)
+        self.assertEqual(footer.slider.style.height, target_height)
+
     def test_page_and_chapter_tracks_commit_only_on_release(self):
         for unit in ('page',):
             with self.subTest(unit=unit):
@@ -123,6 +146,12 @@ class ReaderProgressTests(unittest.TestCase):
         self.assertEqual(footer.spacer.text, 'Counting pages…\nChapter 3 of 12')
         self.assertEqual(footer.spacer.accessible_name, 'Counting pages… · Chapter 3 of 12')
         self.assertFalse(footer.slider.enabled)
+        touch_height = footer.slider.style.height
+        footer.refresh_edges(450)
+        self.assertEqual(footer.spacer.text, 'Counting pages… · Chapter 3 of 12')
+        footer.refresh_edges(220)
+        self.assertEqual(footer.spacer.text, 'Counting pages…\nChapter 3 of 12')
+        self.assertEqual(footer.slider.style.height, touch_height)
 
     def test_book_page_scrub_uses_rendered_counts_and_single_chapter_is_enabled(self):
         from features.books.mobile.pagination import MobilePagination

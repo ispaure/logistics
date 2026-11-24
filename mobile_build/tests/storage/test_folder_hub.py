@@ -642,7 +642,7 @@ class FolderHubTests(unittest.TestCase):
                 app.change_folder_source('rclone')
                 self.assertEqual(list(app.folder_subtab_header.children), [app.folder_cloud_tabs])
                 self.assertEqual(list(app.folder_picker_header.children),
-                                 [app.folder_credential_row, app.folder_view_toggle])
+                                 [app.folder_credential_row])
                 self.assertEqual(app.folder_credential_row.children[0].text, 'Credential')
                 self.assertEqual(app.folder_credential.value, 'All')
                 self.assertEqual(app.native_host.labels[app.native_host.destinations.index('files')], 'Workspaces')

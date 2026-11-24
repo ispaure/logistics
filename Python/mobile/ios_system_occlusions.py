@@ -161,6 +161,8 @@ def observe_window_occlusions(app, native, *, fallback=None):
             reserve_bar_clearance(controller)
             controller.view.setNeedsLayout()
             controller.navigationBar.setNeedsLayout()
+            if hasattr(controller, 'setNeedsUpdateOfVerticalBarConfiguration'):
+                controller.setNeedsUpdateOfVerticalBarConfiguration()
             # UIKit may already be rotating this hierarchy. Invalidate the
             # bars without forcing a nested native layout pass.
         tabs = getattr(adapter, 'controller', None)

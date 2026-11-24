@@ -79,7 +79,10 @@ function previewWholeErase(from, to) {
   }
 }
 function sample(event, bounds) {
-  let point = coord(event, bounds);
+  recordPoint(coord(event, bounds));
+}
+
+function recordPoint(point) {
   last = point;
   if (points.length >= 100000) return;
   let previous = points[points.length - 1];
@@ -90,10 +93,13 @@ function sample(event, bounds) {
 }
 
 function coord(e, r = canvas.getBoundingClientRect()) {
-  const pressure = e.pointerType === 'pen' && !constantPenPressure
-    ? Math.max(0, Math.min(1, e.pressure)) : fallbackPressure;
+  const brush = mode === 'ink' && inkSettings ? brushFor(inkSettings.tool) : null;
+  const fixedGraphite = brush?.default_intensity !== undefined && !!state.brush_intensities;
+  const pressure = e.pointerType === 'pen' && !constantPenPressure && !(fixedGraphite && state.iphone_duo)
+    ? Math.max(0, Math.min(1, e.pressure)) : fixedGraphite
+      ? fixedBrushPressure(inkSettings.tool) : fallbackPressure;
   const point = [Math.max(0, Math.min(state.width, (e.clientX - r.left) / r.width * state.width)), Math.max(0, Math.min(state.height, (e.clientY - r.top) / r.height * state.height)), pressure];
-  if (mode === 'ink' && e.pointerType === 'pen' && brushFor(inkSettings.tool).tilt_widths) {
+  if (e.pointerType === 'pen' && brush?.tilt_widths) {
     // Pointer events may expose either altitude above the page or axis angles
     // from vertical. Android sends the digitizer's normalized angle directly.
     const radians = Math.PI / 180, horizontal = Math.PI / 2;
@@ -246,7 +252,12 @@ function finish(e, cancelled = false) {
     return
   }
   let end = coord(e);
-  if (!last || end[0] !== last[0] || end[1] !== last[1]) sample(e);
+  if (!last || end[0] !== last[0] || end[1] !== last[1]) {
+    // Release can report zero or fallback force and a different tilt. Keep
+    // the endpoint position and the dynamics from the last contact sample.
+    if (last && e.pointerType === 'pen') end = [end[0], end[1], ...last.slice(2)];
+    recordPoint(end);
+  }
   flushPreview();
   let captured = points;
   points = [];

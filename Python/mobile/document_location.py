@@ -53,7 +53,7 @@ def install_document_location(view, *, copies=None, reader=None):
     for name, label in kinds:
         indicator = template_icon(toga.ImageView(icon(name), style=Pack(width=12, height=12, margin_right=4)))
         accessible_name(indicator, label)
-        surface(indicator, radius=0, background='transparent', foreground=name if name.startswith('folder_') else 'accent',
+        surface(indicator, radius=0, background='transparent', foreground=name if name.startswith('folder_') else 'file_icon',
                 outlined=False, eink_outlined=False)
         row.add(indicator)
     caption = BrowserStatusLabel(text, style=Pack(font_size=17 * .75, margin=0))
@@ -183,8 +183,29 @@ def bind_android_hold(view, label, callback=show_document_path):
     label.setOnLongClickListener(Hold())
 
 
+def notebook_title_layout(controller):
+    """Keep the canvas title on the two Duo displays with side actions."""
+    from .fold_layout import is_iphone_duo
+    from .ios_toolbar import vertical_edge
+    if not is_iphone_duo() or not vertical_edge(controller):
+        return 'native'
+    native = controller.view
+    window = getattr(native, 'window', None)
+    window = window() if callable(window) else window
+    size = (window if window is not None else native).bounds.size
+    if size.width > size.height >= 560:
+        return 'inline'
+    if 0 < size.width < 540 and size.height > size.width:
+        return 'stacked'
+    return 'native'
+
+
 def mount_apple_title(view, controller, title):
-    if getattr(view, '_canvas_document_title', False):
+    notebook = getattr(view, '_canvas_document_title', False)
+    has_identity = hasattr(view, '_document_storage_status') or hasattr(view, '_document_path')
+    if notebook:
+        view._notebook_title_layout = notebook_title_layout(controller) if has_identity else 'auto'
+    if notebook and view._notebook_title_layout != 'native':
         # The filename and live drawing buttons share the canvas header.
         remove_location_row(view)
         header = getattr(view, '_document_title_header', None)
@@ -195,7 +216,7 @@ def mount_apple_title(view, controller, title):
             placeholder = view._canvas_empty_title = empty_bar_title()
         controller.navigationItem.titleView = placeholder
         return
-    if not hasattr(view, '_document_storage_status') and not hasattr(view, '_document_path'):
+    if not has_identity:
         controller.navigationItem.titleView = None
         return
     band = getattr(view, '_reader_top_band_state', None)
@@ -262,12 +283,14 @@ def mount_apple_title(view, controller, title):
     header = getattr(view, '_document_title_header', None)
     was_mounted = side_title_header(view) is not None
     frame = getattr(view, '_reading_frame_owner', None)
-    if controls or compact_tools or wide_notebook or stacked_notebook or (edge and (frame is not None or hasattr(view, '_document_path'))):
+    if (controls or compact_tools or wide_notebook or stacked_notebook
+            or (not notebook and edge and (frame is not None or hasattr(view, '_document_path')))):
         # UIKit owns the side actions, but can reposition its titleView after
         # content layout. Give the actual title its own row above the page.
         if header is None:
             top = 0 if notes_controls or stacked_notebook else 6
-            header = view._document_title_header = toga.Box(style=Pack(margin_top=top, margin_bottom=6))
+            bottom = 0 if getattr(view, '_epub_reader', False) else 6
+            header = view._document_title_header = toga.Box(style=Pack(margin_top=top, margin_bottom=bottom))
             header._empty_bar_title = empty_bar_title()
             if controls:
                 header.style.direction = ROW

@@ -73,21 +73,28 @@ class StartupModelTests(TestCase):
                             host.main_window.close()
                             close_loop(host.loop)
 
-    def test_restart_cleanup_preserves_only_active_saved_document_when_restore_enabled(self):
-        for restore in ('true', 'false'):
-            with self.subTest(restore=restore), TemporaryDirectory() as directory:
+    def test_restart_options_preserve_drafts_and_the_requested_saved_sessions(self):
+        for mode in ('home', 'resume', 'keep_open'):
+            with self.subTest(mode=mode), TemporaryDirectory() as directory:
                 root = Path(directory)
-                Preferences(root).save(restore_last_document=restore)
+                Preferences(root).save(document_restart=mode)
                 store = DocumentStore(root / 'Documents')
                 clean = store.create('Other.txt', b'Saved')
                 active = store.create('Active.txt', b'Saved')
+                draft = store.create('Draft.txt')
+                draft.text = 'Unsaved draft'
+                store.checkpoint(draft)
                 workspace = Workspace(root)
+                workspace.open('managed-text', draft.id, 'text')
                 workspace.open('managed-text', clean.id, 'text')
                 workspace.open('managed-text', active.id, 'text')
                 workspace.save()
                 models = load_startup_models(root, root)
                 resources = {session.resource for session in models['workspace'].sessions.values()}
-                self.assertEqual(resources, {active.id} if restore == 'true' else set())
+                expected = {'home': {draft.id}, 'resume': {draft.id, active.id},
+                            'keep_open': {draft.id, active.id, clean.id}}
+                self.assertEqual(resources, expected[mode])
+                self.assertEqual(store.open(draft.id).text, 'Unsaved draft')
                 self.assertEqual(store.open(clean.id).text, 'Saved')
 
     def test_native_startup_reopens_local_epub_before_revealing_workspace(self):
@@ -130,7 +137,7 @@ class StartupModelTests(TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             preferences = Preferences(root)
-            preferences.save(clear_unmodified_documents_on_restart='false')
+            self.assertEqual(preferences.values['document_restart'], 'resume')
             store = DocumentStore(root / 'Documents')
             doc = store.create('Recovered.txt', b'Baseline')
             doc.text = 'Unsaved synthetic draft'

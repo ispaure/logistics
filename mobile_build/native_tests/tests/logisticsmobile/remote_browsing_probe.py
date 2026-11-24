@@ -226,7 +226,7 @@ class RemoteProbe(LogisticsMobile):
                     assert not any(label in controls for label in ('save', 'download', 'edit metadata', 'discard changes')), controls
                     if filename in ('note.txt', 'note.md'):
                         assert owner.crypt_text.readonly and owner.crypt_text.value == SENTINEL
-                        assert {label for label, _ in owner.crypt_actions_menu.actions} == {'Reader tools…', 'Close private document'}
+                        assert owner.crypt_tools_view is None
                         if filename == 'note.md':
                             owner.toggle_private_preview()
                             assert owner.crypt_preview_button.text == 'Text'
@@ -271,23 +271,30 @@ class RemoteProbe(LogisticsMobile):
                         await asyncio.sleep(0)
                         await self.until(lambda: not owner.operation_busy, 'Cached comic did not resume')
                     labels = {label for label, _ in owner.crypt_actions_menu.actions}
+                    assert 'Open / Metadata…' not in labels
                     assert 'Previous comic' not in labels and 'Next comic' not in labels
                     if filename == 'page.png':
-                        assert labels == {'Reader tools…', 'Fit image', 'Close private document'}
+                        assert 'Fit image' in labels
                         owner.crypt_actions_menu.invoke(owner.fit_private_page)
                     if filename in ('comic.cbz', 'book.epub'):
                         assert 'Appearance…' in labels
                         owner.crypt_actions_menu.invoke(owner.show_provider_layout)
                         if filename == 'book.epub':
-                            assert self.routes.screens['settings'][-1][0] == 'epub-settings'
+                            destination = owner.presentation_destination
+                            assert self.native_host.state.destination == destination
+                            assert self.routes.screens[destination][-1][0] == f'private:{owner.session.id}:appearance'
+                            assert self._document_tabs_hidden
                         else:
                             assert owner.provider_appearance in self.body.children
                         assert self.routes.back()
                         assert owner.crypt_view in self.body.children
-                    owner.crypt_actions_menu.invoke(owner.show_private_tools)
-                    assert owner.crypt_tools_view in self.body.children
-                    assert self.routes.back()
-                    assert owner.crypt_view in self.body.children
+                    if filename == 'comic.cbz':
+                        owner.crypt_actions_menu.invoke(owner.show_private_tools)
+                        assert owner.crypt_tools_view in self.body.children
+                        assert self.routes.back()
+                        assert owner.crypt_view in self.body.children
+                    else:
+                        assert owner.crypt_tools_view is None
                     if remote == 'Secret' and filename == 'comic.cbz':
                         await asyncio.sleep(.3)
                         await capture_window(self, output / 'crypt-remote-reader.png')

@@ -93,6 +93,10 @@ button{-webkit-appearance:none;appearance:none}
 .stroke-sample{display:none}
 #mobileSheet[data-panel=brush] .stroke-sample{display:flex;flex:1;min-height:44px;align-items:center;justify-content:center;background:var(--wash);border-radius:8px}
 #mobileSheet[data-panel=brush] .stroke-sample svg{width:64px;height:30px;overflow:visible}
+.stroke-sample canvas{width:64px;height:30px}
+.sheet-panel .brush-intensity{display:grid;grid-template-columns:auto minmax(0,1fr) 4ch;gap:8px}
+.sheet-panel .brush-intensity input[type=range]{width:100%;margin:0;padding:0;border:0;background:transparent}
+.brush-intensity span{text-align:right;font-variant-numeric:tabular-nums}
 @media(prefers-reduced-motion:no-preference){
   #mobileSheet[data-panel=brush]:not([hidden]){animation:ink-drawer-in 120ms ease-out}
   @keyframes ink-drawer-in{from{opacity:0}to{opacity:1}}
@@ -169,6 +173,8 @@ body.notebook-laptop #viewport{position:fixed;top:var(--fold-bottom);bottom:0;le
 #laptopTools .brush-card svg{width:24px;height:24px}
 #laptopTools .sheet-panel:first-child>h3:nth-of-type(2),#laptopTools .widths,#laptopTools .sheet-panel:first-child>h3:nth-of-type(3),#laptopTools .swatches{grid-column:2}
 #laptopTools .swatches{gap:4px}
+#laptopTools .brush-intensity{grid-column:2}
+#laptopTools .brush-intensity input[type=range]{max-width:none}
 #laptopTools .swatch{width:44px;height:44px}
 #laptopTools .sheet-panel{min-width:0}
 #laptopTools .sheet-panel h3{margin:8px 0}
@@ -187,8 +193,9 @@ body.native-drawing-tools header.mobile-head{display:none}
 /* Only an acknowledged native portrait band may borrow this DOM clearance. */
 body.notebook-portrait-band header.mobile-head{max-width:min(352px,calc(100% - 8px));min-height:48px;margin-top:4px}
 body.notebook-portrait-band #restoreTools{top:4px;left:calc(50% + var(--notebook-tools-shift));right:auto;transform:translateX(-50%);max-width:352px}
+.notebook-mobile #templatePicker #templateChoices label{min-height:44px}
 
-/* One live canvas header owns the filename and drawing controls on every host. */
+/* Side-action layouts can keep the title with the unchanged drawing strip. */
 header.canvas-document-header{
   width:calc(var(--notebook-safe-width) - 16px);max-width:calc(var(--notebook-safe-width) - 16px);
   border-radius:0;box-shadow:none;background:transparent;gap:12px;justify-content:center;
@@ -202,10 +209,20 @@ header.canvas-document-header{
 #notebookIdentity .notebook-storage{display:flex;align-items:center;justify-content:center;gap:4px;font-size:12px;color:var(--muted)}
 .notebook-storage svg{flex:none;width:13px;height:13px;color:var(--accent);stroke-width:2}
 header.canvas-document-header .mobile-dock{flex:0 1 auto}
+header.canvas-document-header[data-title-layout=inline]{
+  width:max-content;background:var(--paper);border:1px solid var(--edge);border-radius:18px
+}
+header.canvas-document-header[data-title-layout=inline] #notebookIdentity{flex:0 1 auto}
+header.canvas-document-header[data-title-layout=stacked]{
+  width:max-content;max-width:var(--notebook-safe-width);flex-direction:column;gap:4px
+}
+header.canvas-document-header[data-title-layout=stacked] #notebookIdentity{flex:none;max-width:min(280px,100%)}
+header.canvas-document-header[data-title-layout=stacked] .mobile-dock{max-width:100%}
+header.canvas-document-header[data-title-layout=stacked] .mobile-tools{gap:0}
 @media(max-width:639px){
-  header.canvas-document-header{flex-wrap:wrap;gap:4px;justify-content:center}
-  header.canvas-document-header #notebookIdentity{flex-basis:100%;max-width:100%;order:-1}
-  header.canvas-document-header .mobile-dock{max-width:calc(100% - 96px)}
-  header.canvas-document-header:has(>button[hidden]) .mobile-dock{max-width:calc(100% - 48px)}
-  header.canvas-document-header:has(>button[hidden]):has(>button:last-child[hidden]) .mobile-dock{max-width:100%}
+  header.canvas-document-header[data-title-layout=auto]{flex-wrap:wrap;gap:4px;justify-content:center}
+  header.canvas-document-header[data-title-layout=auto] #notebookIdentity{flex-basis:100%;max-width:100%;order:-1}
+  header.canvas-document-header[data-title-layout=auto] .mobile-dock{max-width:calc(100% - 96px)}
+  header.canvas-document-header[data-title-layout=auto]:has(>button[hidden]) .mobile-dock{max-width:calc(100% - 48px)}
+  header.canvas-document-header[data-title-layout=auto]:has(>button[hidden]):has(>button:last-child[hidden]) .mobile-dock{max-width:100%}
 }

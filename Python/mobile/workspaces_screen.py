@@ -49,6 +49,12 @@ def subtab_button(label, *, on_press=None):
 class WorkspacesScreen:
     """Present the root on the folder controller that owns its state."""
 
+    def open_workspace_search(self):
+        if self.folder_source != 'Local':
+            return False
+        return self.app.hub_controller().open_document_search(destination='files',
+            scope='copies' if self.folder_local_group == 'Rclone' else 'device')
+
     def set_folder_loading(self, message='', *, busy=False):
         """Idle loading controls have no native view or reserved layout space."""
         self.folder_loading_status.text = message
@@ -161,7 +167,7 @@ class WorkspacesScreen:
             background='transparent', foreground='muted', outlined=False)
         self.folder_credential_row = toga.Box(children=[self.folder_credential_label, self.folder_credential],
                                              style=Pack(direction=ROW, align_items=CENTER, flex=1))
-        self.folder_view_toggle = toga.Button(on_press=self._toggle_folder_view, style=Pack(margin_left=6))
+        self.folder_view_toggle = toga.Button(on_press=self._toggle_folder_view)
         self._style_folder_view_toggle()
         self.folder_picker_header = toga.Box(style=Pack(direction=ROW, align_items=CENTER, justify_content=END))
         self.folder_source_actions = toga.Box(style=Pack(direction=ROW))
@@ -171,8 +177,6 @@ class WorkspacesScreen:
             style=Pack(display='pack' if incoming else 'none', font_size=12, margin_top=4))
         self.app._files_status_row = toga.Box(children=[self.folder_source_tabs],
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=4))
-        if self.app.feature_enabled('rclone'):
-            self.app._files_status_row.add(self.folder_transfers_button)
         scroll = folder_scroll(self.folder_list)
         box = toga.Box(children=[self.app._files_status_row, self.folder_subtab_header, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box, self.app.incoming_notice, scroll],
@@ -255,8 +259,6 @@ class WorkspacesScreen:
                 accessible_name(button, SOURCE_LABELS[source] + (' selected' if source == self.folder_source else ''))
             self.folder_source_styled = self.folder_source
         scope = [self.folder_credential_row] if credential_filter else []
-        if credential_filter or self.folder_source == 'Network shares':
-            scope.append(self.folder_view_toggle)
         if list(self.folder_picker_header.children) != scope:
             for child in list(self.folder_picker_header.children):
                 self.folder_picker_header.remove(child)
@@ -287,6 +289,8 @@ class WorkspacesScreen:
         for source in (('Local', 'rclone', 'Network shares') if self.app.feature_enabled('rclone') else ('Local',)):
             def select_source(widget=None, selected=source, **kwargs):
                 if self.folder_source != selected:
+                    from .haptics import feedback
+                    feedback(widget)
                     self.change_folder_source(selected)
             button = toga.Button(SOURCE_LABELS[source], on_press=select_source,
                                  style=Pack(flex=1, height=TOUCH_TARGET,

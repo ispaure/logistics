@@ -24,6 +24,21 @@ class NotebookHostStorageTests(unittest.TestCase):
     def setUp(self):
         self.app, self.client, self.provider = create_storage_notebook_app(self)
 
+    def test_paper_appearance_persists_without_editing_the_notebook(self):
+        from mobile.browser_preview import dark_notebook_thumbnails
+        from mobile.preferences import Preferences
+        panel = create_notebook(self, private=False)
+        before = panel.document.resource.read()
+        self.assertEqual(panel.state()['paper_appearance'], 'system')
+        self.assertFalse(dark_notebook_thumbnails(self.app))
+        self.app.loop.run_until_complete(panel.perform(dict(op='paper-appearance', appearance='dark')))
+        self.assertEqual(panel.state()['paper_appearance'], 'dark')
+        self.assertTrue(dark_notebook_thumbnails(self.app))
+        self.assertEqual(Preferences(self.app.private_root).values['notebook_paper_appearance'], 'dark')
+        panel.web.evaluate_javascript.assert_awaited_with('window.notebookPaperAppearanceUpdate("dark", "")')
+        self.assertFalse(panel.document.dirty)
+        self.assertEqual(panel.document.resource.read(), before)
+
     def test_canvas_html_loads_after_host_attachment_on_open_and_reopen(self):
         import toga
         from services.documents.mobile_notebooks import open_notebook

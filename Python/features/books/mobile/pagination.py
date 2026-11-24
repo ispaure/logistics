@@ -15,7 +15,7 @@ import json
 from uuid import uuid4
 from weakref import ref
 
-from features.books.locations import ChapterText, LayoutPages
+from features.books.locations import ChapterText, LayoutPages, text_completion
 from .presentation import wait_chapter_ready
 
 
@@ -125,12 +125,16 @@ class MobilePagination:
         if self.error:
             value['text'] = f'Page count unavailable · Chapter {self.chapter + 1} of {len(self.pages.counts)}'
             value['mobile'] = value['text'].replace(' · ', '\n')
-        if self.text_starts and self.text_starts[-1]:
-            offset = min(max(0, self.text_offset), self.text_lengths[self.chapter])
-            percent = (self.text_starts[self.chapter] + offset) * 100 // self.text_starts[-1]
+        percent = self.percentage(self.chapter, self.text_offset)
+        if percent is not None:
             for key in ('text', 'mobile'):
                 value[key] = f'{percent}% · {value[key]}'
         self.changed(value)
+
+    def percentage(self, index, offset):
+        at_end = (self.bridge is not None and index == self.chapter == len(self.pages.counts) - 1
+                  and self.bridge.at_end)
+        return text_completion(self.text_starts, index, offset, at_end=at_end)
 
     def text_position(self, offset):
         if offset != self.text_offset:

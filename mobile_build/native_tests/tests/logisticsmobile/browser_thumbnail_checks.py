@@ -206,7 +206,10 @@ async def exercise_browser_thumbnails(app):
                            f'Scrolled tile for {nearby_image.label} has no preview')
             from commonUtils.formats.image_headers import image_header
             image = image_header(cached(browser, nearby_image.label), max_bytes=1024 * 1024)
-            assert (image.width, image.height) == (160, 160 * 17 // (21 + int(Path(nearby_image.label).stem)))
+            width, height = browser._tile_thumbnail_size()
+            source_width = 21 + int(Path(nearby_image.label).stem)
+            assert (image.width, image.height) == (width, max(1, width * 17 // source_width))
+            assert width > 160 and height > 160
             assert not cached(browser, '001-image.png'), 'Recycled row published a thumbnail'
             browser.view_switch.on_press()
             await wait_for(lambda: bool(browser._visible_rows()) and browser._visible_rows()[0] > 100,
@@ -236,7 +239,9 @@ async def exercise_browser_thumbnails(app):
             await browser.select(image_entry)
             browser.view_switch.on_press()
             await wait_for(lambda: preview_attached(browser, image_entry.identity),
-                           'The tile did not reuse its row preview')
+                           'The tile did not load a larger preview')
+            tile = image_header(cached(browser, '001-image.png'), max_bytes=1024 * 1024)
+            assert tile.width > 160 and tile.height > 160
             assert browser.selected == image_entry.identity and browser.buttons[image_entry.identity].text == image_entry.label
             assert calls.count('001-image.png') <= 2, calls
 

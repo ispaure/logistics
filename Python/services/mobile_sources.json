@@ -45,6 +45,8 @@
     "documents/names.py",
     "documents/page_visits.py",
     "documents/progress.py",
+    "documents/completion.py",
+    "documents/help_history.py",
     "documents/progress_identity.py",
     "documents/progress_store.py",
     "documents/protection.py",

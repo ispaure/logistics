@@ -12,4 +12,5 @@ function scheduleViewportResize() {
   })
 }
 new ResizeObserver(scheduleViewportResize).observe($('viewport'));
+window.addEventListener('resize', scheduleViewportResize);
 render();

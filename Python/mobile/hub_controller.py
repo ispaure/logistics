@@ -59,7 +59,6 @@ class HubController(HubUI):
         "document_favourites_list",
         "document_comics_list",
         "document_books_list",
-        "home_actions",
         "home_content",
         "home_continue",
         "home_continue_button",

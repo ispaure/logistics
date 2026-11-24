@@ -218,14 +218,21 @@ def geometry(name, paper_format):
     return paths, texts
 
 
+def rule_style(name):
+    if name in LINE_COUNTS or name == 'Logistics Grid':
+        return '#c7ccd0', .9
+    return '#a6aaa8', 1.5
+
+
 @lru_cache(maxsize=32)
 def svg(name, paper_format='pro'):
     name = template_name(name)
     if name not in CATALOG or name == 'Blank':
         return ''
     paths, texts = geometry(name, paper_format)
+    color, weight = rule_style(name)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}">'
-            '<g fill="none" stroke="#a6aaa8" stroke-width="1.5">'
+            f'<g fill="none" stroke="{color}" stroke-width="{weight:g}">'
             + ''.join(f'<path d="{path}"/>' for path in paths) + '</g>'
             + ''.join(f'<text x="{x:g}" y="{y:g}" font-size="{size}" '
                       f'font-family="sans-serif" fill="#555">{escape(text)}</text>'

@@ -76,6 +76,11 @@ class HubUI(HomeScreen, DocumentsHub):
         excluded = set(excluding)
         live = {}
         for current in self.workspace.sessions.values():
+            if (current.provider == 'notebook' and not current.transient
+                    and current.id not in getattr(self.app, '_notebook_views', {})):
+                binding = self.recent_documents.notebook_binding(current.resource)
+                if binding is not None:
+                    current.history_source, current.title, current.dirty = binding
             aliases = session_identities(current, self.recent_documents)
             if current.identity in excluded:
                 excluded.update(aliases)
@@ -94,11 +99,17 @@ class HubUI(HomeScreen, DocumentsHub):
         active_missing = [session for session in missing if session.id == self.workspace.active]
         other_missing = [session for session in missing if session.id != self.workspace.active]
         items, seen = [], set()
+        from services.documents.help_history import is_documentation
         for entry in [*active_missing, *history, *other_missing]:
             session = (entry if getattr(entry, 'history_opener', None) else live.get(entry.identity, entry))
-            if session.id not in self.workspace.sessions and session.provider == 'file-reference':
+            source = (getattr(session, 'source', None) or getattr(session, 'history_source', None)
+                      or getattr(session, 'cache_source', None))
+            if is_documentation(source, private_root=self.app.private_root):
+                continue
+            if (session.id not in self.workspace.sessions and
+                    (session.provider == 'file-reference' or (session.provider == 'notebook' and not session.dirty))):
                 from .document_sources import local_reference_available
-                if not local_reference_available(self.app, session.source):
+                if not local_reference_available(self.app, source):
                     continue
             from services.mobile_features import session_enabled
             if not session_enabled(self.app.preferences, session):
@@ -134,6 +145,9 @@ class HubUI(HomeScreen, DocumentsHub):
             self.adaptive.menu_open['documents'] = False
             source = (getattr(session, 'source', None) or getattr(session, 'history_source', None)
                       or getattr(session, 'cache_source', None))
+            if session.provider == 'notebook' and (session.dirty or source is None):
+                from features.notebooks.mobile.documents import open_notebook
+                return await open_notebook(self.app, key=session.resource)
             if source is not None:
                 from .document_sources import reopen_file
                 try:
@@ -148,16 +162,14 @@ class HubUI(HomeScreen, DocumentsHub):
                     await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
                     self.refresh_document_list()
                     self.refresh_hub(self.app.native_host.state.destination)
-            elif session.provider == 'notebook':
-                from features.notebooks.mobile.documents import open_notebook
-                await open_notebook(self.app, key=session.resource)
             elif session.provider == 'library':
                 await self.open_book(session.resource)
             elif self.open_document(session.resource):
                 self.show_documents(resume=True)
         return reopen
 
-    def document_row_menu(self, session):
+    def document_row_menu(self, session, *, progress_target=None):
+        from .document_completion import commands
         from .document_sources import folder_location, ordinary_browser_location, show_folder_location
         from .file_items import native_menu, reference_actions, reference_available, row_actions
 
@@ -209,23 +221,30 @@ class HubUI(HomeScreen, DocumentsHub):
             item_provider, item_row = LocalFiles(path.parent), dict(path=path.name, directory=False)
         else:
             item_provider, item_row = None, None
-        if not actions and not item_row and not reference_available(app, source):
+        progress_commands = commands(app, progress_target)
+        if not actions and not progress_commands and not item_row and not reference_available(app, source):
             return []
         button = toga.Button('⋯', style=Pack(width=44, height=TOUCH_TARGET, font_size=24))
         accessible_name(button, 'File actions for ' + (session.title or 'document'))
         def load_actions():
             direct = (row_actions(app, item_provider, item_row, anchor=button, opener=opener)
                       if item_row else reference_actions(app, source, session.title, opener, anchor=button))
-            return [*actions, *direct]
+            return [*actions, *progress_commands, *direct]
         return [native_menu(app, button, load_actions)]
 
-    def recent_row(self, session, summary, *, wrap_name=False, show_source=False, previews=None, featured=False):
+    def recent_row(self, session, summary, *, wrap_name=False, show_source=False, previews=None,
+                   featured=False, collection=None):
         from .browser_ui import middle_filename, wrapped_filename
+        from .document_completion import session_target
+        from .hub_controls import card_trailing
 
         title, _, details = summary
         row = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
         opener = self.recent_opener(session)
-        name = list_button(toga.Button(title, on_press=opener,
+        async def choose(widget=None, **kwargs):
+            return await self.select_document_card(collection, title, opener)
+
+        name = list_button(toga.Button(title, on_press=choose if collection is not None else opener,
                                        style=Pack(height=64 if wrap_name else TOUCH_TARGET, flex=1)))
         if wrap_name:
             name.style.font_size = BODY_TEXT
@@ -240,12 +259,15 @@ class HubUI(HomeScreen, DocumentsHub):
         else:
             self.document_button_icons(name, session)
             title_controls = name
-        controls = [title_controls, *self.document_row_menu(session)]
+        progress_target = session_target(self.app, session)
+        tools = self.document_row_menu(session, progress_target=progress_target)
         currently_open = session.id in self.workspace.sessions
         if currently_open:
             row.session_id = session.id
             row.close_button = icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id))
-            controls.append(row.close_button)
+            tools.append(row.close_button)
+        badge = previews.completion_badge(progress_target) if previews is not None else None
+        controls = [title_controls, *card_trailing(badge, tools)]
         content = row
         if previews is not None:
             height = 96 if featured or currently_open or details else 72
@@ -308,12 +330,17 @@ class HubUI(HomeScreen, DocumentsHub):
                     details.append('File changed outside editor')
             except (OSError, ValueError, KeyError, TypeError):
                 details.append('Unavailable; retry to reopen')
-        elif session.provider == 'notebook' and not getattr(session, 'history_source', None):
-            from features.notebooks.mobile.documents import repository
-            names = dict(repository(self.app).list())
-            title = names.get(session.resource, title)
-            if session.resource not in names:
-                details.append('Unavailable; retry to reopen')
+        elif session.provider == 'notebook':
+            panel = getattr(self.app, '_notebook_views', {}).get(session.id)
+            if panel is not None and panel.document is not None:
+                dirty = panel.document.dirty
+            details = ['Unsaved edits'] if dirty else []
+            if not (getattr(session, 'history_source', None) or getattr(session, 'source', None)):
+                from features.notebooks.mobile.documents import repository
+                names = dict(repository(self.app).list())
+                title = names.get(session.resource, title)
+                if session.resource not in names:
+                    details.append('Unavailable; retry to reopen')
         elif session.provider == 'library':
             try:
                 record = self.reader_manager().catalog.library_store.read_record(session.resource)[0]

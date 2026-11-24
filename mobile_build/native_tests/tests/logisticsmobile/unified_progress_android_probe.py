@@ -177,7 +177,7 @@ class AndroidProgressProbe(UnifiedProgressProbe):
         result = dict(success=False, phase='checkpoint' if initial else 'restarted', pid=os.getpid(), cases={})
         try:
             await until(lambda: not getattr(self, '_startup_in_progress', False), timeout=60)
-            self.preferences.save(restore_last_document='false', clear_unmodified_documents_on_restart='false',
+            self.preferences.save(document_restart='keep_open',
                                   comic_layout='single')
             if initial:
                 self.shelf.mkdir(parents=True, exist_ok=True)

@@ -248,6 +248,27 @@ def style_progress_caption(label):
         label._impl.native.setTextSize(size)
 
 
+def progress_caption_fits(label, text, width):
+    """Use a single line only when the full caption fits at its current font size."""
+    if not isinstance(width, (int, float)) or width <= 1:
+        return False
+    impl = label._impl
+    backend = type(impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass, CGSize
+        ruler = getattr(label, '_progress_ruler', None)
+        if ruler is None:
+            ruler = label._progress_ruler = ObjCClass('UILabel').new()
+        ruler.font = impl.native.font
+        ruler.text = text
+        measured = float(ruler.sizeThatFits(CGSize(100000, 100000)).width)
+    elif backend.startswith('toga_android.'):
+        measured = impl.scale_out(impl.native.getPaint().measureText(text))
+    else:
+        measured = len(text) * READER_LAYOUT.caption_size * .65
+    return measured + 2 <= width
+
+
 def refresh_progress_edges(footer):
     widget = footer.widget
     base = READER_LAYOUT.progress_margin

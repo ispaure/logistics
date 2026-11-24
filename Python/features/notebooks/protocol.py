@@ -27,12 +27,12 @@ class RecoveryIncomplete(OSError):
 
 MODEL_COMMANDS = frozenset({
     'copy-strokes', 'cut-strokes', 'paste-strokes', 'paste-image', 'image-transform', 'delete-image', 'arrange-image', 'unlock-pdf',
-    'page', 'stroke', 'add-layer', 'layer-visible', 'transform', 'erase',
+    'page', 'stroke', 'add-layer', 'move-layer', 'delete-layer', 'layer-visible', 'transform', 'erase',
     'add-page', 'duplicate-page', 'delete-page', 'move-page', 'rename', 'undo', 'redo', 'template',
 })
 HOST_COMMANDS = frozenset({
     'save', 'save-as', 'export', 'transfer', 'library', 'show-in-folder', 'document-location', 'delete-file', 'page-previews',
-    'brush-color', 'eraser-kind', 'paper-preview',
+    'brush-color', 'brush-intensity', 'eraser-kind', 'paper-preview', 'paper-appearance',
 })
 
 
@@ -53,8 +53,11 @@ def validate_action(action):
         'page': {'index': int}, 'move-page': {'index': int},
         'page-previews': {'start': int},
         'brush-color': {'tool': int, 'color': int},
+        'brush-intensity': {'tool': int, 'intensity': int},
         'eraser-kind': {'kind': str}, 'paper-preview': {'muted': bool},
+        'paper-appearance': {'appearance': str},
         'stroke': {'points': list}, 'add-layer': {'name': str},
+        'move-layer': {'layer': str, 'target': str, 'after': bool}, 'delete-layer': {'layer': str},
         'rename': {'name': str}, 'layer-visible': {'layer': str, 'visible': bool},
         'erase': ({'points': list, 'radius': int} if 'points' in action else {'ids': list}), 'transform': {'ids': list},
     }.get(op, {})
@@ -68,9 +71,15 @@ def validate_action(action):
         raise ValueError('Password is too long.')
     if op == 'eraser-kind' and action['kind'] not in ('partial', 'whole'):
         raise ValueError('Invalid eraser type.')
+    if op == 'paper-appearance' and action['appearance'] not in ('system', 'light', 'dark'):
+        raise ValueError('Invalid notebook paper appearance.')
     if op == 'brush-color':
         from .brushes import native_color
         native_color(action['tool'], action['color'])
+    if op == 'brush-intensity':
+        from .brushes import valid_intensity
+        if not valid_intensity(action['tool'], action['intensity']):
+            raise ValueError('Choose a pencil intensity from 1 to 100 percent.')
     if op == 'erase' and 'points' in action:
         from .eraser import SIZES
         path = action['points']

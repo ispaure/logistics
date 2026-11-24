@@ -448,6 +448,43 @@ class NotebookTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'another window'):
             self.repo.save(self.key,stale)
 
+    def test_layer_reorder_and_delete_round_trip_with_undo(self):
+        from features.notebooks.ink import CrdtId, LwwValue, encode
+        self.draw()
+        for name in ('Second', 'Third'):
+            self.editor.apply(dict(op='add-layer', name=name))
+            self.editor.apply(dict(op='stroke', points=[[20, 30, .5]], layer=self.book.page(0).layers[-1][0]))
+        first, second, third = [key for key, _, _ in self.book.page(0).layers]
+        first_node = CrdtId(*map(int, first.split(':')))
+        scene_info = ss.SceneInfo(LwwValue(CrdtId(1, 1), first_node), None, None, None)
+        raw = self.book.page(0).to_bytes() + encode([scene_info])[len(HEADER_V6):]
+        self.book.pages[0].ink = InkPage.read(raw)
+
+        def assert_layers(order, strokes):
+            for book in (self.book, self.repo.open(self.key), Notebook.read(self.book.to_bytes())):
+                ink = book.page(0)
+                self.assertFalse(ink.warning)
+                self.assertEqual([row[0] for row in ink.layers], order)
+                self.assertCountEqual([stroke.layer for stroke in ink.strokes], strokes)
+
+        self.editor.apply(dict(op='move-layer', layer=third, target=first, after=False))
+        assert_layers([third, first, second], [first, second, third])
+        self.editor.apply(dict(op='delete-layer', layer=first))
+        assert_layers([third, second], [second, third])
+        scene_info = next(block for block in self.repo.open(self.key).page(0)._blocks if isinstance(block, ss.SceneInfo))
+        self.assertEqual(scene_info.current_layer.value, CrdtId(*map(int, second.split(':'))))
+        self.editor.apply(dict(op='undo'))
+        assert_layers([third, first, second], [first, second, third])
+        self.editor.apply(dict(op='undo'))
+        assert_layers([first, second, third], [first, second, third])
+        self.editor.apply(dict(op='redo'))
+        self.editor.apply(dict(op='redo'))
+        assert_layers([third, second], [second, third])
+        self.editor.apply(dict(op='delete-layer', layer=second))
+        with self.assertRaisesRegex(ValueError, 'at least one layer'):
+            self.editor.apply(dict(op='delete-layer', layer=third))
+        assert_layers([third], [third])
+
     def test_long_cpages_order_keys_are_unique_sorted_and_bounded(self):
         from features.notebooks.notebook import page_order_key
         keys = [page_order_key(i) for i in range(1000)]

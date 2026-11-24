@@ -1,6 +1,6 @@
 # Books mobile workflows
 
-On Android, enable **Appearance → Volume buttons turn pages**, then tap **Apply and return**. Volume down advances and volume up goes back in the reader. This off-by-default setting is separate for books and comics.
+On Android, enable **Appearance → Volume buttons turn pages**. EPUB saves immediately. For comics, tap **Apply and return**. Volume down advances and volume up goes back in the reader. The setting is off by default and is separate for books and comics.
 
 ## Book cover on iPhone Duo
 
@@ -40,7 +40,7 @@ Choose an installed offline voice under **Settings → Read aloud → Read-aloud
 
 **Timer** offers Off and durations from 15 minutes to one hour. Its budget runs only during playback. **Reset timer** restores the selected duration. At zero, speech pauses. Play starts a fresh timer.
 
-Use **Appearance…** or **Settings → EPUB** for local fonts, sizes 12–32, spacing, width, margins, justification and System/Light/Dark/Sepia/Slate themes. These settings are device-wide and save immediately. Back returns to the same passage. For comic layouts and editing, see [Comics](../../comics/user_mobile/reading.md).
+Use the reader's **Appearance…** or **Settings → EPUB** for local fonts, sizes 12–32, spacing, width, margins, justification and System/Light/Dark/Sepia/Slate themes. These settings are device-wide and save immediately. The reader's Appearance page stays in the document's navigation stack, and Back returns to the same passage. For comic layouts and editing, see [Comics](../../comics/user_mobile/reading.md).
 
 ### Lock-screen read-aloud
 

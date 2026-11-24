@@ -21,23 +21,38 @@ from mobile.reader_controls import ReadingFrame
 
 
 class DocumentLocationTests(unittest.TestCase):
-    def test_canvas_header_owns_filename_and_suppresses_duplicate_native_title(self):
+    def test_notebook_title_follows_duo_posture_and_native_bar(self):
         from mobile.document_location import side_title_reader
         view = toga.Box()
         view._canvas_document_title = True
         with patch('mobile.document_location.storage_identity', return_value=('On-device', False, False)):
             install_document_location(view)
         row = view._document_location_row
-        controller = NS(navigationItem=NS(titleView=None))
+        size = NS(width=951, height=669)
+        controller = NS(view=NS(bounds=NS(size=size)), navigationItem=NS(titleView=None))
         placeholder = object()
         with patch('mobile.document_location.empty_bar_title', return_value=placeholder), \
-                patch('mobile.folder_title.storage_title') as native_title:
-            for title in ('Sketch.rmdoc', 'Renamed.rmdoc'):
-                mount_apple_title(view, controller, title)
-                self.assertIs(controller.navigationItem.titleView, placeholder)
+                patch('mobile.fold_layout.is_iphone_duo') as duo, \
+                patch('mobile.ios_toolbar.vertical_edge') as edge, \
+                patch('mobile.folder_title.storage_title', return_value=object()) as native_title:
+            for is_duo, width, height, rail, layout in (
+                    (True, 951, 669, 2, 'inline'),
+                    (True, 669, 951, 0, 'native'),
+                    (True, 466, 678, 2, 'stacked'),
+                    (True, 669, 951, 2, 'native'),
+                    (False, 1024, 768, 0, 'native'),
+                    (False, 390, 844, 0, 'native'),
+                    (True, 951, 669, 1, 'inline')):
+                duo.return_value, edge.return_value = is_duo, rail
+                size.width, size.height = width, height
+                mount_apple_title(view, controller, 'Sketch.rmdoc')
+                self.assertEqual(view._notebook_title_layout, layout)
+                expected = native_title.return_value if layout == 'native' else placeholder
+                self.assertIs(controller.navigationItem.titleView, expected)
                 self.assertIsNone(row.parent)
                 self.assertIs(side_title_reader(view), view)
-            native_title.assert_not_called()
+            native_title.assert_called()
+            self.assertEqual(native_title.call_args.args[:2], ('Sketch.rmdoc', 'On-device'))
 
     def test_android_hold_resolves_current_path_each_time(self):
         from mobile.document_location import bind_android_hold

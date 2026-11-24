@@ -27,7 +27,8 @@ def epub(app, *, from_reader=False):
 
     def sync_category():
         if from_reader:
-            section = app.settings_navigation.sections.built.get('EPUB')
+            navigation = getattr(app, 'settings_navigation', None)
+            section = navigation.sections.built.get('EPUB') if navigation is not None else None
             if section is not None:
                 section._settings_on_open()
 
@@ -112,15 +113,15 @@ def show_from_reader(owner, *, provider=False):
     app = owner.app
     if (owner.cloud_busy if provider else owner.book_busy):
         return False
+    destination = owner.presentation_destination
     with batch_surfaces():
-        if not hasattr(app, 'settings_navigation'):
-            app.show_settings(present=False)
         box = epub(app, from_reader=True)
         surface(box, radius=0, background='settings_background', outlined=False, eink_outlined=False)
         settings_presentation(box)
-        fit_section(box, app.adaptive.content_width('settings', full=True))
+        fit_section(box, app.adaptive.content_width(destination, full=True))
         view = toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
-    if app.show_view(view, destination='settings', route='epub-settings', title='EPUB',
+    route = f"{'private' if provider else 'reader'}:{owner.session.id}:appearance"
+    if app.show_view(view, destination=destination, route=route, title='Reading appearance',
                      retain_private=owner if provider else None):
         from ..reading.epub_resume import bridge_for
         owner._epub_return_pending = True

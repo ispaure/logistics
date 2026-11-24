@@ -17,46 +17,10 @@ NOTEBOOK_TOOLBAR_CLEARANCE = (48, 352)
 NATIVE_TOOLBAR_CENTER_OFFSET = 7
 
 
-def native_tool_group(buttons):
-    """Keep inline reader tools in a real UIKit toolbar with shared glass."""
-    import toga
-    from toga.style import Pack
-    from toga.style.pack import ROW
-    # UIKit reserves space for the toolbar margins and the gap between items.
-    width = sum(button.style.width for button in buttons) + 32
-    height = max(button.style.height for button in buttons)
-    group = toga.Box(style=Pack(direction=ROW, width=width, height=height))
-    if not type(group._impl).__module__.startswith('toga_iOS.'):
-        group.add(*buttons)
-        return group
-    from rubicon.objc import ObjCClass
-    from .ios_toolbar import bar_item
-    host = group._impl.native
-    # Start at the host's current size so autoresizing tracks its first Toga layout.
-    toolbar = ObjCClass('UIToolbar').alloc().initWithFrame(host.bounds)
-    appearance = ObjCClass('UIToolbarAppearance').alloc().init()
-    appearance.configureWithTransparentBackground()
-    toolbar.standardAppearance = appearance
-    toolbar.compactAppearance = appearance
-    toolbar.scrollEdgeAppearance = appearance
-    toolbar.setItems([bar_item(button) for button in buttons], animated=False)
-    toolbar.autoresizingMask = 2 | 16
-    # Keep only UIBarButtonItems in the native view tree. Toga reapplies the
-    # widget visibility style during layout and would unhide duplicate buttons.
-    host.addSubview(toolbar)
-    group._reader_native_toolbar = toolbar
-    return group
+CONTROL_GAP = 8
 
 
-def retire_native_tool_group(group):
-    toolbar = getattr(group, '_reader_native_toolbar', None)
-    if toolbar is not None:
-        toolbar.setItems([], animated=False)
-    if group.parent is not None:
-        group.parent.remove(group)
-
-
-def free_top_band(regions, width, safe_top, required_width, *, row_height=60, center_offset=0):
+def free_top_band(regions, width, safe_top, required_width, *, row_height=60, center_offset=0, content_gap=8):
     """Choose only a wide edge column; missing/central/full-width data declines."""
     if safe_top < row_height or required_width <= 0 or width <= 0:
         return None
@@ -76,7 +40,7 @@ def free_top_band(regions, width, safe_top, required_width, *, row_height=60, ce
         return None
     left, right = max(choices, key=lambda pair: pair[1] - pair[0])
     from .ios_system_occlusions import control_top_clearance
-    reserve = max(row_bottom, control_top_clearance(regions, 0, width, 0, target=row_height))
+    reserve = max(row_bottom, control_top_clearance(regions, 0, width, 0, target=row_height, gap=content_gap))
     return dict(left=left, right=right, width=width, row_height=row_height,
                 row_top=row_top, reserve=reserve)
 
@@ -144,9 +108,6 @@ def restore(view, *, preserve_content=False):
     header = state['header']
     if header.parent is not None:
         header.parent.remove(header)
-    group = state.get('tool_group')
-    if group is not None:
-        retire_native_tool_group(group)
     for button in state['buttons']:
         if button.parent is not None:
             button.parent.remove(button)
@@ -218,12 +179,17 @@ def project(app, view, destination, controller):
            for size in sizes for value in size):
         restore(view)
         return False
+    gap_after = [close] if menu is not None and not notes_controls else []
+    if [getattr(button, 'control_icon', None) for button in actions] == ['speaker', 'more']:
+        gap_after.append(actions[0])
     row_height = max(48, *(height for width, height in sizes)) + 12
     width = float(native.bounds.size.width)
     regions = system_occlusions(controller)
     geometry = free_top_band(regions, width,
                              float(native_value(window.safeAreaInsets).top),
-                             sum(size[0] for size in sizes) + 44 + 32, row_height=row_height,
+                             sum(size[0] for size in sizes) + 44 + 32 + len(gap_after) * CONTROL_GAP,
+                             row_height=row_height,
+                             content_gap=0 if getattr(view, '_epub_reader', False) else 8,
                              center_offset=0 if getattr(view, '_notebook_dom_toolbar_contract', None)
                              == NOTEBOOK_TOOLBAR_CLEARANCE else NATIVE_TOOLBAR_CENTER_OFFSET)
     if geometry is None:
@@ -273,24 +239,20 @@ def project(app, view, destination, controller):
     header = toga.Box(children=[row], style=Pack(direction=COLUMN, height=geometry['reserve'],
         margin_top=-margins[0], margin_right=-margins[1], margin_left=-margins[2]))
     leading_count = 2 if notes_controls or menu is not None else 1
-    grouped_tools = (not notes_controls and len(actions) == 2
-                     and [getattr(button, 'control_icon', None) for button in actions] == ['speaker', 'more'])
+    from .ios_reader_chrome import content_control
     for index, button in enumerate(buttons):
         if button.parent is not None:
             button.parent.remove(button)
         button.app, button.window = app, app.main_window
-        from .ios_reader_chrome import content_control
-        content_control(button)
-        if not grouped_tools or button not in actions:
-            row.add(button)
+        content_control(button, glass=getattr(button, 'control_icon', None) == 'speaker')
+        row.add(button)
+        if button in gap_after:
+            row.add(toga.Box(style=Pack(width=CONTROL_GAP)))
         if index + 1 == leading_count:
             row.add(title_host)
-    group = native_tool_group(actions) if grouped_tools else None
-    if group is not None:
-        row.add(group)
     row._title_content = title_host
     place_title_in_header(row, view._document_title_view, subtitle)
-    row.style.height = row_height - 12  # Title sizing must not clip an existing 52pt menu.
+    row.style.height = row_height - 12
     frame = getattr(view, '_reading_frame_owner', None)
     if frame is not None:
         frame.controls.insert(0, header)
@@ -301,8 +263,7 @@ def project(app, view, destination, controller):
     controller_key = pointer.value if pointer is not None else id(controller)
     view._reader_top_band_state = dict(header=header, previous_header=previous,
         signature=signature, buttons=buttons, geometry=geometry, controller=controller,
-        controller_key=controller_key, owner_app=weakref.ref(app), notebook_candidate=candidate_token,
-        tool_group=group)
+        controller_key=controller_key, owner_app=weakref.ref(app), notebook_candidate=candidate_token)
     app._reader_top_band_view = weakref.ref(view)
     navigation = app.native_host.adapter.navigation_for(destination)
     if not bool(navigation.isNavigationBarHidden()):

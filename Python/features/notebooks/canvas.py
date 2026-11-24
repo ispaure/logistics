@@ -49,6 +49,11 @@ let state=__STATE__,bridge=__BRIDGE__,seq=0,queue=[],busy=false,mode='ink',
     active=null,points=[],selected=new Set(),start=null,last=null,pan=null,pageSwipe=false,
     pendingInk=null,continuousInk=false,deferredUpdate=null;
 const $=id=>document.getElementById(id),canvas=$('paper'),ctx=canvas.getContext('2d');
+if (document.body.classList.contains('notebook-mobile')) {
+    const appearance = state.paper_appearance ?? 'system';
+    if (appearance === 'dark' || (appearance === 'system' && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.body.classList.add('dark-notebook-paper');
+}
 const canvasPixelLimit=__CANVAS_PIXEL_LIMIT__;
 const templateArtwork=__TEMPLATE_ARTWORK__;
 """

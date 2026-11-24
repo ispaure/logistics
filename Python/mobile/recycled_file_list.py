@@ -14,14 +14,16 @@ import weakref
 import toga
 from commonUtils.ui.native.recycled_list import RecycledList, ListAppearance, thumbnail_image
 from .appearance import apple_color, android_palette, eink_enabled
-from services.appearance_palette import FILE_ICON_BLUE
 from .hub_icons import icon
 from .ui_metrics import TOUCH_TARGET, BODY_TEXT, CAPTION_TEXT, WRAPPED_FILENAME_ROW_HEIGHT
 
 
 @lru_cache(maxsize=2)
 def file_list_icon(folder):
-    return thumbnail_image(icon('files' if folder else 'documents'))
+    image = thumbnail_image(icon('files' if folder else 'documents'))
+    if type(image._impl).__module__.startswith('toga_iOS.'):
+        image._impl.native = image._impl.native.imageWithRenderingMode(2)
+    return image
 
 
 class RecycledFileList(RecycledList):
@@ -47,13 +49,25 @@ class RecycledFileList(RecycledList):
             row_height=row_height,
             body_text=body_text, caption_text=caption_text, icon_size=icon_size, title_lines=title_lines)
         super().__init__(row_kind=row_kind, appearance=appearance, **kwargs)
-        if self.factory.DetailedList.__module__.startswith('toga_android.'):
-            from android.graphics import Color
-            self._impl.native.setEntryIconColor(Color.parseColor(FILE_ICON_BLUE))
+        backend = self.factory.DetailedList.__module__
+        if backend.startswith('toga_android.'):
+            self._set_android_entry_color()
+        elif backend.startswith('toga_iOS.'):
+            self._impl.native.tintColor = apple_color('file_icon')
         app = toga.App.app
         if not hasattr(app, '_recycled_file_lists'):
             app._recycled_file_lists = weakref.WeakSet()
         app._recycled_file_lists.add(self)
+
+    def _set_android_entry_color(self):
+        from android.graphics import Color
+
+        self._impl.native.setEntryIconColor(Color.parseColor(self._impl.colors['file_icon']))
+
+    def refresh_palette(self):
+        super().refresh_palette()
+        if self.factory.DetailedList.__module__.startswith('toga_android.'):
+            self._set_android_entry_color()
 
     def show_checked_rows(self, active, indices):
         indices = frozenset(indices)

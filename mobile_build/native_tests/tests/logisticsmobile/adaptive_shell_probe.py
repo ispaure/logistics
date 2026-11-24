@@ -36,10 +36,9 @@ class ShellProbe(ToolbarProbe):
         sample['native'] = native_geometry(self, verify=False)
         sample['root_observation'] = getattr(self, '_ios_window_occlusions', None)
         view = self.routes.body().children[0]
-        sample['home_header'] = bool(getattr(view, '_home_top_band', None))
+        sample['home_header'] = getattr(view, '_destination_key', None) == 'home'
         sample['reader_header'] = bool(getattr(view, '_reader_top_band_state', None))
-        sample['destination_header'] = bool(getattr(view, '_duo_top_band', None) or
-                                            getattr(view, '_destination_top_band', None))
+        sample['destination_header'] = bool(getattr(view, '_destination_heading_state', None))
         (self.output / 'progress.json').write_text(json.dumps(self.report, indent=2))
         return sample
 
@@ -96,13 +95,13 @@ class ShellProbe(ToolbarProbe):
                 await self.record(f'{phase}-home-unlock-{locked}')
         self.show_documents_hub()
         view = self.routes.body().children[0]
-        if getattr(view, '_duo_top_band', None) or getattr(view, '_destination_top_band', None):
+        if getattr(view, '_destination_heading_state', None):
             from .sync_status_probe import tap
             await asyncio.sleep(.75)
             tap(self, view._document_search_button)
             await asyncio.sleep(.5)
             assert self.documents_search_open
-            tap(self, view._document_search_close)
+            tap(self, self.hub_controller()._document_search_route.close_button)
             await asyncio.sleep(.5)
             assert not self.documents_search_open
             self.main_window._impl.native.endEditing(True)

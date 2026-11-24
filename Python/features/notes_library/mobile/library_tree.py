@@ -43,7 +43,7 @@ class TreeRow:
         return dict(title=self.label, subtitle='', folder=self.directory, icon=None,
                     path=self.path, page=self.page, searching=self.searching, tree_depth=self.depth,
                     tree_expanded=self.expanded if self.directory and not self.searching else None,
-                    tree_landing=self.page is not None)
+                    tree_landing=self.page is not None and not self.searching)
 
 
 def _visible_folder_entries(folder, folders, expanded, visible, depth=0):
@@ -173,7 +173,7 @@ def _widget_tree_updates(owner, projection, old_rows, message, reveal_index, pre
         selected = row.path == owner.selected_path
         if getattr(widget, '_notes_selected', None) != selected:
             owner.style_tree_selection(widget, button, selected)
-        if row.page is not None:
+        if row.page is not None and not row.searching:
             underline_folder_link(button)
         desired.append(widget)
         yield

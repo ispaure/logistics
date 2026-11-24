@@ -86,9 +86,9 @@ class SyncStatusProbe(LogisticsMobile):
                 await asyncio.sleep(.3)
                 button = self.folder_transfers_button
                 view = self.routes.roots['files'].children[0]
-                state = getattr(view, '_duo_heading_state', None)
+                state = getattr(view, '_destination_heading_state', None)
                 native = self.routes.apple and button.parent is None
-                placement = [self.folder_source_tabs] if state is not None or native else [self.folder_source_tabs, button]
+                placement = [self.folder_source_tabs]
                 assert list(self._files_status_row.children) == placement
                 assert '42%' in button.accessible_name
                 frame = control_frame(self, button)
@@ -99,7 +99,7 @@ class SyncStatusProbe(LogisticsMobile):
                     assert button in state['buttons'] and frame['y'] < server['y'], (frame, server)
                 else:
                     assert 47 <= frame['width'] <= 49 and 47 <= frame['height'] <= 49, frame
-                    assert 0 <= frame['x'] - (server['x'] + server['width']) <= 12, (frame, server)
+                    assert frame['y'] < server['y'], (frame, server)
                 if not native:
                     row_frame = control_frame(self, state['header'] if state is not None else button.parent)
                     assert frame['x'] + frame['width'] <= row_frame['x'] + row_frame['width'] + 1, (frame, row_frame)

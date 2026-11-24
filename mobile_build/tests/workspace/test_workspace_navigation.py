@@ -432,7 +432,8 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 view = self.app.routes.roots[destination].children[0]
                 self.assertEqual(view._ios_toolbar_title, '')
                 header, buttons = view._destination_actions
-                self.assertFalse(any(isinstance(child, toga.Label) for child in header.children))
+                titles = [child.text for child in header.children if isinstance(child, toga.Label)]
+                self.assertEqual(titles, [self.app.native_host.labels[self.app.native_host.destinations.index(destination)]])
                 # Existing commands and destination labels remain available.
                 self.assertTrue(buttons)
                 self.assertEqual(self.app.native_host.labels[self.app.native_host.destinations.index(destination)],
@@ -490,7 +491,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
                     screens.clear()
                     try:
                         bar.setNavigationBarHidden.reset_mock()
-                        hidden = destination not in {'documents', 'files'}
+                        hidden = True  # These roots render actions in their shared header.
                         bar.isNavigationBarHidden.return_value = not hidden
                         self.navigation.sync_destination_bar(destination)
                         bar.setNavigationBarHidden.assert_called_once_with(hidden, animated=False)
@@ -956,6 +957,10 @@ class WorkspaceNavigationTests(unittest.TestCase):
             overview = app.body.children[0]._workspace_frame
             controls = app.folder_source_tabs
             self.assertEqual(list(overview.row.children), [overview.main, overview.folder_placeholder])
+            prompt = overview.folder_placeholder.children[0]
+            tabs = app._files_status_row
+            self.assertEqual(prompt.layout.absolute_content_top, tabs.layout.absolute_content_top)
+            self.assertEqual(prompt.layout.content_height, tabs.layout.content_height)
             app.loop.run_until_complete(app.show_files(local_root=True))
             browser = app.files_view._workspace_frame
             self.assertEqual(list(browser.row.children), [overview.main, browser.main])
@@ -978,7 +983,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             app.loop.run_until_complete(app.show_files(local_root=True))
             frame = app.files_view._workspace_frame
             browser = app.file_browser
-            browser.open_search()
+            search = browser.open_search()
             with patch.object(frame.row.layout, 'content_height', 700):
                 self.navigation.render()
             with patch.object(frame.row, 'remove', wraps=frame.row.remove) as remove:
@@ -988,7 +993,9 @@ class WorkspaceNavigationTests(unittest.TestCase):
                     remove.assert_not_called()
             self.assertTrue(browser.search_open)
             self.assertIs(browser.search_panel.parent, browser.widget)
-            self.assertEqual(list(frame.row.children), [frame.folder_master, frame.main])
+            self.assertIs(app.routes.body().children[0], search.view)
+            self.assertIs(browser.widget.parent, search.view)
+            search.close()
         app.loop.run_until_complete(browser.close())
 
     def test_workspace_hinge_reflows_without_a_window_resize(self):
@@ -1189,10 +1196,11 @@ class WorkspaceNavigationTests(unittest.TestCase):
             app.document_view_buttons['Recent'].on_press()
             self.assertIs(app.body.children[0], overview)
             self.assertEqual(list(app.document_results.children), [app.document_recent_list])
+            search = app.open_document_search()
             app.document_search.value = 'Draft'
-            self.assertIsNone(app.document_views.parent)
-            self.assertEqual(list(app.document_results.children), [app.document_search_results])
-            app.document_search.value = ''
+            self.assertIsNotNone(app.document_views.parent)
+            self.assertIs(app.routes.body().children[0], search.view)
+            search.close()
             self.assertEqual(list(app.document_results.children), [app.document_recent_list])
             self.assertEqual(owner.editor.value, 'Draft before opening the overview')
 

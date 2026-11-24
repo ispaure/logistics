@@ -190,10 +190,13 @@ class ToolbarProbe(LogisticsMobile):
                 if kind == 'comic':
                     assert sample['pinned'] == ['Apply and return'], sample
                 else:
-                    assert self.native_host.state.destination == 'settings'
-                    assert self.routes.screens['settings'][-1][0] == 'epub-settings'
+                    destination = owner.presentation_destination
+                    assert self.native_host.state.destination == destination
+                    assert self.routes.screens[destination][-1][0] == f'reader:{owner.session.id}:appearance'
+                    assert self._document_tabs_hidden
                     assert self.routes.back()
                     assert self.visible_reader() == owner.session.id
+                    assert self._document_tabs_hidden
                 self.show_home()
             from mobile.obsidian import open_vault
             vault = await open_vault(self, LocalFiles(root), '', destination='home')

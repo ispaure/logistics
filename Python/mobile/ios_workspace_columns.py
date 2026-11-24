@@ -51,8 +51,6 @@ class WorkspaceColumns:
         self.controller.tabBarItem.accessibilityLabel = item.accessibilityLabel
         self.sidebar = ControlledContainer(on_refresh=lambda value: None,
                                           on_native_layout=self.layout_sidebar)
-        from .destination_actions import restore_workspace_header
-        restore_workspace_header(master.view())
         from .file_drawer import detach
         detach(master.main)
         if (prompt := getattr(master, 'folder_placeholder', None)) is not None:
@@ -94,6 +92,51 @@ class WorkspaceColumns:
         self.layout()
         self.app.native_host.activate(self.app.native_host.state.destination)
 
+    @property
+    def side_by_side(self):
+        targets = getattr(self, '_layout_targets', None)
+        return targets is not None and targets[1][0] > targets[0][0] and targets[1][1] == 0
+
+    def heading_host(self):
+        """Host the shared root title above both native columns."""
+        if not hasattr(self, '_heading_container'):
+            import toga
+            from toga.style import Pack
+            from toga.style.pack import COLUMN
+            from toga_iOS.container import Container
+
+            self._heading_box = toga.Box(style=Pack(direction=COLUMN))
+            self._heading_box.app, self._heading_box.window = self.app, self.app.main_window
+            self._heading_container = Container(on_refresh=lambda value: None)
+            self._heading_container.content = self._heading_box._impl
+            native = self._heading_container.native
+            native.autoresizingMask = 0
+            native.hidden = True
+            self.controller.view.addSubview(native)
+        return self._heading_box
+
+    def layout_heading(self, top_inset):
+        self._heading_bottom = 0
+        container = getattr(self, '_heading_container', None)
+        if container is None:
+            return
+        header = next(iter(self._heading_box.children), None)
+        if header is None:
+            container.native.hidden = True
+            return
+        from rubicon.objc import CGRect
+        native = self.controller.view
+        safe = native.safeAreaInsets
+        container.left_inset, container.right_inset = safe.left, safe.right
+        container.top_inset = top_inset
+        bottom = top_inset + header.style.margin_top + header.style.height
+        self._heading_bottom = bottom + 4
+        container.native.frame = CGRect((0, 0), (native.bounds.size.width, bottom))
+        # Both columns keep their normal scroll owners below the shared heading.
+        self.controller.view.bringSubviewToFront(container.native)
+        self._heading_box.refresh()
+        container.native.hidden = bool(self.app.routes.screens['files'])
+
     def layout_sidebar(self, container, *, insets_only=False):
         if self.closed:
             return
@@ -106,8 +149,10 @@ class WorkspaceColumns:
         container.left_inset, container.right_inset = safe.left, safe.right
         from .ios_system_occlusions import compact_content_top
         compact_content_top(container)
-        from .home_header import compact_content_top as compact_header
+        from .destination_actions import compact_content_top as compact_header
         compact_header(container)
+        if heading_bottom := getattr(self, '_heading_bottom', 0):
+            container.top_inset = max(container.top_inset, heading_bottom - self.sidebar_box.style.margin_top)
         if previous_insets == (container.top_inset, container.bottom_inset,
                                container.left_inset, container.right_inset):
             return
@@ -115,6 +160,7 @@ class WorkspaceColumns:
         reflow_folder_notice(self.app, float(container.native.bounds.size.width - safe.left - safe.right) - 24)
         if container.content is not None:
             container.content.interface.refresh()
+        self.align_prompt()
         from .appearance import reserve_navigation
         reserve_navigation(self.app, view=self.sidebar_box)
 
@@ -130,8 +176,26 @@ class WorkspaceColumns:
         container.left_inset, container.right_inset = safe.left, safe.right
         from .ios_system_occlusions import compact_content_top
         compact_content_top(container)
+        if not self.app.routes.screens['files']:
+            container.top_inset = max(container.top_inset, getattr(self, '_heading_bottom', 0))
         if container.content is not None:
             container.content.interface.refresh()
+        self.align_prompt()
+
+    def align_prompt(self):
+        """Match the source row across the independently laid out native columns."""
+        prompt = getattr(self.master, 'folder_placeholder', None)
+        if prompt is None or prompt.parent is not self.master.row or not hasattr(self, '_layout_targets'):
+            return
+        source = self.master.view()._workspaces_source_row
+        _, detail = self._layout_targets
+        offset = 0
+        if detail[1] == 0:
+            source_top = self.sidebar.top_inset + source.layout.absolute_content_top
+            detail_top = self.root_container.top_inset + self.master.row.layout.absolute_content_top
+            offset = round(source_top - detail_top)
+        if prompt.style.margin_top != offset:
+            prompt.style.margin_top = offset
 
     def layout(self):
         if self.closed:
@@ -141,6 +205,12 @@ class WorkspaceColumns:
         from dataclasses import replace
         from .fold_layout import division, has_fold
         native = self.controller.view
+        from .ios_system_occlusions import observe_window_occlusions, reserve_bar_clearance
+        window = getattr(native, 'window', None)
+        window = window() if callable(window) else window
+        if window is not None:
+            observe_window_occlusions(self.app, window, fallback=native)
+            reserve_bar_clearance(self.navigation)
         parent = native.superview
         parent = parent() if callable(parent) else parent
         if parent is not None and parent.bounds.size.width > 0 and parent.bounds.size.height > 0:
@@ -152,12 +222,15 @@ class WorkspaceColumns:
         height = float(bounds.size.height)
         if width <= 0 or height <= 0:
             return
-        from .reader_lifecycle import document_route
+        from .reader_lifecycle import document_stack
         # Readers share the folder navigation stack, but not its browser column.
         # Include loading and reader child routes so opening tools never brings
         # the workspace sidebar back over an active document.
-        document = any(document_route(route) for route, _, _ in self.app.routes.screens['files'])
+        routes = self.app.routes.screens['files']
+        document = document_stack(routes)
         self.sidebar.controller.view.hidden = document
+        if hasattr(self, '_heading_container'):
+            self._heading_container.native.hidden = bool(routes) or not self._heading_box.children
         # Fold queries use the full owning container, before allocating panes.
         impl = type('ColumnsImpl', (), {'__module__': 'toga_iOS.container'})()
         impl.native = native
@@ -239,6 +312,11 @@ class WorkspaceColumns:
         detach(self.master.main)
         if (prompt := getattr(self.master, 'folder_placeholder', None)) is not None:
             detach(prompt)
+        if hasattr(self, '_heading_container'):
+            self._heading_box.clear()
+            self._heading_container.content = None
+            self._heading_container.native.removeFromSuperview()
+            self._heading_box.window, self._heading_box.app = None, None
         self.sidebar.content = None
         self.master.row.add(self.master.main)
         self.sidebar_box.window, self.sidebar_box.app = None, None

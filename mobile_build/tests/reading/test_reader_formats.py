@@ -156,7 +156,10 @@ class ReaderFormatTests(unittest.TestCase):
                     self.assertIn('Fit comic page', menu)
                 else:
                     self.assertIn('Read aloud…', menu)
-                    self.assertIn('bookmark', tools_text)
+                    if tools is not None:
+                        self.assertIn('bookmark', tools_text)
+                    else:
+                        self.assertIn('Chapters and bookmarks…', menu)
                     self.assertIn('epub font size', form)
                     self.assertNotIn('comic page layout', form)
                     self.assertNotIn('Fit comic page', menu)
@@ -170,7 +173,7 @@ class ReaderFormatTests(unittest.TestCase):
                     owner = app.readers.active
                     owner.show_reader_appearance()
                     appearance = (owner.reader_appearance if kind == 'comic'
-                                  else app.routes.body('settings').children[-1])
+                                  else app.routes.body(owner.presentation_destination).children[-1])
                     check(owner.reader_actions.actions, owner.reader_tools_view, appearance, kind == 'comic')
                     if kind == 'epub':
                         self.assertTrue(app.routes.back())
@@ -200,10 +203,18 @@ class ReaderFormatTests(unittest.TestCase):
                         provider = app.private_sessions.active
                         provider.show_provider_layout()
                         appearance = (provider.provider_appearance if kind == 'comic'
-                                      else app.routes.body('settings').children[-1])
+                                      else app.routes.body(provider.presentation_destination).children[-1])
                         check(provider.crypt_actions_menu.actions, provider.crypt_tools_view, appearance, kind == 'comic')
                         if kind == 'epub':
+                            menu = dict(provider.crypt_actions_menu.actions)
+                            self.assertNotIn('Open / Metadata…', menu)
+                            self.assertIsNone(provider.crypt_tools_view)
+                            self.assertEqual('Edit metadata…' in menu, not read_only)
                             self.assertTrue(app.routes.back())
+                            await menu['Chapters and bookmarks…']()
+                            tools = provider.provider_epub_view.tools
+                            self.assertIn(tools.panel, tools.widget.children)
+                            tools.close()
                         if kind == 'comic':
                             with patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog, \
                                     patch('mobile.provider_ui.toga.InfoDialog') as info, \

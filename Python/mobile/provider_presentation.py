@@ -44,17 +44,8 @@ def bind_provider_title(owner):
 
 def compact_private_view(self, view):
     from .action_menu import FeatureCommands
-    old = view.crypt_view
     comic = view.crypt_reader.kind in {'.cbz', '.zip'}
     view.crypt_actions = icon_button('more', 'Reader actions' if comic else 'Private document actions')
-    for control in (view.crypt_title, view.crypt_page, view.crypt_read_page, view.crypt_content, view.crypt_save):
-        if control in old.children:
-            old.remove(control)
-    view.crypt_tools_view = toga.ScrollContainer(horizontal=False, content=old, style=Pack(flex=1))
-    old.add(toga.Button('Return to private document', on_press=self.resume_crypt, style=Pack(height=44)))
-    if view.crypt_reader.book is not None:
-        old.insert(0, toga.Button('Contents and bookmarks', on_press=self.show_provider_epub_navigation,
-                                 style=Pack(height=44)))
     actions, neighbors = _private_actions(self, view, comic)
     view.crypt_action_items = list(actions)
     view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, actions, self.show_private_tools, document=True)
@@ -109,9 +100,8 @@ def compact_private_view(self, view):
 def _private_actions(self, view, comic):
     """Choose document actions before mounting shared reader chrome."""
     from .reader_controls import comic_actions, comic_pages
+    writable = not getattr(view.crypt_reader, 'read_only', False)
     if comic:
-        host = getattr(self, 'app', self)
-        writable = not getattr(view.crypt_reader, 'read_only', False)
         neighbors = (getattr(view._crypt_reader_store, 'provider', None) is not None
                      or getattr(view._crypt_reader_store, 'resource', None) is not None)
         actions = comic_actions(pages=self.show_private_tools, appearance=self.show_provider_layout,
@@ -119,22 +109,20 @@ def _private_actions(self, view, comic):
             metadata=self.edit_crypt_metadata if writable else None, info=self.show_provider_comic_info,
             close=self.close_crypt)
         view.crypt_tools_view = comic_pages(view.crypt_page, self.resume_crypt)
-    elif getattr(view.crypt_reader, 'read_only', False):
+    else:
         actions = []
+        if view.crypt_reader.editable and writable:
+            actions.append(('File actions…', self.show_private_tools))
         if view.crypt_reader.book is not None:
             actions.extend([('Chapters and bookmarks…', self.show_provider_epub_navigation),
                 ('Read aloud…', self.show_provider_read_aloud), ('Find in chapter…', self.show_provider_epub_find),
                 ('Appearance…', self.show_provider_layout)])
+            if writable:
+                actions.append(('Edit metadata…', self.edit_crypt_metadata))
         elif view.crypt_reader.kind == '.pdf':
             actions.append(('Pages and search', lambda: view.pdf_tools.toggle()))
         elif getattr(view.crypt_reader, 'image_document', False):
             actions.append(('Fit image', self.fit_private_page))
-        actions.append(('Close private document', self.close_crypt))
-    else:
-        actions = [('File actions…' if view.crypt_reader.editable else 'Open / Metadata…', self.show_private_tools)]
-        if view.crypt_reader.book is not None:
-            actions.extend([('Read aloud…', self.show_provider_read_aloud), ('Find in chapter…', self.show_provider_epub_find),
-                ('Appearance…', self.show_provider_layout)])
         actions.append(('Close private document', self.close_crypt))
     if view.crypt_reader.book is not None or view.crypt_reader.kind == '.pdf':
         actions.append(('Fullscreen', self.toggle_private_reading_mode))
@@ -274,7 +262,9 @@ def _mount_reader(self, view, controls, comic, neighbors):
         reader_controls.remove(footer)
     view.reading_frame = ReadingFrame(view.pdf_body if view.crypt_reader.kind == '.pdf' else view.crypt_content, reader_controls,
         margin=0, restore=view.reader_restore,
-        top_controls=2 if view.crypt_reader.kind == '.pdf' else 1)
+        top_controls=2 if view.crypt_reader.kind == '.pdf' else 1,
+        text_overlap=view.page_footer.text_overlap()
+        if view.crypt_reader.book is not None and hasattr(panel, 'webview') else 0)
     if view.crypt_reader.kind == '.pdf':
         view.reading_frame.side_controls = [(view.pdf_body, footer)]
     view.crypt_view = view.reading_frame.widget
@@ -282,6 +272,7 @@ def _mount_reader(self, view, controls, comic, neighbors):
     view.crypt_view._native_reader_toolbar = header
     view.crypt_view._native_reader_status = view.crypt_title
     if view.crypt_reader.book is not None:
+        view.crypt_view._epub_reader = True
         view.crypt_view._native_reader_buttons = lambda: [view.reader_speech_button, view.crypt_actions]
     elif comic:
         view.crypt_view._native_reader_buttons = lambda: [

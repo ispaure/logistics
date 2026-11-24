@@ -79,7 +79,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     def file_item_actions(self, provider, row):
         from .file_items import row_actions
-        return row_actions(self, provider, row)
+        from .document_completion import file_commands
+        return [*row_actions(self, provider, row), *file_commands(self, provider, row)]
 
     def cloud_controller(self) -> CloudController:
         """Return the retained owner of this workflow."""
@@ -288,8 +289,11 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             return await reopen_file(self, source)
         self.credential_document_lists = CredentialDocumentLists(self,
             references=self.recent_documents, max_recent=MAX_RECENT, reopen=reopen_reference)
-        if models is None and self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
+        restart = self.preferences.values['document_restart']
+        if models is None and restart != 'keep_open':
             self.clear_restored_documents()
+        if restart != 'resume':
+            self.workspace.active = None
         restored_document = self.workspace.sessions.get(self.workspace.active)
         self.pending_reader_restore = None
         if hasattr(self, 'scene_manager'):
@@ -315,6 +319,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self.adaptive = AdaptiveWorkspace(self)
         self.routes.on_render = self.adaptive.render
         self.navigation = self.native_host.root
+        for body in self.native_host.bodies.values():
+            body._notebook_thumbnail_appearance_changed = self.schedule_notebook_thumbnail_refresh
         self.body = self.routes.body()
         if not hasattr(self, '_startup_window'):
             from .ios_notebook_window import main_window_class
@@ -331,24 +337,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
     def _restore_startup_documents(self, restored_document):
         self.refresh_documents()
         self.loading = False
-        active = self.workspace.sessions.get(self.workspace.active)
-        if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
-            if active is None or active.provider != 'managed-text':
-                return
-            key = active.resource
-        elif self.labels and (restored_document is None or restored_document.provider == 'managed-text'):
-            key = self.preferences.values['last_document']
-            if active is not None and active.provider == 'managed-text':
-                key = active.resource
-            if self.preferences.values['restore_last_document'] != 'true' or key not in self.labels.values():
-                key = next(iter(self.labels.values()))
-        else:
-            return
-
-        if getattr(self, '_async_startup', False):
-            self._pending_managed_restore = key
-        else:
-            self.open_document(key)
+        if (restored_document is not None and restored_document.provider == 'managed-text'
+                and not getattr(self, '_async_startup', False)):
+            self.open_document(restored_document.resource)
 
     def _prepare_startup_workspace(self):
         if not getattr(self, '_async_startup', False):
@@ -385,20 +376,19 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         from commonUtils.ui.native.memory import MemoryPressure
         self.memory_pressure = MemoryPressure(self, on_pressure=self.release_disposable_resources,
                                               on_configuration=self.native_configuration_changed)
-        if self.preferences.values['restore_last_document'] == 'true':
-            if restored_document is not None and not restored_document.transient:
-                if restored_document.provider == 'library':
-                    self.workspace.active = restored_document.id
-                    self.show_documents_hub()
-                    self.startup_document_task = self.loop.create_task(self.resume_library_session(restored_document))
-                elif restored_document.provider == 'notebook':
-                    from features.notebooks.mobile.documents import open_notebook
-                    self.show_documents_hub()
-                    self.startup_document_task = self.loop.create_task(open_notebook(self, key=restored_document.resource, destination='documents'))
-                elif restored_document.provider == 'managed-text':
+        if restored_document is not None and not restored_document.transient:
+            if restored_document.provider == 'library':
+                self.workspace.active = restored_document.id
+                self.show_documents_hub()
+                self.startup_document_task = self.loop.create_task(self.resume_library_session(restored_document))
+            elif restored_document.provider == 'notebook':
+                from features.notebooks.mobile.documents import open_notebook
+                self.show_documents_hub()
+                self.startup_document_task = self.loop.create_task(open_notebook(self, key=restored_document.resource, destination='documents'))
+            elif restored_document.provider == 'managed-text':
+                if self.current is not None or (getattr(self, '_async_startup', False)
+                                                and self.open_document(restored_document.resource)):
                     self.show_documents(resume=True, destination='documents')
-        elif restored_document is not None and restored_document.provider == 'library':
-            self.workspace.active = None
         self.save_workspace()
 
         from .incoming_files import start_receiving
@@ -476,8 +466,6 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                     chat.toggle_chat_conversations()
             if destination == 'settings' and hasattr(self, 'settings_navigation'):
                 self.settings_navigation.detail_requested = False
-                for child in list(self.settings_navigation.detail.children):
-                    self.settings_navigation.detail.remove(child)
             self.routes.trim(destination, 0)
             self.routes.render(destination)
         if destination == 'chat' and not self.routes.screens['chat']:
@@ -599,7 +587,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     def refresh_native_theme(self):
         from .appearance import refresh_appearance, native_theme_configuration
+        from .browser_preview import refresh_notebook_thumbnails
         refresh_appearance(self)
+        refresh_notebook_thumbnails(self)
         enabled = self.preferences.values.get('android_eink') != 'true'
         editors = [owner.editor for owner in self.text_views.values()]
         private = getattr(self, 'private_sessions', None)
@@ -610,6 +600,10 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                 editor.highlighting = enabled
                 editor.changed(notify=False)
         self._native_theme_configuration = native_theme_configuration(self)
+
+    def schedule_notebook_thumbnail_refresh(self):
+        from .browser_preview import refresh_notebook_thumbnails
+        self.loop.call_soon(refresh_notebook_thumbnails, self)
 
     def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False,
                   retain_private=None):
@@ -647,7 +641,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             owner = private.active
             if owner is None or view not in (getattr(owner, 'crypt_view', None), getattr(owner, 'crypt_metadata_view', None)):
                 private.suspend(except_owner=retain_private)
-        if self.adaptive.split is not None and target == 'documents' and not root:
+        searching = any(route.startswith(('search:', 'search-folder:'))
+                        for route, _, _ in self.routes.screens[target])
+        if self.adaptive.split is not None and target == 'documents' and not root and not searching and not hasattr(view, '_search_route'):
             self.routes.retire_other_presentations(view, target, 'editor' if route == 'preview' else route)
             self.native_host.activate('documents')
             self.adaptive.present(view, route=route, title=title)
@@ -787,7 +783,11 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     def close_session(self, key, *, choice='keep'):
         from .session_workflows.transitions import transitions_for
-        return transitions_for(self).close(key, choice=choice).committed
+        closed = transitions_for(self).close(key, choice=choice).committed
+        if closed:
+            from .document_completion import refresh_browsers
+            refresh_browsers(self)
+        return closed
 
     def save_workspace(self, *, capture=True):
         if not self.active_host:
@@ -801,7 +801,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             self.workspace.save()
             active = self.workspace.sessions.get(self.workspace.active)
             self.recent_documents.remember(active)
-            if active is not None and getattr(active, 'history_source', None):
+            if active is not None and active.provider != 'notebook' and getattr(active, 'history_source', None):
                 self.recent_documents.remember_file(active, active.history_source)
             self.scene_manager.save_destination(self)
         except (OSError, ValueError) as error:
@@ -811,9 +811,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         if not self.require_feature('text_editor'):
             return False
         if self.current is None:
-            pending = self.__dict__.pop('_pending_managed_restore', None)
-            if pending is None or not self.open_document(pending):
-                self.new_document()
+            self.new_document()
         if self.current is None:
             return False
         self.pending_reader_restore = None
@@ -848,7 +846,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         # building. Paint only their final appearance, before presenting them.
         with batch_surfaces():
             if rebuild or not hasattr(self, 'settings_navigation'):
-                for name in ('font_choice', 'markdown_font_size_choice', 'text_font_size_choice', 'epub_font_size_choice', 'markdown_justify_choice', 'epub_justify_choice', 'restore_choice', 'clear_documents_choice'):
+                for name in ('font_choice', 'markdown_font_size_choice', 'text_font_size_choice', 'epub_font_size_choice', 'markdown_justify_choice', 'epub_justify_choice'):
                     self.__dict__.pop(name, None)
                 previous = getattr(self, 'settings_navigation', None)
                 self.settings_navigation = SettingsNavigation(self, settings_sections(self))
@@ -929,10 +927,6 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                 choice = getattr(self, key + '_choice', None)
                 if choice is not None:
                     changes[key] = 'true' if choice.value else 'false'
-            for name, key in (('clear_documents_choice', 'clear_unmodified_documents_on_restart'),
-                              ('restore_choice', 'restore_last_document')):
-                if hasattr(self, name):
-                    changes[key] = 'true' if getattr(self, name).value else 'false'
             self.preferences.save(**changes)
             if (tuple(self.preferences.values[key] for key in FONT_KEYS) != previous_fonts
                     or tuple(self.preferences.values[key] for key in alignment_keys) != previous_alignment):

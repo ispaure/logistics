@@ -87,8 +87,7 @@ class NotebookMutations:
             document.dirty = previous.dirty
             remember_notebook_resource(document)
             adopt_notebook_document(self.app, panel, document)
-            panel.session.dirty = document.dirty
-            remember_notebook(self.app, panel)
+            remember_notebook(self.app, panel, replacing=('notebook', previous.key))
         self.app.save_workspace()
         if updated:
             self.app.refresh_document_list()

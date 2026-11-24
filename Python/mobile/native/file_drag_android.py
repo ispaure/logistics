@@ -12,9 +12,9 @@ __status__ = "Production"
 from weakref import ref
 
 from android.content import ClipData
-from android.graphics import Rect
+from android.graphics import Bitmap, Canvas, Rect
 from android.view import DragEvent, MotionEvent, View
-from android.widget import AdapterView
+from android.widget import AdapterView, ImageView
 from java import dynamic_proxy, jarray, jint
 
 from ..file_drag import FileDrag
@@ -61,12 +61,30 @@ def highlight(view):
     return update
 
 
-def lift(drag, token, native):
+def lift(drag, token, native, *, preview=None):
     clip = ClipData.newPlainText(token, '')
-    started = native.startDragAndDrop(clip, View.DragShadowBuilder(native), None, 0)
+    shadow = View.DragShadowBuilder(native if preview is None else preview)
+    started = native.startDragAndDrop(clip, shadow, None, 0)
     if not started:
         drag.end(token)
     return bool(started)
+
+
+def tile_preview(card):
+    # The title and thumbnail are siblings of the Box's background view.
+    width, height = card.getWidth(), card.getHeight()
+    parent = card.getParent()
+    if parent is None or width <= 0 or height <= 0:
+        return None
+    bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    canvas = Canvas(bitmap)
+    canvas.translate(-card.getLeft(), -card.getTop())
+    parent.draw(canvas)
+    preview = ImageView(card.getContext())
+    preview.setImageBitmap(bitmap)
+    preview.setScaleType(ImageView.ScaleType.FIT_XY)
+    preview.layout(0, 0, width, height)
+    return preview
 
 
 def install(owner, browser):
@@ -161,6 +179,15 @@ class _TileHold(dynamic_proxy(View.OnLongClickListener)):
         return self.callback(view)
 
 
+class TileClick(dynamic_proxy(View.OnClickListener)):
+    def __init__(self, activate):
+        super().__init__()
+        self.activate = activate
+
+    def onClick(self, view):
+        self.activate()
+
+
 class _TileTouch(dynamic_proxy(View.OnTouchListener)):
     def __init__(self, callback):
         super().__init__()
@@ -170,7 +197,7 @@ class _TileTouch(dynamic_proxy(View.OnTouchListener)):
         return self.callback(view, event)
 
 
-def attach_tile_hold(browser, native, entry):
+def attach_tile_hold(browser, native, entry, card):
     browser_ref, epoch = ref(browser), browser.epoch
     drag = getattr(browser, 'file_drag', None)
     slop = native.getResources().getDisplayMetrics().density * 10
@@ -222,7 +249,7 @@ def attach_tile_hold(browser, native, entry):
             if dx * dx + dy * dy >= slop * slop:
                 armed, token = token, None
                 retire()
-                return lift(drag, armed, view)
+                return lift(drag, armed, card, preview=tile_preview(card))
         elif action == MotionEvent.ACTION_UP:
             if token is not None:
                 open_menu()

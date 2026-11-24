@@ -558,7 +558,7 @@ class UnifiedProgressProbe(LogisticsMobile):
                       pid=os.getpid(), scope=scope, cases=cases, video_evidence=self.video_evidence)
         try:
             await until(lambda: not getattr(self, '_startup_in_progress', False), timeout=40)
-            self.preferences.save(restore_last_document='false', clear_unmodified_documents_on_restart='false',
+            self.preferences.save(document_restart='keep_open',
                                   comic_layout='single')
             if previous is None:
                 make_fixtures(self.shelf)

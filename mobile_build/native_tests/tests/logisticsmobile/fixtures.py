@@ -24,7 +24,7 @@ def png_page():
             + chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00\xff')) + chunk(b'IEND', b''))
 
 
-def make_books(root, *, chapter_text="", embed_cover=False):
+def make_books(root, *, chapter_text="", second_chapter_text="", embed_cover=False):
     epub, comic = root / 'Fixture.epub', root / 'Fixture.cbz'
     with ZipFile(epub, 'w') as archive:
         archive.writestr('mimetype', 'application/epub+zip')
@@ -38,7 +38,7 @@ def make_books(root, *, chapter_text="", embed_cover=False):
                            if embed_cover else '') + '</manifest>'
                         '<spine><itemref idref="one"/><itemref idref="two"/></spine></package>')
         archive.writestr('one.xhtml', f'<html><body><h1>Native EPUB first</h1>{chapter_text}<script>bad()</script></body></html>')
-        archive.writestr('two.xhtml', '<html><body><h1>Native EPUB second</h1></body></html>')
+        archive.writestr('two.xhtml', f'<html><body><h1>Native EPUB second</h1>{second_chapter_text}</body></html>')
         if embed_cover:
             archive.writestr('cover.png', png_page())
     with ZipFile(comic, 'w') as archive:

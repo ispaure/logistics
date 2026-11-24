@@ -233,12 +233,12 @@ window.notebookUpdate = (next, error) => {
   syncChrome()
 };
 document.addEventListener('pointerdown', e => {
-  if ($('templatePicker').open) return;
+  if ($('templatePicker').open || $('deleteLayerDialog')?.open) return;
   for (let panel of document.querySelectorAll('details'))
     if (panel.open && !panel.contains(e.target)) panel.open = false
 });
 document.addEventListener('keydown', e => {
-  if ($('templatePicker').open) return;
+  if ($('templatePicker').open || $('deleteLayerDialog')?.open) return;
   if (eraserDialog.open && e.key === 'Escape') {
     e.preventDefault();
     closeEraserSettings(true);

@@ -130,6 +130,8 @@ def favourite_action(app, source, title, opener, cipher, *, validate=lambda: Non
         try:
             await asyncio.to_thread(change)
             if app.active_host:
+                from .haptics import feedback
+                feedback(app.main_window, confirmed=True)
                 refresh(app)
         except (OSError, ValueError) as error:
             if app.active_host:
@@ -288,9 +290,10 @@ async def reopen(app, row, *, error_title='Open favourite'):
     return False
 
 
-def populate(app, container, *, heading=True, row_font=None, allow_remove=False, limit=None):
-    from .hub_controls import DocumentThumbnails, source_title
-    previews = container._document_thumbnails = DocumentThumbnails(app) if row_font is not None else None
+def populate(app, container, *, heading=True, row_font=None, allow_remove=False, limit=None, select=None):
+    from .document_completion import commands, reference_target
+    from .hub_controls import DocumentCardMedia, card_trailing, source_title
+    previews = container._document_card_media = DocumentCardMedia(app) if row_font is not None else None
 
     if heading:
         container.add(toga.Label('Favourites', style=Pack(font_size=20, font_weight='bold', margin_top=12)))
@@ -307,6 +310,8 @@ def populate(app, container, *, heading=True, row_font=None, allow_remove=False,
             continue
         async def open_row(widget=None, row=row, **kwargs):
             await reopen(app, row)
+        async def choose(widget=None, row=row, open_row=open_row, **kwargs):
+            return await select('Favourites', row['title'], open_row)
         async def remove(widget=None, row=row, **kwargs):
             try:
                 cipher = next((value for value in unlocked_ciphers(app)
@@ -315,7 +320,8 @@ def populate(app, container, *, heading=True, row_font=None, allow_remove=False,
                 refresh(app)
             except (OSError, ValueError, PermissionError) as error:
                 await app.main_window.dialog(toga.InfoDialog('Remove favourite', str(error)))
-        opener = toga.Button(row['title'], on_press=open_row, style=Pack(height=48, flex=1))
+        opener = toga.Button(row['title'], on_press=choose if select is not None else open_row,
+                             style=Pack(height=48, flex=1))
         controls = [opener]
         if row_font is not None:
             from .appearance import list_button
@@ -330,17 +336,22 @@ def populate(app, container, *, heading=True, row_font=None, allow_remove=False,
             controls = [previews.artwork(row['source'], row['opener'].get('kind')),
                         source_title(opener, [(glyph, label)], text=label)]
         from . import outbound_share
-        if allow_remove or (outbound_share.supported() and
+        progress = reference_target(app, row['source'], row['opener'].get('kind'))
+        tools = []
+        if allow_remove or progress is not None or (outbound_share.supported() and
                             row['source']['type'] in {'local', 'remote', 'crypt', 'download'}):
             from .control_icons import icon_button
             from .file_items import native_menu, reference_actions
             more = icon_button('overflow', 'File actions for ' + row['title'])
 
-            def actions(row=row, button=more, remove_action=remove):
-                commands = [('Remove from Favourites', remove_action)] if allow_remove else []
-                return commands + reference_actions(app, row['source'], row['title'], row['opener'], anchor=button)
+            def actions(row=row, button=more, remove_action=remove, progress=progress):
+                removal = [('Remove from Favourites', remove_action)] if allow_remove else []
+                return removal + commands(app, progress) + reference_actions(
+                    app, row['source'], row['title'], row['opener'], anchor=button)
 
-            controls.append(native_menu(app, more, actions))
+            tools.append(native_menu(app, more, actions))
+        badge = previews.completion_badge(progress) if previews is not None else None
+        controls.extend(card_trailing(badge, tools))
         buttons.append(toga.Box(children=controls,
             style=Pack(direction=ROW, align_items='center')))
         if len(buttons) == limit:

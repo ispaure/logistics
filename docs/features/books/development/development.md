@@ -36,6 +36,13 @@ python3 dev.py test desktop --exact-file Python/tests/readers/test_books_reader.
 
 For format changes, run `python3 dev.py test desktop --exact-file Python/tests/readers/test_books_epub.py` for EPUB 2/3 fixtures, resource limits and rewrite failures. Mobile load-policy checks use `mobile_build/tests/reading/test_epub_load_policy.py`. Native layout, folds and speech require platform checks.
 
+Mobile EPUB reserves one top gutter inside the page. On iOS the page can use
+the clear strip above the progress track. The controls keep their placement and
+full native hit area, including where it extends over the text. The progress
+caption uses one line when the full label fits at its existing size.
+Short iOS landscape pages use narrower gaps between consecutive paragraphs
+so another line can fit before the page break.
+
 ## Metadata publication
 
 `ui/metadata_actions.py` dispatches mixed EPUB and CBZ selections. `mutations.py` validates the rewritten EPUB and preserves unknown fields and retained IDs. `metadata.py` stages beside the resolved source and replaces atomically after validating its revision and the backup's digest and identity. On conflict reopen the current book. Failed cleanup preserves a replacement with a different identity. Signed books may need signing again.

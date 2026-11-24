@@ -39,7 +39,7 @@ class WorkspaceColumnsTests(TestCase):
         self.assertEqual(prompt.style.width, toga.Box().style.width)
         self.assertEqual(prompt.style.height, toga.Box().style.height)
         self.assertEqual((prompt.style.margin_left, prompt.style.margin_top, prompt.style.flex), (0, 0, 1))
-        self.assertEqual((prompt.style.align_items, prompt.style.justify_content), ('center', 'center'))
+        self.assertEqual((prompt.style.align_items, prompt.style.justify_content), ('center', 'start'))
 
     def test_route_policy_mock_does_not_create_native_controllers(self):
         workspace = NS(app=NS(_impl=NS(), routes=NS(apple=True)))
@@ -92,6 +92,19 @@ class WorkspaceColumnsTests(TestCase):
         create.assert_called_once_with(workspace, master)
         self.assertIs(workspace.file_columns, create.return_value)
 
+    def test_native_prompt_aligns_to_the_source_row_even_when_the_detail_starts_lower(self):
+        columns = WorkspaceColumns.__new__(WorkspaceColumns)
+        source = NS(layout=NS(absolute_content_top=12))
+        row = NS(layout=NS(absolute_content_top=8))
+        prompt = NS(parent=row, style=NS(margin_top=0))
+        columns.master = NS(row=row, folder_placeholder=prompt,
+                            view=lambda: NS(_workspaces_source_row=source))
+        columns.sidebar = NS(top_inset=48)
+        columns.root_container = NS(top_inset=60)
+        columns._layout_targets = ((0, 0), (388, 0))
+        columns.align_prompt()
+        self.assertEqual(prompt.style.margin_top, -8)
+
     def test_sidebar_layout_keeps_its_assigned_column_frame(self):
         frame = object()
         container = NS(native=NS(frame=frame, bounds=NS(size=NS(width=330)),
@@ -99,9 +112,10 @@ class WorkspaceColumnsTests(TestCase):
                        content=NS(interface=Mock()))
         columns = object.__new__(WorkspaceColumns)
         columns.closed = False
+        columns.master = NS()
         columns.app, columns.sidebar_box = Mock(), Mock()
         with patch('mobile.appearance.reserve_navigation') as reserve, \
-                patch('mobile.home_header.compact_content_top') as project_header, \
+                patch('mobile.destination_actions.compact_content_top') as project_header, \
                 patch('mobile.folder_hub_ui.reflow_folder_notice') as notice:
             columns.layout_sidebar(container)
         project_header.assert_called_once_with(container)
@@ -115,7 +129,9 @@ class WorkspaceColumnsTests(TestCase):
         wrapper, bounds = object(), object()
         columns = object.__new__(WorkspaceColumns)
         columns.closed = False
+        columns.master = NS()
         columns.navigation = NS(view=NS(bounds=bounds))
+        columns.app = NS(routes=NS(screens={'files': []}))
         container = NS(controller=wrapper, native=NS(safeAreaInsets=NS(top=0, bottom=20, left=0, right=0)),
                        content=NS(interface=Mock()))
         columns.layout_root(container)
@@ -266,6 +282,9 @@ class WorkspaceColumnsTests(TestCase):
         columns.controller = NS(view=native)
         columns.sidebar = NS(controller=NS(view=NS(hidden=False, layoutIfNeeded=Mock())))
         columns.navigation = NS(view=NS(layoutIfNeeded=Mock()))
+        heading = NS(hidden=False)
+        columns._heading_container = NS(native=heading)
+        columns._heading_box = NS(children=[object()])
         columns.master = NS(mount_native_folder_prompt=Mock())
         def mount_prompt():
             frame = columns.navigation.view.frame
@@ -285,9 +304,13 @@ class WorkspaceColumnsTests(TestCase):
             browser_frame = columns.navigation.view.frame
             self.assertGreater(browser_frame.origin.x, 20)
             self.assertEqual(browser_frame.origin.x + browser_frame.size.width, 900)
-            for route in ('file-loading:comic', 'reader:comic', 'editor', 'private:pdf', 'notebook:notes', 'notes-library:vault'):
+            self.assertTrue(heading.hidden)
+            reader = NS(children=[NS(_reader_session_id='retained')])
+            for route, panel in (('file-loading:comic', None), ('reader:comic', None), ('editor', None),
+                                 ('private:pdf', None), ('notebook:notes', None), ('notes-library:vault', None),
+                                 ('restored-view', reader)):
                 with self.subTest(route=route):
-                    screens[:] = [('folder:books', None, ''), (route, None, ''), ('reader-tools', None, '')]
+                    screens[:] = [('folder:books', None, ''), (route, panel, ''), ('reader-tools', None, '')]
                     for width, height in ((900, 600), (650, 980)):
                         native.bounds = rect((0, 0), (width, height))
                         columns.layout()
@@ -298,11 +321,16 @@ class WorkspaceColumnsTests(TestCase):
             screens[:] = [('folder:books', None, '')]
             native.bounds = rect((0, 0), (900, 600))
             columns.layout()
+            self.assertTrue(heading.hidden)
+            screens.clear()
+            columns.layout()
+            self.assertFalse(heading.hidden)
+            columns.layout_sidebar.assert_called_with(columns.sidebar, insets_only=True)
         self.assertFalse(columns.sidebar.controller.view.hidden)
         restored = columns.navigation.view.frame
         self.assertEqual((restored.origin.x, restored.size.width),
                          (browser_frame.origin.x, browser_frame.size.width))
-        self.assertEqual(columns.layout_sidebar.call_count, 2)
+        self.assertEqual(columns.layout_sidebar.call_count, 3)
         columns.master.mount_native_folder_prompt.assert_called_once()
 
     def test_active_fold_retains_native_columns_below_flat_breakpoint(self):

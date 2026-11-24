@@ -164,8 +164,8 @@ def library_host(app):
         if not current() or not local_read_available(app, private=provider.private):
             return
         if destination == 'documents':
-            return await app.adaptive.browser(destination).show_main_browser(
-                library['source'], folder=library['folder'], title=library['name'], provider=provider, library=True)
+            return await app.hub_controller().browse_document_library(
+                library['source'], folder=library['folder'], title=library['name'], provider=provider, category='Comics')
         await app.show_files(local_root=not provider.private)
         if not current():
             return False
@@ -330,10 +330,11 @@ def provider_markdown(owner, view, footer):
     return workflow
 
 
-def file_operations(owner):
+def file_operations(owner, *, drawer=None):
     """Bind captured controls and existing global busy policy to the file worker."""
     from dataclasses import dataclass
     from ..file_operations import FileOperations, FileOperationsHost
+    browser_owner = owner if drawer is None else drawer
 
     @dataclass(frozen=True)
     class OperationView:
@@ -345,10 +346,10 @@ def file_operations(owner):
     def stamp():
         client = getattr(owner, "cloud_client", None)
         return (
-            id(owner.file_operation_view),
-            id(owner.file_browser),
-            id(owner.file_provider),
-            owner.file_path,
+            id(owner.file_operation_view if drawer is None else drawer.page),
+            id(browser_owner.file_browser),
+            id(browser_owner.file_provider),
+            browser_owner.file_path,
             owner.navigation_generation,
             id(client),
             getattr(client, "generation", None),
@@ -372,20 +373,24 @@ def file_operations(owner):
             raise ValueError('Save or close open file edits before changing files.')
 
     def begin(cancel):
-        row = owner.file_rows.get(owner.file_selection.value)
-        owner._file_selected = owner.file_provider, row["path"] if row else None
-        controls = (
-            owner.file_storage,
-            owner.file_location,
-            owner.file_selection,
-            owner.file_name,
-            owner.file_destination,
-            owner.file_target,
-            owner.file_password,
-            owner.file_actions_button,
-        )
+        if drawer is None:
+            row = owner.file_rows.get(owner.file_selection.value)
+            owner._file_selected = owner.file_provider, row["path"] if row else None
+            controls = (
+                owner.file_storage,
+                owner.file_location,
+                owner.file_selection,
+                owner.file_name,
+                owner.file_destination,
+                owner.file_target,
+                owner.file_password,
+                owner.file_actions_button,
+            )
+        else:
+            controls = (drawer.folder_select_button,)
         view = OperationView(
-            controls, owner.file_status, owner.file_action_status, stamp()
+            controls, browser_owner.file_status,
+            owner.file_action_status if drawer is None else None, stamp()
         )
         for control in controls:
             control.enabled = False
@@ -397,7 +402,7 @@ def file_operations(owner):
         return (
             owner.active_host
             and view.stamp == stamp()
-            and owner.file_status is view.status
+            and browser_owner.file_status is view.status
             and getattr(owner, "_crypt_cancel", None) is operations.cancel_event
         )
 
@@ -412,11 +417,11 @@ def file_operations(owner):
         if not owner.active_host:
             owner.cloud_busy = False
             return
-        if visible:
+        if visible and view.action_status is not None:
             view.action_status.text = view.status.value
         try:
             owner.set_cloud_busy(False)
-            if visible and view.stamp == stamp():
+            if visible and drawer is None and view.stamp == stamp():
                 owner.refresh_downloads()
         finally:
             for control in view.controls:

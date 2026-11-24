@@ -45,6 +45,16 @@ def _row_panel_state(rows, scroll):
 
 
 def _search_interface_state(control):
+    # Search terms can be file names, fragments or operators. Keep the native
+    # editor from marking them up as misspellings or in-progress suggestions.
+    backend = type(control._impl).__module__
+    native = getattr(control._impl, 'native', None)
+    if backend.startswith('toga_iOS.'):
+        native.autocorrectionType = 1  # UITextAutocorrectionTypeNo
+        native.spellCheckingType = 1  # UITextSpellCheckingTypeNo
+    elif backend.startswith('toga_android.'):
+        from android.text import InputType
+        native.setInputType(native.getInputType() | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS)
     return dict(control=control, search_rows=[], search_status='',
                 search_paused=False, search_query=None)
 
@@ -294,13 +304,14 @@ class LibraryPanels:
     def install_panel_actions(self):
         """Reuse the library's existing commands, keeping the tree viewport clear."""
         presentation = self.host.presentation
-        actions = [('edit', 'New document', self.new_note, 'create'),
+        actions = [('file_add', 'New document', self.new_note, 'create'),
                    ('folder_add', 'New folder', lambda widget=None, **kw: self.manage_entry(folder=True), 'create'),
                    ('collapse', 'Collapse all folders', self.collapse_folders, None)]
         for icon, label, callback, capability in actions:
             if capability is None or self.library.supports(capability):
                 button = presentation.icon_button(icon, label, on_press=callback)
-                presentation.surface(button, radius=0, background='transparent', foreground='muted', outlined=False)
+                foreground = 'file_icon' if capability == 'create' else 'muted'
+                presentation.surface(button, radius=0, background='transparent', foreground=foreground, outlined=False)
                 self.panel_actions.add(button)
         self.panel_actions.add(toga.Box(style=Pack(flex=1)))
 

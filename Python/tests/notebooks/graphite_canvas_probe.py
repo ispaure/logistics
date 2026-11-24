@@ -35,7 +35,7 @@ from tests.notebooks.webengine_driver import javascript, wait_until
 CHECKS = r'''(()=>{try{
 const check=(ok,message)=>{if(!ok)throw Error(message)},originalGrain=grain;
 const stateBefore=JSON.stringify(state),grayBefore=$('grayscale').checked;
-const cold=[];grainCache.clear();graphiteMasks.clear();
+const cold=[];grainCache.clear();graphiteTooth.clear();
 for(const mechanical of [false,true]){const start=performance.now();grain(ctx,[0,0,0],mechanical);cold.push({mechanical,ms:performance.now()-start})}
 const make=(scale=1)=>{const c=document.createElement('canvas');c.width=360*scale;c.height=160*scale;
  const g=c.getContext('2d',{willReadFrequently:true});g.setTransform(scale,0,0,scale,0,0);return {c,g}};
@@ -56,7 +56,21 @@ for(const tool of [14,13]){
  check(densified.normalized<.02,'History sample density changed graphite opacity '+JSON.stringify({tool,densified}));
  const retrace=compare(pixels(image(tool,[...constant,...constant.slice().reverse()])),sparse);
  check(retrace.normalized<.02,'Retracing inside one stroke darkened graphite '+JSON.stringify({tool,retrace}));
- const row=first.getContext('2d').getImageData(30,80,272,1).data;
+ const solid=pressure=>constant.map(([x,y,,w])=>[x,y,pressure,w]);
+ const deposition=pressure=>{
+  const data=image(tool,solid(pressure),2).getContext('2d').getImageData(60,155,540,10).data;
+  const alpha=data.filter((_,i)=>i%4===3);
+  return {mean:alpha.reduce((sum,value)=>sum+value,0)/alpha.length,
+    bare:alpha.filter(value=>value<8).length/alpha.length, dark:alpha.filter(value=>value>215).length/alpha.length};
+ };
+ const light=deposition(.24), half=deposition(.5), medium=deposition(tool===14?.8:.75), firm=deposition(tool===14?1:.95);
+ check(light.mean>17&&light.mean<39&&light.bare>.80&&light.dark>.04,
+  'Light graphite should leave sparse dark flecks '+JSON.stringify({tool,light}));
+ check(half.mean>light.mean&&half.mean<54&&half.bare>.33&&half.bare<.83,
+  'Half-pressure graphite should be faint and broken while leaving a visible trace '+JSON.stringify({tool,half}));
+ check(medium.mean>105&&medium.mean<175&&medium.bare>.04,'Medium graphite must have dark deposits and bare pores '+JSON.stringify({tool,medium}));
+ check(firm.mean>medium.mean+18&&firm.bare<medium.bare,'Firm graphite failed to fill the paper tooth '+JSON.stringify({tool,medium,firm}));
+ const row=image(tool,solid(.8)).getContext('2d').getImageData(30,80,272,1).data;
  let repeat8=0;for(let x=0;x<264;x++)repeat8+=Math.abs(row[x*4+3]-row[(x+8)*4+3]);
  repeat8/=264;
  check(repeat8>.5,'Graphite still has the old repeating eight-unit lattice '+tool);
@@ -68,29 +82,29 @@ for(const tool of [14,13]){
   scales.push({scale,width:one.width,height:one.height});
  }
  $('grayscale').checked=true;
- const gray=pixels(image(tool,constant,1,7));
+ const gray=pixels(image(tool,solid(.8),1,7));
  check(Array.from({length:gray.length/4},(_,i)=>i*4).every(i=>!gray[i+3]||(gray[i]===gray[i+1]&&gray[i+1]===gray[i+2])),
   'Colored graphite ignores grayscale '+tool);
  $('grayscale').checked=false;
- const red=pixels(image(tool,constant,1,7));
+ const red=pixels(image(tool,solid(.8),1,7));
  check(Array.from({length:red.length/4},(_,i)=>i*4).some(i=>red[i+3]>100&&red[i]>red[i+1]),'Graphite lost writing hue '+tool);
- metrics.push({tool,densified,retrace,repeat8,scales});
+ metrics.push({tool,light,half,medium,firm,densified,retrace,repeat8,scales});
 }
 check(digest(image(14,constant))!==digest(image(13,constant)),'Pencil and Mechanical Pencil look identical');
 
 // Compare old and new app code with original, non-handwritten fixture paths.
 const sheet=document.createElement('canvas');sheet.width=2400;sheet.height=1710;const g=sheet.getContext('2d');
 g.fillStyle='#e9ece7';g.fillRect(0,0,sheet.width,sheet.height);g.fillStyle='#20251e';g.font='26px sans-serif';
-const headings=['Pencil - previous','Pencil - original graphite','Mechanical - previous','Mechanical - original graphite'];
+const headings=['Pencil - baseline','Pencil - revised','Mechanical Pencil - baseline','Mechanical Pencil - revised'];
 headings.forEach((text,i)=>g.fillText(text,i*600+20,40));
 const wave=p=>Array.from({length:91},(_,i)=>[20+i*3,55+Math.sin(i/8)*18,p]);
 const rows=[
- {name:'Thin / light pressure - white paper',color:0,width:1,samples:wave(.15),paper:'#fff'},
- {name:'Thick / firm pressure - white paper',color:0,width:3,samples:wave(.9),paper:'#fff'},
- {name:'Variable pressure / diagonal - warm paper',color:0,width:3,samples:Array.from({length:91},(_,i)=>[20+i*3,25+i*.65,.08+i/100]),paper:'#f4ead5'},
+ {name:'Medium width / 50%',color:0,width:2,samples:wave(.5),paper:'#fff'},
+ {name:'Medium width / 75%',color:0,width:2,samples:wave(.75),paper:'#fff'},
+ {name:'Medium width / 80%',color:0,width:2,samples:wave(.8),paper:'#fff'},
  {name:'Crosshatch - white paper',color:0,width:2,samples:wave(.65),paper:'#fff',hatch:true},
- {name:'Two overlapping strokes - warm paper',color:0,width:3,samples:wave(.65),paper:'#f4ead5',overlap:true},
- {name:'Red graphite / native color',color:7,width:3,samples:wave(.65),paper:'#fff'}
+ {name:'Medium width / 95%',color:0,width:2,samples:wave(.95),paper:'#fff'},
+ {name:'Medium width / 100%',color:0,width:2,samples:wave(1),paper:'#fff'}
 ];
 try{
  for(let row=0;row<rows.length;row++)for(let col=0;col<4;col++){
@@ -118,17 +132,17 @@ for(const [tool,color,gray] of [[14,0,false],[14,7,false],[13,7,false],[13,7,tru
  document.createElement=function(name,...args){if(name==='canvas')canvases++;return create.call(this,name,...args)};
  CanvasRenderingContext2D.prototype.putImageData=function(...args){uploads++;return upload.apply(this,args)};
  try{
-  clearDraft();points=[[30,60,.6],[50,70,.6]];inkSettings={tool,color,width:2,layer:state.layers[0][0]};preview(points);
+  clearDraft();points=[[30,60,.5],[50,70,.5]];inkSettings={tool,color,width:2,layer:state.layers[0][0]};preview(points);
  }finally{document.createElement=create;CanvasRenderingContext2D.prototype.putImageData=upload;points=[];clearDraft();inkSettings=null}
  check(canvases===0&&uploads===0,'Selected graphite was not warm before first contact '+JSON.stringify({tool,color,gray,canvases,uploads}));
  uiWarming.push({tool,color,gray,canvases,uploads});
 }
 $('grayscale').checked=false;
 const oldActive=active;active=123456;
-const cacheBefore=[...grainCache.keys()],masksBefore=graphiteMasks.size,oldColor=$('color').value;
+const cacheBefore=[...grainCache.keys()],masksBefore=graphiteTooth.size,oldColor=$('color').value;
 $('color').value='10';$('color').dispatchEvent(new Event('change',{bubbles:true}));
 active=oldActive;$('color').value=oldColor;
-check(JSON.stringify([...grainCache.keys()])===JSON.stringify(cacheBefore)&&graphiteMasks.size===masksBefore,
+check(JSON.stringify([...grainCache.keys()])===JSON.stringify(cacheBefore)&&graphiteTooth.size===masksBefore,
  'UI warming did cold work during active ink');
 for(const tool of [14,13]){
  const samples=wave(.65);inkSettings={tool,color:0,width:3,layer:state.layers[0][0]};
@@ -161,10 +175,10 @@ inkSettings=null;
 const warmStart=performance.now();for(let i=0;i<1000;i++)grain(ctx,[0,0,0],i%2===0);
 const warm1000Ms=performance.now()-warmStart;
 for(let i=0;i<80;i++)grain(ctx,[i,90,140],i%2===0);
-check(grainCache.size<=24&&graphiteMasks.size<=2,'Graphite cache grows without its bounded resource budget');
+check(grainCache.size<=24&&graphiteTooth.size<=2,'Graphite cache grows without its bounded resource budget');
 $('grayscale').checked=grayBefore;
 check(JSON.stringify(state)===stateBefore,'Graphite rendering mutated native stroke state');
-return JSON.stringify({success:true,metrics,previewChecks,uiWarming,cold,warm1000Ms,cacheEntries:grainCache.size,alphaMaskEntries:graphiteMasks.size,
+return JSON.stringify({success:true,metrics,previewChecks,uiWarming,cold,warm1000Ms,cacheEntries:grainCache.size,toothFields:graphiteTooth.size,
  display_only:true,physical_stylus:false,sheet:sheet.toDataURL()});
 }catch(error){return JSON.stringify({success:false,error:String(error),stack:error.stack})}})()'''
 

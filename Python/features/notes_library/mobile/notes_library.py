@@ -579,7 +579,11 @@ class VaultBrowser(LibraryFileForms, LibraryPanels):
             self.breadcrumbs.add(self.host.breadcrumb_separator())
         file_icon = self.host.entry_icon(False)
         file_icon.style.width = file_icon.style.height = 16
-        self.breadcrumbs.add(file_icon)
+        name = PurePosixPath(self.path).name
+        filename = toga.Label(name, style=Pack(font_size=self.breadcrumb_font,
+            width=measure(name) + 4, margin_left=6, margin_right=6))
+        self.host.presentation.surface(filename, radius=0, background='transparent', foreground='text')
+        self.breadcrumbs.add(toga.Box(children=[file_icon, filename], style=Pack(direction=ROW, align_items=CENTER)))
         self.breadcrumb_scroll.reveal_end(self.host.loop,
             valid=lambda: self._breadcrumb_key == key and self.valid())
 

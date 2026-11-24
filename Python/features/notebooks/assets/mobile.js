@@ -77,8 +77,14 @@ renderEraserChoices();
   identity.innerHTML = '<span class="notebook-filename"></span><span class="notebook-storage"></span>';
   identity.setAttribute('aria-label', 'Document location');
   identity.onclick = () => send({op: 'document-location'});
-  identity.hidden = !state.canvas_header;
-  header.classList.toggle('canvas-document-header', !!state.canvas_header);
+  window.notebookTitleLayout = layout => {
+    const canvasTitle = !!state.canvas_header && layout !== 'native';
+    identity.hidden = !canvasTitle;
+    header.classList.toggle('canvas-document-header', canvasTitle);
+    header.dataset.titleLayout = layout;
+    return true;
+  };
+  window.notebookTitleLayout(state.notebook_title_layout ?? 'auto');
   header.insertBefore(identity, more);
   let dock = document.createElement('nav');
   dock.className = 'mobile-dock';
@@ -213,7 +219,12 @@ renderEraserChoices();
   bp.append(widths);
   const strokeSample = document.createElement('span');
   strokeSample.className = 'stroke-sample';
+  strokeSample.setAttribute('aria-hidden', 'true');
   strokeSample.innerHTML = svg('<path d="M1 15c6 4 13-8 22-5"/>');
+  const graphiteSample = document.createElement('canvas');
+  graphiteSample.width = 128;
+  graphiteSample.height = 60;
+  strokeSample.append(graphiteSample);
   widths.append(strokeSample);
   for (let [label, value] of Object.entries(state.widths)) {
     let b = document.createElement('button');
@@ -227,6 +238,45 @@ renderEraserChoices();
       saveBrushSlot()
     };
     widths.append(b)
+  }
+  const intensityLabel = document.createElement('label');
+  intensityLabel.className = 'brush-intensity';
+  const intensity = document.createElement('input');
+  intensity.type = 'range';
+  intensity.min = '1';
+  intensity.max = '100';
+  intensity.id = 'brushIntensity';
+  const intensityValue = document.createElement('span');
+  intensity.setAttribute('aria-label', 'Stroke intensity');
+  intensityLabel.append(document.createTextNode('Intensity'), intensity, intensityValue);
+  bp.append(intensityLabel);
+  intensity.oninput = () => {
+    const {tool, color, width} = chosenInk();
+    const pressure = Number(intensity.value) / 100;
+    showIntensity(pressure);
+    paintGraphiteSample(tool, color, width, pressure);
+  };
+  intensity.onchange = () => {
+    const {tool} = chosenInk(), value = Number(intensity.value);
+    if (active !== null) { sync(); return; }
+    if (intensityByBrush.get(tool) === value) return;
+    intensityByBrush.set(tool, value);
+    if (state.brush_intensities) send({op: 'brush-intensity', tool, intensity: value});
+    sync();
+  };
+
+  function showIntensity(pressure) {
+    intensityValue.textContent = Math.round(pressure * 100) + '%';
+    intensity.setAttribute('aria-valuetext', intensityValue.textContent);
+  }
+
+  function paintGraphiteSample(tool, color, width, pressure) {
+    const target = graphiteSample.getContext('2d');
+    const samples = [[16, 38, pressure], [40, 36, pressure], [66, 23, pressure], [90, 20, pressure], [112, 24, pressure]];
+    const dark = darkNotebookPaper();
+    target.fillStyle = dark ? 'black' : 'white';
+    target.fillRect(0, 0, graphiteSample.width, graphiteSample.height);
+    line({...nativeColor(tool, color), points: strokePoints(samples, tool, width)}, target, false, dark);
   }
   control('width').hidden = true;
   bp.append(control('width'));
@@ -454,6 +504,47 @@ renderEraserChoices();
   let grayLabel = document.createElement('label');
   grayLabel.append(control('grayscale'), document.createTextNode('Grayscale preview'));
   vp.append(grayLabel);
+  const paperAppearance = document.createElement('select');
+  paperAppearance.id = 'paperAppearance';
+  for (const [value, label] of [['system', 'Follow system'], ['light', 'Light'], ['dark', 'Dark']])
+    paperAppearance.add(new Option(label, value));
+  field(vp, 'Paper appearance', paperAppearance);
+  const systemPaper = matchMedia('(prefers-color-scheme: dark)');
+  let appearance = state.paper_appearance ?? 'system';
+  function refreshPaperAppearance() {
+    const dark = appearance === 'dark' || (appearance === 'system' && systemPaper.matches);
+    if (dark === darkNotebookPaper()) return;
+    document.body.classList.toggle('dark-notebook-paper', dark);
+    requestAnimationFrame(() => {
+      warmSelectedGraphite();
+      refreshPagePreviews(previews);
+      sync();
+      draw();
+    });
+  }
+  function showPaperAppearance(value) {
+    appearance = paperAppearance.value = value;
+    refreshPaperAppearance();
+  }
+  showPaperAppearance(appearance);
+  systemPaper.addEventListener('change', refreshPaperAppearance);
+  paperAppearance.onchange = () => {
+    if (active !== null || busy) {
+      paperAppearance.value = appearance;
+      return;
+    }
+    send({op: 'paper-appearance', appearance: paperAppearance.value});
+  };
+  window.notebookRefreshPaperAppearance = value => {
+    if (busy) return false;
+    showPaperAppearance(value);
+    return true;
+  };
+  window.notebookPaperAppearanceUpdate = (value, error) => {
+    showPaperAppearance(value);
+    window.notebookBrushColorUpdate('');
+    if (error) showNotice(error);
+  };
   const paperPreview = document.createElement('select');
   paperPreview.id = 'paperPreview';
   paperPreview.add(new Option('Muted (default)', 'muted'));
@@ -769,7 +860,7 @@ renderEraserChoices();
     target.clip();
   };
   document.addEventListener('pointerdown', e => {
-    if ($('templatePicker').open) return;
+    if ($('templatePicker').open || $('deleteLayerDialog')?.open) return;
     if (inSideRail(e.clientX) && $('viewport').contains(e.target)) {
       cancelPageTouch();
       e.preventDefault();
@@ -798,7 +889,7 @@ renderEraserChoices();
   document.addEventListener('selectionchange', clearPaperSelection);
   const startPointer = canvas.onpointerdown;
   canvas.onpointerdown = e => {
-    if ($('templatePicker').open || inSideRail(e.clientX)) return;
+    if ($('templatePicker').open || $('deleteLayerDialog')?.open || inSideRail(e.clientX)) return;
     // The Android native pen bridge calls this handler directly.
     dismissToolPanels(canvas);
     // WebKit need not emit selectionchange for a programmatic/nonselectable
@@ -817,7 +908,7 @@ renderEraserChoices();
   }
   dock.addEventListener('scroll', repositionToolPanels);
   document.addEventListener('keydown', e => {
-    if ($('templatePicker').open) return;
+    if ($('templatePicker').open || $('deleteLayerDialog')?.open) return;
     if (e.key === 'Escape' && presetMenu.open) {
       e.preventDefault();
       presetMenu.close();
@@ -851,7 +942,7 @@ renderEraserChoices();
   // combining brush, color and width without repeated menu trips.
   sheet.addEventListener('click', e => {
     let b = e.target.closest('button');
-    if (b && b.dataset.action) closeSheet()
+    if (b && b.dataset.action && b.dataset.action !== 'add-layer') closeSheet()
   });
 
   function paletteColor(tool, color) {
@@ -1167,12 +1258,22 @@ renderEraserChoices();
     for (let b of grid.children) b.setAttribute('aria-pressed', String(b.dataset.tool === t.value));
     for (let b of swatches.children) b.setAttribute('aria-pressed', String(b.dataset.color === c.value));
     const ink = chosenInk();
+    const graphite = brushFor(ink.tool).default_intensity !== undefined;
+    const pressure = fixedBrushPressure(ink.tool);
+    intensityLabel.hidden = !graphite;
+    graphiteSample.hidden = !graphite;
+    strokeSample.querySelector('svg').toggleAttribute('hidden', graphite);
+    if (graphite) {
+      intensity.value = String(Math.round(pressure * 100));
+      showIntensity(pressure);
+      paintGraphiteSample(ink.tool, ink.color, ink.width, pressure);
+    }
     const sample = strokeSample.querySelector('path');
     sample.style.stroke = paletteColor(ink.tool, ink.color);
     sample.style.strokeWidth = String(Math.min(7, Math.max(.9, brushFor(ink.tool).widths[ink.width - 1] * .4)));
     const fixed = brushFor(ink.tool).fixed_width;
     // A horizontal finger stroke also gives directional brushes a defined angle.
-    const fingerSample = [[16, 16, fallbackPressure], [44, 16, fallbackPressure]];
+    const fingerSample = [[16, 16, pressure], [44, 16, pressure]];
     for (const button of widths.querySelectorAll('button')) {
       const width = Number(button.dataset.width);
       button.hidden = fixed && width !== 1;
@@ -1254,18 +1355,17 @@ renderEraserChoices();
     const exclude = [...document.querySelectorAll('header,nav,#restoreTools')].filter(visible).map(el => {
       const b = el.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom]
     });
-    const {rgb, alpha} = inkColor(nativeColor(ink.tool, ink.color));
+    const {rgb, alpha} = inkColor(nativeColor(ink.tool, ink.color), darkNotebookPaper());
     // Use the same displayed RGB (including grayscale) as the canonical canvas;
     // keep the selected native color ID unchanged for saving.
     const argb = 0xff000000 + rgb[0] * 65536 + rgb[1] * 256 + rgb[2];
+    const brush = brushFor(ink.tool), baseWidth = brush.widths[ink.width - 1];
     const config = JSON.stringify({enabled: mode === 'ink' && [15, 17].includes(ink.tool) && alpha === 1 &&
-      brushFor(ink.tool).colors.includes(ink.color) &&
+      brush.colors.includes(ink.color) &&
       !overlay && !state.read_only && !state.warning && !pan && queue.length < 64 &&
       queue.every(a => a.op === 'stroke'), tool: ink.tool, color: ink.color, argb,
-      width: brushFor(ink.tool).widths[ink.width - 1] * r.width / state.width,
-      baseWidth: brushFor(ink.tool).widths[ink.width - 1],
-      pressureFactor: brushFor(ink.tool).pressure,
-      pressureExponent: brushFor(ink.tool).exponent,
+      width: baseWidth * (brush.display_width ?? 1) * r.width / state.width,
+      baseWidth, pressureFactor: brush.pressure, pressureExponent: brush.exponent,
       rect, exclude, viewportWidth: innerWidth, viewportHeight: innerHeight,
       // Changing scene or layer cancels any outstanding native gesture.
       scene: [state.index, state.width, state.height, ink.layer]});

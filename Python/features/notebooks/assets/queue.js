@@ -3,7 +3,7 @@
 
 function send(action) {
   if (action.op === 'unlock-pdf') $('status').textContent = 'Unlocking notebook…';
-  else if (action.op !== 'document-location') {
+  else if (!['document-location', 'paper-appearance'].includes(action.op)) {
     $('status').textContent = ['export', 'library', 'transfer', 'page'].includes(action.op) ? 'Opening…' : 'Saving…';
   }
   queue.push(action);

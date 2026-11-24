@@ -124,7 +124,13 @@ def diagnostics(entry_point):
         return NATIVE_DIAGNOSTICS + tuple(f'documents-search-{pose}.png'
             for pose in ('portrait', 'landscape-left'))
     if entry_point.endswith('.documents_hub_probe'):
-        return NATIVE_DIAGNOSTICS + ('documents-hub-header-collision.png',) + tuple(f'documents-hub-{orientation}-{panel}.png'
+        return NATIVE_DIAGNOSTICS + ('documents-hub-header-collision.png',
+            'documents-hub-library-browser.png', 'documents-hub-explorer-completion-list.png',
+            'documents-hub-explorer-completion-tiles.png', 'documents-folder-portrait.png',
+            'documents-folder-landscape-left.png', 'workspaces-folder-heading.png', 'documents-notes-library.png',
+            'workspaces-notebook-open.png') + tuple(
+            f'documents-browser-search-{embedded}-{orientation}.png'
+            for embedded in (True, False) for orientation in ('portrait', 'landscape-left', 'landscape-right')) + tuple(f'documents-hub-{orientation}-{panel}.png'
             for orientation in ('portrait', 'landscape-left')
             for panel in ('home', 'files', 'documents', 'libraries', 'search', 'settings'))
     if entry_point.endswith('.file_transfer_probe'):
@@ -646,7 +652,11 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 if not checkpoint:
                     (output / 'ios-result.json').write_text(json.dumps(result, indent=2))
                 screenshot = 'ios-before-restart.png' if checkpoint else 'ios-final.png'
-                client.invoke('io', device, 'screenshot', str(output / screenshot))
+                display = ()
+                if pose is not None:
+                    display_id = json.loads((output / 'pose.json').read_text())['displayId']
+                    display = (f'--display={display_id}',)
+                client.invoke('io', device, 'screenshot', *display, str(output / screenshot))
                 if not result['success']:
                     raise RuntimeError(result.get('error') or result.get('errors') or 'Native layout assertions failed')
                 if restart_probe:
