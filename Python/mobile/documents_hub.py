@@ -27,6 +27,7 @@ from .ui_metrics import TOUCH_TARGET, WRAPPED_FILENAME_ROW_HEIGHT
 
 COLLECTIONS = ('Libraries', 'Favourites', 'Recent')
 TABS_BREAKPOINT = 300
+COLLECTION_SPLIT_WIDTH = 720
 COLLECTION_FONT = 13
 FILENAME_FONT = 15
 
@@ -55,17 +56,17 @@ class DocumentsHub:
     def reflow_documents_hub(self):
         from commonUtils.ui.native.forms import fit_text
         from .fold_layout import division
+        from .pane_layout import panes
 
         body = self._document_collection_body
         width = self.adaptive.content_width('documents', margin=32)
+        height = self.main_window.size.height
         fold = division(self.app, body)
         searching = self.document_search.parent is not None
-        split = fold is not None and fold.vertical
-        selector_width = fold.x if split else width
-        if fold is not None:
-            gap = fold.width if split else fold.height
-        else:
-            gap = 0
+        split = fold.vertical if fold is not None else width >= COLLECTION_SPLIT_WIDTH
+        allocation = panes(width, height, fold=fold, leading_fraction=.43)
+        selector_width = allocation.leading if split else width
+        gap = allocation.gap if split or fold is not None else 0
         result_width = width - selector_width - gap if split else width
         wrapped = selector_width < TABS_BREAKPOINT
 
@@ -192,6 +193,7 @@ class DocumentsHub:
                                                     style=Pack(direction=COLUMN))
         self._document_collection_navigation = toga.ScrollContainer(horizontal=False,
             content=self._document_collection_header)
+        box._duo_heading_pane = self._document_collection_navigation
         self._document_collection_title = toga.Label(self.documents_view,
             style=Pack(font_size=16, font_weight='bold', margin_bottom=8))
         results = toga.Box(children=[self._document_collection_title, self.document_results],

@@ -21,6 +21,8 @@ Select **Libraries** again to see every library. **Saved files** lists
 app-managed text files and notebooks outside Recent. A storage icon and
 caption identify the source beneath the file name. Home, Favourites and Recent
 show thumbnails for supported local files.
+In a wide window, Documents keeps its tabs on the left and shows
+the selected collection on the right.
 If a Recent entry fails, find the file in its current folder,
 reconnect its remote, or unlock its credential.
 

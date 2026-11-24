@@ -76,6 +76,18 @@ def entry_icon(directory, *, landing_page=False):
     return image
 
 
+def tile_entry_icon(directory):
+    image = entry_icon(directory)
+    del image.style.width
+    image.style.update(height=56, margin_left=0, margin_right=0)
+    if type(image._impl).__module__.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass
+        symbol = ObjCClass('UIImage').systemImageNamed('folder.fill' if directory else 'doc')
+        if symbol is not None:
+            image._impl.native.image = symbol.imageWithRenderingMode(2)
+    return image
+
+
 def breadcrumb_separator():
     """A passive, theme-tinted File Browser chevron."""
     image = template_icon(toga.ImageView(icon('breadcrumb_chevron'), style=Pack(width=14, height=14)))
@@ -238,7 +250,7 @@ async def refresh_download_directory(app, destination, target):
 class LogisticsBrowserPresentation(BrowserPresentation):
     command = staticmethod(apply_icon)
     command_style = staticmethod(browser_command)
-    entry_icon = staticmethod(entry_icon)
+    entry_icon = staticmethod(tile_entry_icon)
     style_button = staticmethod(list_button)
     middle_filename = staticmethod(middle_filename)
     highlight = staticmethod(highlight_entry)

@@ -86,7 +86,7 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
                     unlock = [item for item in controls if item['label'] == 'Unlock LocalCrypt']
                     assert len(unlock) == 1, geometry
                     position = unlock[0]['frame']
-                    if geometry['pose']['duo_capable'] and geometry['pose']['width'] > 900:
+                    if geometry['pose']['duo_capable']:
                         self.check_duo_header(view, destination, control_frame, geometry)
                     report['samples'].append(dict(destination=destination, orientation=orientation,
                                                   geometry=geometry))
@@ -148,7 +148,7 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
             self.document_view_buttons['Favourites'].on_press()
             await self.check_thumbnails(self.document_favourites_list, 1)
             self.document_view_buttons['Recent'].on_press()
-            if self.routes.apple and geometry['pose']['duo_capable'] and geometry['pose']['width'] > 900:
+            if self.routes.apple and geometry['pose']['duo_capable']:
                 self.show_settings()
                 await asyncio.sleep(.35)
                 settings = self.routes.roots['settings'].children[0]
@@ -186,6 +186,7 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
 
     def check_duo_header(self, view, destination, frame, geometry):
         from mobile.destination_actions import DUO_HEADINGS
+        from mobile.ios_toolbar import vertical_edge
 
         state = view._duo_heading_state
         header = state['header']
@@ -193,12 +194,36 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
         assert title.text == DUO_HEADINGS[destination]
         box = frame(self, header)
         assert box['y'] < 32 and box['height'] >= 48, (destination, box)
+        edge = vertical_edge(self.native_host.adapter.content_controller(destination))
+        if edge:
+            assert not state['buttons'], destination
+        elif destination != 'settings':
+            assert state['buttons'], destination
+            action_groups = state['group'].children
+            frames = [frame(self, group) for group in action_groups]
+            for first, second in zip(frames, frames[1:]):
+                assert second['x'] - first['x'] - first['width'] >= 7, frames
+            if destination == 'documents':
+                assert len(action_groups[0].children) == 2
+                native_children = action_groups[0]._impl.native.subviews
+                native_children = native_children() if callable(native_children) else native_children
+                assert any(str(child.objc_class.name) == 'UIVisualEffectView'
+                           for child in native_children)
         title_box = frame(self, title)
         group = state['group']
         title_end = frame(self, group)['x'] if group is not None else box['x'] + box['width']
         assert int(title._impl.native.textAlignment) == 1, destination
         assert abs(title_box['x'] - box['x']) <= 1, (destination, box, title_box)
-        assert abs(title_box['x'] + title_box['width'] - title_end) <= 1, (destination, title_end, title_box)
+        pane = getattr(view, '_duo_heading_pane', None)
+        from toga.style.pack import NONE, ROW
+        if destination == 'documents' and geometry['pose']['width'] > 900:
+            assert pane.parent.style.direction == ROW, destination
+        if pane is not None and pane.parent.style.direction == ROW and pane.style.width != NONE:
+            leading = frame(self, pane)
+            expected = leading['x'] + leading['width'] / 2
+            assert abs(title_box['x'] + title_box['width'] / 2 - expected) <= 2, (destination, leading, title_box)
+        else:
+            assert abs(title_box['x'] + title_box['width'] - title_end) <= 1, (destination, title_end, title_box)
         for x, y, width, height in geometry['occlusions']:
             assert (box['x'] + box['width'] <= x + 1 or box['x'] >= x + width - 1
                     or box['y'] + box['height'] <= y + 1 or box['y'] >= y + height - 1), (destination, box)
@@ -208,17 +233,18 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
 
     def check_collection_frames(self, frame, orientation):
         from mobile.fold_layout import division
+        from toga.style.pack import ROW
 
         hub = self.hub_controller()
         nav = frame(self, hub._document_collection_navigation)
         detail = frame(self, hub._document_collection_detail)
         fold = division(self, hub._document_collection_body)
-        sidebar = fold is not None and fold.vertical
+        sidebar = hub._document_collection_body.style.direction == ROW
         controls = {name: frame(self, button) for name, button in self.document_view_buttons.items()}
         sample = dict(orientation=orientation, nav=nav, detail=detail, controls=controls,
                       sidebar=sidebar, fold=vars(fold) if fold else None)
         if sidebar:
-            assert detail['x'] >= nav['x'] + nav['width'] + fold.width - 2, sample
+            assert detail['x'] >= nav['x'] + nav['width'] + (fold.width if fold is not None else 16) - 2, sample
         else:
             assert detail['y'] >= nav['y'] + nav['height'] + (fold.height if fold else 0) - 2, sample
         for control in controls.values():
@@ -253,6 +279,7 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
                         raise AssertionError(geometry['collisions'])
                     frames = {item['label']: item['frame'] for item in items}
                     assert frames and len(frames) == len(items), sample
+                    assert {'New document', 'Search documents'} <= frames.keys(), sample
                     assert ('Unlock LocalCrypt' in frames) == unlock, sample
                     if orientation == 'portrait':
                         if portrait is None:

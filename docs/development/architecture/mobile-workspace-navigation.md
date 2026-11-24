@@ -328,11 +328,12 @@ Custom content uses the [UIKit reserved-region API](https://developer.apple.com/
 in local coordinates. `control_top_clearance` considers every intersecting
 region. Reclaim inset only for a measured free column. Track window position and
 bar edge as well as dimensions. Native prompts and titles retain their space.
-On Duo, Home, Documents, Workspaces and Settings use the measured top column
-for their page heading and native toolbar. Home and Documents keep New and
-conditional Unlock in that header. Documents also keeps Search, and Workspaces
-keeps Transfers and Unlock above its source tabs. The native bar handles
-actions when the content column cannot fit them.
+On Duo, Home, Documents, Workspaces and Settings center their headings in the
+measured top strip above the leading pane when the page has side-by-side panes.
+With a horizontal bar, actions occupy the trailing part of
+the same strip when they fit. Related actions share a glass group, with space
+between groups. With a vertical bar, UIKit owns the actions at the active edge.
+The native bar also handles actions when the strip is too narrow.
 
 `reader_top_band` can project the existing storage title and all native actions
 beside a tall edge reservation if measured space and touch targets fit. Keep
@@ -346,8 +347,8 @@ from interactive page, footer and header geometry.
 On unfolded Duo portrait, Notes Library places Close, Files, the title and
 Links in the measured strip above the article and drawers. Comics aligns its
 Close and actions to the notebook toolbar's centerline. In Workspaces, the
-source selectors and transfer shortcut sit below the heading, including in
-the leading pane when the browser has two columns. Check optical alignment
+source selectors sit below the heading, including in the leading pane when
+the browser has two columns. Check optical alignment
 against the notebook separately from native hit testing and accessibility labels.
 
 ## Offline documentation wiki

@@ -37,6 +37,32 @@ class HomeHeaderTests(TestCase):
         self.assertIsNone(duo_heading_geometry(((250, 0, 300, 62),), 24, 0, 867, 320,
                                                vertical=True))
 
+    def test_duo_portrait_header_uses_the_strip_beside_status_items(self):
+        from mobile.destination_actions import duo_heading_geometry
+
+        regions = ((535, 0, 134, 82),)
+        self.assertEqual(duo_heading_geometry(regions, 82, 0, 669, 336, vertical=False), (0, 535, 24, 90))
+        self.assertIsNone(duo_heading_geometry(((320, 0, 349, 120),), 82, 0, 669, 336, vertical=False))
+
+    def test_duo_title_centers_over_the_leading_pane_and_expands_in_one_column(self):
+        from mobile.destination_actions import align_duo_heading, prepare_duo_heading
+        from toga.style.pack import NONE
+
+        leading = toga.Box(style=Pack(width=320))
+        body = toga.Box(children=[leading, toga.Box()], style=Pack(direction='row'))
+        view = NS(_duo_heading_pane=leading)
+        prepare_duo_heading(view, 'documents')
+        header = view._duo_root_header
+        view._duo_heading_state = dict(header=header, title_space=(16, 800), pane_origin=16)
+        align_duo_heading(view)
+        title, spacer = header.children
+        self.assertEqual(title.style.width, 320)
+        self.assertEqual(spacer.style.flex, 1)
+        body.style.direction = 'column'
+        align_duo_heading(view)
+        self.assertEqual(title.style.width, NONE)
+        self.assertEqual(title.style.flex, 1)
+
     def test_overview_actions_use_the_selected_tab_navigation_owner(self):
         from mobile.destination_actions import project_header, sync_native_host
         child, outer = Mock(), Mock()

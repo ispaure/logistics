@@ -438,10 +438,12 @@ class HubDocumentTests(unittest.TestCase):
         with patch.object(app.adaptive, 'content_width', return_value=900):
             app.adaptive.render()
         self.assertTrue(home.paired)
+        self.assertEqual(documents._duo_heading_pane.parent.style.direction, 'row')
         self.assertIs(app.document_recent_list.parent, app.document_results)
         with patch.object(app.adaptive, 'content_width', return_value=390):
             app.adaptive.render()
         self.assertFalse(home.paired)
+        self.assertEqual(documents._duo_heading_pane.parent.style.direction, 'column')
         self.assertIs(app.document_recent_list.parent, app.document_results)
 
     def test_home_keeps_page_heading_and_navigation_label(self):

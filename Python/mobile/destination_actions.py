@@ -17,6 +17,7 @@ from .control_icons import icon_button
 
 
 DUO_HEADINGS = dict(home='Home', files='Workspaces', documents='Documents', settings='Settings')
+DUO_ACTION_GROUP_GAP = 8
 
 
 def prepare(app, view, destination):
@@ -29,6 +30,7 @@ def prepare(app, view, destination):
             return previous
         original = view
         view = toga.Box(children=[original], style=Pack(direction=COLUMN, flex=1))
+        view._duo_heading_pane = getattr(original, 'sidebar', None)
         original._duo_settings_root = ref(view)
         prepare_duo_heading(view, destination)
         return view
@@ -40,6 +42,7 @@ def prepare(app, view, destination):
         view.content = getattr(original, 'content', original)
         if destination == 'home' and hasattr(original, '_home_primary_buttons'):
             view._home_sections = original
+            view._duo_heading_pane = getattr(original, 'leading_scroll', None)
             view._home_primary_actions = original._home_primary_actions
             view._home_primary_buttons = original._home_primary_buttons
             view._home_prefer_native = getattr(original, '_home_prefer_native', False)
@@ -86,6 +89,8 @@ def prepare(app, view, destination):
                 return [*getattr(view, '_home_primary_buttons', ()), *actions]
         if buttons[0] in actions:
             actions = [*actions[1:], actions[0]]
+        if destination == 'files' and hasattr(view, '_workspaces_source_row') and app.feature_enabled('rclone'):
+            actions = [app.folder_transfers_button, *actions]
         return actions
     view._ios_toolbar_buttons = apple_actions
     view._ios_toolbar_leading = []
@@ -143,10 +148,12 @@ def sync_native_host(app, view, destination, *, preparing_return=False):
     projected = (root and hasattr(view, '_duo_root_header') and
                  project_duo_heading(app, view, destination, controller=projection_host))
     if projected:
-        overview = False
+        overview = view._duo_heading_state['native_actions']
     elif overview and destination == 'home':
         from .home_header import sync
         overview = not sync(app, view) and bool(view._ios_toolbar_buttons())
+    elif overview and destination == 'files' and hasattr(view, '_workspaces_source_row'):
+        overview = bool(view._ios_toolbar_buttons())
     elif overview:
         overview = bool(selected(app, view._destination_actions[1]))
         if not hasattr(view, '_duo_root_header') and project_header(app, view, destination, controller=projection_host):
@@ -166,11 +173,31 @@ def sync_native_host(app, view, destination, *, preparing_return=False):
 def prepare_duo_heading(view, destination):
     title = toga.Label(DUO_HEADINGS[destination],
                        style=Pack(flex=1, text_align=CENTER, font_size=30, font_weight='bold'))
-    view._duo_root_header = toga.Box(children=[title],
+    spacer = toga.Box(style=Pack(width=0))
+    view._duo_root_header = toga.Box(children=[title, spacer],
         style=Pack(direction=ROW, align_items=CENTER, height=48))
     body_title = getattr(view, '_destination_body_heading', None)
     if body_title is not None and body_title.parent is not None:
         view._duo_body_heading_slot = (body_title.parent, list(body_title.parent.children).index(body_title))
+
+
+def align_duo_heading(view):
+    """Center the title over the leading pane within the usable top strip."""
+    from toga.style.pack import NONE
+    state = getattr(view, '_duo_heading_state', None)
+    if state is None:
+        return
+    pane = getattr(view, '_duo_heading_pane', None)
+    title, spacer = state['header'].children[:2]
+    width = NONE
+    if (pane is not None and pane.parent is not None and pane.parent.style.direction == ROW
+            and pane.style.width != NONE):
+        center = state['pane_origin'] + pane.style.width / 2
+        start, end = state['title_space']
+        width = round(max(1, min(end - start, 2 * (center - start))))
+    if title.style.width != width:
+        title.style.update(width=width, flex=1 if width == NONE else 0)
+        spacer.style.update(width=0 if width == NONE else NONE, flex=0 if width == NONE else 1)
 
 
 def duo_heading_geometry(regions, safe_top, left, right, required, *, vertical, fold=None):
@@ -194,8 +221,9 @@ def duo_heading_geometry(regions, safe_top, left, right, required, *, vertical, 
 
 def project_duo_heading(app, view, destination, *, controller=None):
     from .fold_layout import division
-    from .ios_reader_chrome import content_control, occlusion_geometry
-    from .ios_toolbar import vertical_edge
+    from .ios_reader_chrome import occlusion_geometry
+    from .ios_system_occlusions import control_top_clearance
+    from .ios_toolbar import action_groups, inline_action_group, vertical_edge
 
     adapter = app.native_host.adapter
     if controller is None:
@@ -209,27 +237,27 @@ def project_duo_heading(app, view, destination, *, controller=None):
     width = float(native.bounds.size.width)
     left, right = float(safe.left), width - float(safe.right)
     controls = getattr(view, '_ios_toolbar_buttons', None)
-    actions = controls() if controls is not None else []
-    buttons = [*getattr(view, '_ios_toolbar_leading', ()), *actions]
-    source_row = getattr(view, '_workspaces_source_row', None)
-    transfer = getattr(app, 'folder_transfers_button', None) if source_row is not None else None
-    if transfer is not None and app.feature_enabled('rclone'):
-        buttons.insert(0, transfer)
+    trailing = controls() if controls is not None else []
+    actions = [*getattr(view, '_ios_toolbar_leading', ()), *trailing]
+    edge = vertical_edge(controller)
+    buttons = [] if edge else actions
+    groups = action_groups(buttons)
     regions = occlusion_geometry(window)
     regions = tuple((x - float(origin.x), y - float(origin.y), w, h) for x, y, w, h in regions
                     ) if regions else occlusion_geometry(native)
-    required = 192 + sum(button.style.width + button.style.margin_left + button.style.margin_right
-                         for button in buttons)
+    action_width = sum(button.style.width + button.style.margin_left + button.style.margin_right
+                       for button in buttons) + max(0, len(groups) - 1) * DUO_ACTION_GROUP_GAP
     geometry = None
-    # The vertical rail has a usable top rectangle in open landscape. In
-    # portrait a content header can paint above UIKit's interactive viewport.
-    if abs(float(origin.y)) <= .5 and vertical_edge(controller):
+    # Reserve the system activity region in the window's own coordinates.
+    # Duo can leave an adjacent top rectangle with either bar orientation.
+    if abs(float(origin.y)) <= .5:
         geometry = duo_heading_geometry(regions, float(window.safeAreaInsets.top), left, right,
-                                        required, vertical=True, fold=division(app, view))
-    fits = geometry is not None or right - left >= required
+                                        192 + action_width, vertical=bool(edge), fold=division(app, view))
+    fits = geometry is not None or right - left >= 192 + action_width
+    fallback_top = control_top_clearance(regions, left, right, float(safe.top), target=48) - float(safe.top)
 
     state = getattr(view, '_duo_heading_state', None)
-    signature = (geometry, tuple(map(id, buttons)), left, right, id(host)) if fits else None
+    signature = (geometry, fallback_top, edge, tuple(map(id, actions)), left, right, id(host)) if fits else None
     if state is not None and signature == state['signature']:
         return True
     header = view._duo_root_header
@@ -241,11 +269,11 @@ def project_duo_heading(app, view, destination, *, controller=None):
         view._duo_top_band = None
         header._duo_top_band = False
         if state['group'] is not None:
-            state['group'].clear()
+            for button in state['buttons']:
+                if button.parent is not None:
+                    button.parent.remove(button)
             header.remove(state['group'])
     if not fits:
-        if transfer is not None and transfer.parent is None and app.feature_enabled('rclone'):
-            source_row.add(transfer)
         if body_title is not None:
             if body_title.parent is None:
                 original, index = view._duo_body_heading_slot
@@ -265,12 +293,15 @@ def project_duo_heading(app, view, destination, *, controller=None):
             if button.parent is not None:
                 button.parent.remove(button)
             button.app, button.window = app, app.main_window
-            content_control(button, glass=True)
-        group = toga.Box(children=buttons, style=Pack(direction=ROW, align_items=CENTER)) if buttons else None
+        group = toga.Box(children=[inline_action_group(items) for items in groups],
+                         style=Pack(direction=ROW, align_items=CENTER, gap=DUO_ACTION_GROUP_GAP)) if groups else None
         if group is not None:
             header.add(group)
+        start, end = geometry[:2] if geometry is not None else (left, right)
         state = view._duo_heading_state = dict(signature=signature, geometry=geometry, header=header,
-                                              buttons=buttons, group=group)
+            buttons=buttons, group=group, native_actions=bool(edge and actions),
+            title_space=(start + 16, end - 16 - action_width), pane_origin=left + host.style.margin_left)
+        align_duo_heading(view)
         if geometry is not None:
             view._duo_top_band = state
             header._duo_top_band = True
@@ -278,7 +309,7 @@ def project_duo_heading(app, view, destination, *, controller=None):
             header.style.margin = (top - host.style.margin_top, right - end + 16 - host.style.margin_right,
                                    reserve - top - 48, start - left + 16 - host.style.margin_left)
         else:
-            header.style.margin = (0, 16 - host.style.margin_right, 4, 16 - host.style.margin_left)
+            header.style.margin = (fallback_top, 16 - host.style.margin_right, 4, 16 - host.style.margin_left)
         if header.parent is None:
             host.insert(0, header)
     container = getattr(host._impl, 'container', None)

@@ -118,6 +118,32 @@ def action_groups(buttons):
     return [group for _, group in groups]
 
 
+def inline_action_group(buttons):
+    """Use one UIKit glass capsule for related controls in the Duo top strip."""
+    from .ios_reader_chrome import bar_control, content_control
+
+    if len(buttons) == 1:
+        content_control(buttons[0], glass=True)
+        return buttons[0]
+    import toga
+    from toga.style import Pack
+    from toga.style.pack import CENTER, ROW
+    group = toga.Box(children=buttons, style=Pack(direction=ROW, align_items=CENTER, height=48))
+    if type(group._impl).__module__.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass
+        for button in buttons:
+            bar_control(button)
+        effect = ObjCClass('UIGlassEffect').effectWithStyle(0)
+        glass = ObjCClass('UIVisualEffectView').alloc().initWithEffect(effect)
+        glass.cornerConfiguration = ObjCClass('UICornerConfiguration').capsuleConfiguration()
+        host = group._impl.native
+        glass.frame = host.bounds
+        glass.autoresizingMask = 2 | 16
+        glass.userInteractionEnabled = False
+        host.addSubview(glass)
+    return group
+
+
 def action_state(buttons):
     """Capture bar projection values without retaining widgets or private owners."""
     from .palette import LIGHT, DARK
@@ -252,10 +278,11 @@ def sync_screen(app, view, destination, *, returning_to=None):
     else:
         controller, screens = returning_to, ()
     if not screens and hasattr(view, '_destination_actions'):
+        duo_header = getattr(view, '_duo_heading_state', None)
         if (getattr(view, '_home_inline_unlock', False)
                 or getattr(view, '_home_top_band', None) is not None
                 or getattr(view, '_destination_top_band', None) is not None
-                or getattr(view, '_duo_heading_state', None) is not None):
+                or (duo_header is not None and not duo_header['native_actions'])):
             clear_actions(controller.navigationItem)
             mount_leading(controller, [])
             return

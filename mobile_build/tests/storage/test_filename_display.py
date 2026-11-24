@@ -91,7 +91,10 @@ class FilenameDisplayTests(unittest.TestCase):
                 for entry in entries:
                     _, card, title, _, _ = browser._tile_cards[entry.identity]
                     media, caption = card.children
-                    icon = media.children[0].layout
+                    placeholder, = media.children
+                    icon = placeholder.layout
+                    self.assertEqual(placeholder.browser_entry_kind, 'folder' if entry.container else 'file')
+                    self.assertEqual(icon.content_height, 56)
                     self.assertEqual(list(caption.children), [title])
                     self.assertEqual(title.layout.content_width, caption.layout.content_width)
                     self.assertFalse(hasattr(card, '_tile_selection'))
@@ -99,6 +102,8 @@ class FilenameDisplayTests(unittest.TestCase):
                     self.assertLessEqual(title.layout.content_height, 56)
                     self.assertEqual(icon.absolute_content_left + icon.content_width / 2,
                                      media.layout.absolute_content_left + media.layout.content_width / 2)
+                    self.assertEqual(icon.absolute_content_top + icon.content_height / 2,
+                                     media.layout.absolute_content_top + media.layout.content_height / 2)
                     self.assertLessEqual(media.layout.absolute_content_top + media.layout.content_height,
                                          title.layout.absolute_content_top)
                     self.assertEqual(title.accessible_name, entry.label)

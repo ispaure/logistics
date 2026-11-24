@@ -472,7 +472,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         finally:
             self.app.native_host.adapter = original
 
-    def test_title_only_roots_hide_the_bar_and_nested_routes_restore_it(self):
+    def test_root_bars_follow_actions_and_nested_routes_restore_them(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
         original = self.app.native_host.adapter
@@ -490,7 +490,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
                     screens.clear()
                     try:
                         bar.setNavigationBarHidden.reset_mock()
-                        hidden = destination != 'documents'  # Documents owns real root actions.
+                        hidden = destination not in {'documents', 'files'}
                         bar.isNavigationBarHidden.return_value = not hidden
                         self.navigation.sync_destination_bar(destination)
                         bar.setNavigationBarHidden.assert_called_once_with(hidden, animated=False)

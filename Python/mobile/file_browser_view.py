@@ -435,8 +435,12 @@ class LocalFileBrowser(FileBrowser):
         # The media view can use the full width inside this shared height cap.
         image_box.style.update(direction=ROW, height=_TILE_PREVIEW_HEIGHT,
                                margin_left=4, margin_right=4)
+        placeholder = image_box.children[0]
+        if getattr(placeholder, 'browser_entry_kind', None) is not None:
+            inset = (_TILE_PREVIEW_HEIGHT - placeholder.style.height) // 2
+            placeholder.style.margin_top = placeholder.style.margin_bottom = inset
         if self.thumbnails is not None and self.thumbnails.supports(entry):
-            self._tile_previews[entry.identity] = image_box, image_box.children[0]
+            self._tile_previews[entry.identity] = image_box, placeholder
         controls = [button]
         if self.on_item_actions is not None:
             backend = type(button._impl).__module__

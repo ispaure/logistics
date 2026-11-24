@@ -97,10 +97,12 @@ class ShellProbe(ToolbarProbe):
         self.show_documents_hub()
         view = self.routes.body().children[0]
         if getattr(view, '_duo_top_band', None) or getattr(view, '_destination_top_band', None):
-            view._document_search_button._impl.native.sendActionsForControlEvents(1 << 6)
+            from .sync_status_probe import tap
+            await asyncio.sleep(.75)
+            tap(self, view._document_search_button)
             await asyncio.sleep(.5)
             assert self.documents_search_open
-            view._document_search_close._impl.native.sendActionsForControlEvents(1 << 6)
+            tap(self, view._document_search_close)
             await asyncio.sleep(.5)
             assert not self.documents_search_open
             self.main_window._impl.native.endEditing(True)
@@ -179,7 +181,7 @@ class ShellProbe(ToolbarProbe):
             assert not collisions, collisions
             self.report['checks'] = ['all-five-destinations', 'settings-categories',
                 'two-documents-round-trips-per-phase', 'retained-home', 'repeated-notebook-entry',
-                'documents-libraries-open-recent-saved-with-and-without-unlock',
+                'documents-libraries-favourites-recent-with-and-without-unlock',
                 'native-control-and-reservation-frames']
             if not self.static:
                 self.report['checks'].append('real-external-audio-expansion-contraction')

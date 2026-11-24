@@ -87,18 +87,22 @@ class SyncStatusProbe(LogisticsMobile):
                 button = self.folder_transfers_button
                 view = self.routes.roots['files'].children[0]
                 state = getattr(view, '_duo_heading_state', None)
-                placement = [self.folder_source_tabs] if state is not None else [self.folder_source_tabs, button]
+                native = self.routes.apple and button.parent is None
+                placement = [self.folder_source_tabs] if state is not None or native else [self.folder_source_tabs, button]
                 assert list(self._files_status_row.children) == placement
                 assert '42%' in button.accessible_name
                 frame = control_frame(self, button)
-                row_frame = control_frame(self, state['header'] if state is not None else button.parent)
                 server = control_frame(self, self.folder_source_buttons['Network shares'])
-                if state is not None:
+                if native:
+                    assert button._ios_action_item.valueForKey('view').window is not None, frame
+                elif state is not None:
                     assert button in state['buttons'] and frame['y'] < server['y'], (frame, server)
                 else:
                     assert 47 <= frame['width'] <= 49 and 47 <= frame['height'] <= 49, frame
                     assert 0 <= frame['x'] - (server['x'] + server['width']) <= 12, (frame, server)
-                assert frame['x'] + frame['width'] <= row_frame['x'] + row_frame['width'] + 1, (frame, row_frame)
+                if not native:
+                    row_frame = control_frame(self, state['header'] if state is not None else button.parent)
+                    assert frame['x'] + frame['width'] <= row_frame['x'] + row_frame['width'] + 1, (frame, row_frame)
                 for source in ('rclone', 'Network shares', 'Local'):
                     tap(self, self.folder_source_buttons[source])
                     await asyncio.sleep(.2)

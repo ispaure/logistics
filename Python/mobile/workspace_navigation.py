@@ -290,9 +290,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 navigation.setNavigationBarHidden(True, animated=False)
             return
         if not self.app.routes.screens[destination] and hasattr(view, '_destination_actions'):
+            duo_header = getattr(view, '_duo_heading_state', None)
             projected = (getattr(view, '_home_top_band', None) is not None
                          or getattr(view, '_destination_top_band', None) is not None
-                         or getattr(view, '_duo_heading_state', None) is not None)
+                         or (duo_header is not None and not duo_header['native_actions']))
             hidden = projected or not bool(view._ios_toolbar_buttons())
             if bool(navigation.isNavigationBarHidden()) != hidden:
                 navigation.setNavigationBarHidden(hidden, animated=False)
@@ -570,6 +571,9 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 self.app.reflow_home()
             if hasattr(self.app, 'documents_sections'):
                 self.app.reflow_documents_hub()
+            if view is not None:
+                from .destination_actions import align_duo_heading
+                align_duo_heading(view)
             from .transfer_status import refresh as refresh_sync_status
             refresh_sync_status(self.app, destination)
             dismiss = getattr(view, '_workspace_status_dismiss', None)
