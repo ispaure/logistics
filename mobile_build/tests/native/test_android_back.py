@@ -320,6 +320,28 @@ class AndroidBackTests(unittest.TestCase):
             self.assertIsNot(app.body, panel)
             previous.assert_not_called()
 
+    def test_archive_back_retraces_members_then_closes_the_archive(self):
+        from zipfile import ZipFile
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile.archive_operations import ArchiveItem
+        from mobile.archive_ui import controller
+
+        app = self.app
+        with ZipFile(app.private_root / 'Nested.zip', 'w') as archive:
+            archive.writestr('First/Second/file.txt', 'Archive Back fixture')
+        workspace = controller(app)
+        origin = app.body
+        self.assertTrue(app.loop.run_until_complete(
+            workspace.open(ArchiveItem(LocalFiles(app.private_root), 'Nested.zip'))))
+        workspace.enter('First/Second')
+        for parent in ('First', ''):
+            self.assertTrue(self.routes.system_back())
+            self.assertEqual(workspace.folder, parent)
+            self.assertTrue(workspace.visible())
+        self.assertTrue(self.routes.system_back())
+        self.assertIsNone(workspace.view)
+        self.assertIs(app.body, origin)
+
     def test_document_search_and_compact_drawer_preserve_draft(self):
         app = self.app
         app.create_chosen_document('txt')

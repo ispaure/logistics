@@ -330,6 +330,13 @@ class ArchiveWorkspace:
         from .routes import contains
         return self.view is not None and contains(self.app.body, self.view)
 
+    def back_action(self):
+        if not self.visible():
+            return None
+        if self.cancel is not None:
+            return self.request_cancel
+        return self.parent if self.folder else self.close
+
     def request_cancel(self, widget=None, **kwargs):
         if self.cancel is not None:
             self.cancel.set()

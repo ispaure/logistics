@@ -37,7 +37,7 @@ def settings_route_delegate():
                 owner = self.owner
                 if owner is not None:
                     owner.prepare_settings_return(navigation, controller, animated)
-                    owner.folders.prepare_transition(navigation, animated)
+                    owner.folders.prepare_transition(navigation, controller, animated)
 
         _settings_route_delegate = LogisticsRouteDelegate
     return _settings_route_delegate
@@ -488,6 +488,10 @@ class MobileRoutes(Routes):
             action = owner.back_action()
             if action is not None:
                 return self.invoke_back(action)
+
+        archive = getattr(app, '_archives', None)
+        if archive is not None and (action := archive.back_action()) is not None:
+            return self.invoke_back(action)
 
         drawer = adaptive.browsers.get(destination)
         if drawer is not None and contains(body, drawer.browser_widget):

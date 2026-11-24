@@ -113,6 +113,20 @@ async def exercise_archives(app):
             assert not await manager.open(item)
             assert dialog.await_count == 1
         assert not (root.parent / 'outside.txt').exists()
+        from commonUtils.runtime.platform import OS, get_os
+        if get_os() is OS.ANDROID:
+            with ZipFile(root / 'Nested.zip', 'w') as archive:
+                archive.writestr('First/Second/file.txt', 'Archive Back fixture')
+            assert await manager.open(ArchiveItem(app.file_provider, folder + '/Nested.zip'))
+            manager.enter('First/Second')
+            back = app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher()
+            for parent in ('First', ''):
+                back.onBackPressed()
+                await asyncio.sleep(0)
+                assert manager.visible() and manager.folder == parent
+            back.onBackPressed()
+            await asyncio.sleep(0)
+            assert manager.view is None and app.file_path == folder
     finally:
         app.set_feature_enabled('archives', True, refresh=False)
         app.show_home()

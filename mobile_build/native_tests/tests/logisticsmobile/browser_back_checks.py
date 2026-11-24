@@ -118,6 +118,10 @@ async def exercise_folder_pop_preview(app, *, scroll_position=120):
     original_offset = float(original.contentOffset.y)
     await app.browser_file_folder(next(row for row in app.file_rows.values() if row['name'] == 'Child'))
     await asyncio.sleep(.3)
+    adapter = app.native_host.adapter
+    index = app.native_host.destinations.index('files')
+    navigation = adapter.navigation[index]
+    root_container, _ = adapter.containers[index]
     parent_route, parent_panel, parent_pane = app.routes.screens['files'][-2]
     matches_canvas(parent_panel._impl.native)
     matches_canvas(parent_pane.native)
@@ -132,9 +136,11 @@ async def exercise_folder_pop_preview(app, *, scroll_position=120):
         return await navigate(location)
     parent.navigate = delayed
     try:
-        navigation = app.native_host.adapter.navigation[app.native_host.destinations.index('files')]
         navigation.popViewControllerAnimated(True)
         await asyncio.sleep(.1)
+        for backing in (adapter.outer_navigation.view, adapter.controller.view, navigation.view,
+                        root_container.native, app.routes.roots['files']._impl.native):
+            matches_canvas(backing)
         coordinator = native_value(navigation.transitionCoordinator)
         if coordinator is not None:
             matches_canvas(native_value(coordinator.containerView))

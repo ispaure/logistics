@@ -264,8 +264,20 @@ class FolderNavigation:
         from .appearance import apple_color
 
         color = apple_color('window')
+        adapter = routes.host.adapter
+        # UIKit composites the tab controller, navigation controller, and
+        # destination root during a pop. Any of them can show through at the
+        # safe-area edge even when both folder panels have the right color.
+        adapter.outer_navigation.view.backgroundColor = color
+        adapter.controller.view.backgroundColor = color
         targets = (destination,) if destination is not None else ('home', 'files')
         for target in targets:
+            adapter.navigation_for(target).view.backgroundColor = color
+            container, _ = adapter.containers[routes.host.destinations.index(target)]
+            container.native.backgroundColor = color
+            root = routes.roots[target]._impl
+            root._default_background_color = color
+            root.native.backgroundColor = color
             for route, panel, pane in routes.screens[target]:
                 entry = self.screens.get((target, route))
                 if entry is None or pane is None:
@@ -276,7 +288,7 @@ class FolderNavigation:
                 if retire_snapshots:
                     clear_snapshot(entry)
 
-    def prepare_transition(self, navigation, animated):
+    def prepare_transition(self, navigation, controller, animated):
         routes = self.routes
         if not animated or routes.changing or routes.host.changing:
             return
@@ -287,10 +299,13 @@ class FolderNavigation:
             return
         self.paint_canvas(destination)
         from commonUtils.ui.native.keyboard import native_value
-        coordinator = native_value(navigation.transitionCoordinator)
+        from .appearance import apple_color
+        color = apple_color('window')
+        native_value(controller.view).backgroundColor = color
+        coordinator = (native_value(navigation.transitionCoordinator)
+                       or native_value(controller.transitionCoordinator))
         if coordinator is not None:
-            from .appearance import apple_color
-            native_value(coordinator.containerView).backgroundColor = apple_color('window')
+            native_value(coordinator.containerView).backgroundColor = color
 
     def forget(self, destination, route):
         entry = self.screens.pop((destination, route), None)
