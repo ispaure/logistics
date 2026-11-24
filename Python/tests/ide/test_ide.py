@@ -114,7 +114,9 @@ class ProjectSettingsTests(IDEQtTests):
             self.wait_until(lambda: browser.path() == selected)
             self.assertTrue(browser.tree.isExpanded(index(browser, source)))
             self.assertEqual(index(browser, excluded).data(tooltip).splitlines()[1], 'Excluded')
-            self.assertTrue(reopened.prepare_close())
+            # The restored selection can become visible while the editor is
+            # still opening its document on the worker.
+            self.wait_until(reopened.prepare_close)
 
     def test_interpreter_inspects_the_selected_virtual_environment(self):
         import os

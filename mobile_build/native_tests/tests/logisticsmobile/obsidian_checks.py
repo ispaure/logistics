@@ -179,9 +179,9 @@ async def exercise_obsidian(app, encrypted):
 def assert_drawer_bottom(app, overlay, scroll):
     window = app.main_window._impl.native
     height = float(window.bounds.size.height)
-    for native in (overlay.container.native, scroll._impl.native):
+    for label, native in (('drawer', overlay.container.native), ('scroll viewport', scroll._impl.native)):
         frame = native.convertRect(native.bounds, toView=window)
         bottom = float(frame.origin.y + frame.size.height)
-        assert abs(bottom - height) <= 2, (bottom, height)
+        assert abs(bottom - height) <= 2, (label, bottom, height)
     padding = float(scroll._impl.native.contentInset.bottom)
     assert padding >= float(window.safeAreaInsets.bottom) + 12, padding

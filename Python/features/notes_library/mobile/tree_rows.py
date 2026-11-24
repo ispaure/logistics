@@ -11,7 +11,7 @@ __status__ = "Production"
 
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, NONE, PACK
+from toga.style.pack import COLUMN
 
 
 class NativeTreeRows:
@@ -27,8 +27,8 @@ class NativeTreeRows:
             primary_action='Actions for' if actions else None, on_primary_action=self.context,
             style=Pack(flex=1))
         self.native_list.tree_actions = self
-        self.status = toga.Label('', style=Pack(display=NONE))
-        self.widget = toga.Box(children=[self.native_list, self.status],
+        self.status = toga.Label('')
+        self.widget = toga.Box(children=[self.native_list],
                                style=Pack(direction=COLUMN, flex=1))
 
     @property
@@ -91,11 +91,13 @@ class NativeTreeRows:
             self.native_list.updating = False
 
     def message(self, value):
-        if self.status.text != value:
-            self.status.text = value
-        display = PACK if value else NONE
-        if self.status.style.display != display:
-            self.status.style.display = display
+        if value:
+            if self.status.text != value:
+                self.status.text = value
+            if self.status.parent is None:
+                self.widget.insert(0, self.status)
+        elif self.status.parent is self.widget:
+            self.widget.remove(self.status)
 
     def select_path(self):
         index = next((i for i, row in enumerate(self.native_list.data)
