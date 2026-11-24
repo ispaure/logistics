@@ -190,6 +190,7 @@ class FileDetailsPanel(toga.Box):
 
 class LocalFileBrowser(FileBrowser):
     TILE_ROW_HEIGHT = _TILE_PREVIEW_HEIGHT + _TILE_CAPTION_HEIGHT + 8  # Card margins.
+    TILE_OVERSCAN = 1
 
     def __init__(self, **kwargs):
         self.thumbnails = None
