@@ -43,6 +43,7 @@ class FileDrawer:
         self.provider = None
         self.extensions = None
         self.folder = ''
+        self.library_root = None
         self.generation = 0
         self.task = None
         self.refresh_requested = False
@@ -72,7 +73,8 @@ class FileDrawer:
             self.widget = toga.ScrollContainer(horizontal=False, content=self.menu_content, style=Pack(flex=1))
         self.storage.on_change = self.change_storage
 
-    async def show_main_browser(self, storage, *, folder='', extensions=None, title='Browse files', provider=None):
+    async def show_main_browser(self, storage, *, folder='', extensions=None, title='Browse files',
+                                provider=None, library=False):
         from services.documents.mobile_locations import COPIES_ALIAS, enabled, storage_reference
         from .local_sources import device_files_label
         if storage == 'Local files' and enabled(self.app.private_root):
@@ -81,18 +83,21 @@ class FileDrawer:
                 storage = Path(folder).name or provider.root.name
         if not self.app.checkpoint():
             return False
-        if self.destination == 'home' and hasattr(self, 'page'):
+        if (self.destination == 'home' or library or self.library_root is not None) and hasattr(self, 'page'):
             # A second picker can be opened from a reader above the first one.
             # Each owns its controls and return edge rather than moving the
             # older picker's widget out from under its retained reader.
             drawer = FileDrawer(self.navigation, self.destination)
             self.navigation.browsers[self.destination] = drawer
             return await drawer.show_main_browser(storage, folder=folder, extensions=extensions,
-                                                  title=title, provider=provider)
+                                                  title=title, provider=provider, library=library)
         self.extensions = extensions
+        self.library_root = provider.relative(folder) if library else None
         client = getattr(self.app, 'cloud_client', None)
         self.scoped_provider = (storage, provider, client, getattr(client, 'generation', None)) if provider else None
-        self.folder = folder
+        self.folder = self.library_root if library else folder
+        if library:
+            detach(self.storage)
         self.changing_storage = True
         try:
             self.storage.items = list(dict.fromkeys([*self.roots, storage]))
@@ -109,15 +114,18 @@ class FileDrawer:
             page._folder_detail_return_count = len(self.app.adaptive.detail_routes)
             if self.workspaces_button in self.browser_widget.children:
                 self.browser_widget.remove(self.workspaces_button)
-            self.cancel_button = toga.Button('Cancel', on_press=self.cancel_browser,
-                                            style=Pack(height=TOUCH_TARGET, width=72))
-            self.browser.location_bar.add(self.cancel_button)
+            if not library:
+                self.cancel_button = toga.Button('Cancel', on_press=self.cancel_browser,
+                                                style=Pack(height=TOUCH_TARGET, width=72))
+                self.browser.location_bar.add(self.cancel_button)
         route = ('workspace-browser:' + page._folder_scope if self.destination == 'home' else 'workspace-browser')
         self.app.show_view(page, destination=self.destination, route=route, title=title)
         return await self.refresh()
 
     def back_action(self):
         """Retrace browser state before leaving this retained picker."""
+        if self.library_root is not None and not (self.browser.search_open or self.browser.search.value):
+            return self.up
         action = self.browser.back_action()
         if action is not None:
             return action
@@ -219,8 +227,10 @@ class FileDrawer:
             self.generation += 1
             generation = self.generation
             work = self.listing.begin()
+            scope = getattr(self, 'scoped_provider', None)
             try:
-                roots = await asyncio.to_thread(self.available_roots)
+                roots = ({scope[0]: scope[1]} if self.library_root is not None
+                         else await asyncio.to_thread(self.available_roots))
             except (OSError, ValueError) as error:
                 # A failed credential query must not strand the menu refresh task.
                 # Keep Local files usable and report the connection error in-place.
@@ -230,7 +240,6 @@ class FileDrawer:
                 return False
             if not self.listing.accepts(work, private=True):
                 return False
-            scope = getattr(self, 'scoped_provider', None)
             if scope is not None:
                 roots.setdefault(scope[0], None)
             selected = self.storage.value if self.storage.value in roots else next(iter(roots))
@@ -271,14 +280,18 @@ class FileDrawer:
                     name=selected if not folder else None)
                 main_browser = self.main_browser_visible()
                 self.parent_button.enabled = bool(folder) or main_browser
-                if main_browser and not folder:
+                if self.library_root is not None:
+                    from .control_icons import apply_icon
+                    apply_icon(self.parent_button, 'back',
+                               'Back to Libraries' if folder == self.library_root else 'Parent folder')
+                elif main_browser and not folder:
                     from .control_icons import apply_icon
                     apply_icon(self.parent_button, 'back', 'Back')
                 if hasattr(self, 'page'):
                     from .folder_navigation import record
                     record(self.app, self.page, self.browser, 'workspace-browser', selected, folder, self.navigate)
                 self.status.value = ''
-                if self.destination == 'documents':
+                if self.destination == 'documents' and self.library_root is None:
                     self.refresh_menu()
                     catalog = self.app.reader_manager().catalog
                     await catalog.refresh_library_folders()
@@ -315,7 +328,7 @@ class FileDrawer:
         return await self.refresh()
 
     async def up(self, widget=None, **kwargs):
-        if not self.folder and self.main_browser_visible():
+        if (not self.folder or self.folder == self.library_root) and self.main_browser_visible():
             self.cancel_browser()
             return True
         self.folder = self.folder.rpartition('/')[0]

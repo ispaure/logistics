@@ -149,7 +149,7 @@ def library_host(app):
     from .. import library_ui
     from ..files_ui import local_read_available
 
-    async def open_folder(library):
+    async def open_folder(library, *, destination='files'):
         provider = library["provider"]
 
         def current():
@@ -161,8 +161,11 @@ def library_host(app):
         if not current():
             return False
         app.cloud_controller().show_cloud(present=False)
-        if not local_read_available(app, private=provider.private):
+        if not current() or not local_read_available(app, private=provider.private):
             return
+        if destination == 'documents':
+            return await app.adaptive.browser(destination).show_main_browser(
+                library['source'], folder=library['folder'], title=library['name'], provider=provider, library=True)
         await app.show_files(local_root=not provider.private)
         if not current():
             return False

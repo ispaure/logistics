@@ -291,7 +291,7 @@ class DocumentsHub:
                     continue
                 async def open_library(widget=None, record=record, **kwargs):
                     if self.app.checkpoint():
-                        await catalog.library_host.open_folder(record)
+                        await catalog.library_host.open_folder(record, destination='documents')
                 rows.append(library_folder_button(record, open_library))
             target.add(document_list(rows, 'No Comics libraries found.'))
             if 'could not' in catalog.book_status.text:
@@ -335,10 +335,17 @@ class DocumentsHub:
                 if not app.folder_path_visible(location[1]):
                     continue
 
-                async def open_library(widget=None, location=location, **kwargs):
+                async def open_library(widget=None, record=record, location=location, **kwargs):
                     if (target is self.document_books_list and app.feature_enabled('books')
                             and app.checkpoint()):
-                        return await app.show_files(location=location)
+                        label, folder = location
+                        try:
+                            provider = app.storage_provider(label, app.ordinary_file_roots(include_collections=False))
+                        except (OSError, ValueError) as error:
+                            await app.main_window.dialog(toga.InfoDialog('Could not open library', str(error)))
+                            return False
+                        return await self.adaptive.browser('documents').show_main_browser(
+                            record['source'], folder=folder, title=record['name'], provider=provider, library=True)
 
                 button = library_folder_button(record, open_library)
                 source = record['source']

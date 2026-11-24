@@ -416,6 +416,8 @@ class LocalDocumentSearchTests(TestCase):
         book_folder = root.parent / 'More Books/Author/Book'
         book_folder.mkdir(parents=True)
         epub, _ = make_books(book_folder)
+        (root.parent / 'Local Comics').mkdir()
+        (root.parent / 'remoteConfig.ini').write_text('[LogisticsComics]\nlibraries=Local Comics\n')
         app.show_documents_hub()
         app.document_view_buttons['Libraries'].on_press()
         async def wait():
@@ -440,20 +442,57 @@ class LocalDocumentSearchTests(TestCase):
         self.assertEqual(library.read_text('One/Vault/Two/Three/Note.md'), '# Note')
         self.assertFalse(any(getattr(w, 'text', '') in ('Refresh libraries', 'Open Books & Comics library')
                              for w in widgets(app.document_libraries_list)))
-        app.loop.run_until_complete(book_rows[0].on_press())
-        self.assertEqual(app.file_storage.value, 'Shared files')
-        self.assertEqual(app.file_path, 'Calibre')
-        app.loop.run_until_complete(book_rows[-1].on_press())
-        self.assertEqual(app.native_host.state.destination, 'files')
-        self.assertEqual(app.file_storage.value, 'Local files')
-        self.assertEqual(app.file_path, 'One/More Books')
-        author = next(row for row in app.file_rows.values() if row['directory'])
-        app.loop.run_until_complete(app.browser_file_folder(author))
-        book = next(row for row in app.file_rows.values() if row['directory'])
-        app.loop.run_until_complete(app.browser_file_folder(book))
-        app.browser_file_selected(next(row for row in app.file_rows.values() if row['name'] == epub.name))
-        self.assertTrue(app.loop.run_until_complete(app.read_managed_file()))
+        def assert_library(folder):
+            self.assertEqual(app.native_host.state.destination, 'documents')
+            drawer = app.adaptive.browser('documents')
+            self.assertEqual(drawer.folder, folder)
+            self.assertIsNone(drawer.storage.parent)
+            return drawer
+
+        async def android_back():
+            self.assertTrue(app.routes.system_back())
+            if app.routes.back_task is not None:
+                await app.routes.back_task
+            await asyncio.sleep(0)
+
+        def assert_libraries():
+            self.assertEqual(app.native_host.state.destination, 'documents')
+            self.assertFalse(app.routes.screens['documents'])
+            self.assertEqual(app.documents_view, 'Libraries')
+
+        async def browse():
+            await book_rows[0].on_press()
+            drawer = assert_library('Calibre')
+            self.assertEqual(drawer.parent_button.accessible_name, 'Back to Libraries')
+            drawer.parent_button.on_press()
+            if app.routes.back_task is not None:
+                await app.routes.back_task
+            await asyncio.sleep(0)
+            assert_libraries()
+
+            comic_row = next(w for w in widgets(app.document_comics_list)
+                             if isinstance(w, toga.Button) and w.text == 'Local Comics')
+            await comic_row.on_press()
+            assert_library('One/Local Comics')
+            await android_back()
+            assert_libraries()
+
+            await book_rows[-1].on_press()
+            drawer = assert_library('One/More Books')
+            author = next(entry.payload for entry in drawer.browser.entries if entry.container)
+            await drawer.open_folder(author)
+            assert_library('One/More Books/Author')
+            await android_back()
+            assert_library('One/More Books')
+            await drawer.open_folder(author)
+            book_row = next(entry.payload for entry in drawer.browser.entries if entry.container)
+            await drawer.open_folder(book_row)
+            file = next(entry.payload for entry in drawer.browser.entries if entry.label == epub.name)
+            self.assertTrue(await drawer.open_file(file))
+
+        app.loop.run_until_complete(browse())
         self.assertEqual(app.private_sessions.active.crypt_reader.kind, '.epub')
+        self.assertEqual(app.native_host.state.destination, 'documents')
 
     def test_encrypted_notes_library_displays_its_nested_name_once(self):
         app = self.app
