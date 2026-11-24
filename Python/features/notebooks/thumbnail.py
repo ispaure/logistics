@@ -15,6 +15,20 @@ from math import isfinite
 from commonUtils.runtime.operations import check_cancelled
 
 
+def graphite_thumbnail_density(pressure, mechanical):
+    # Cover pixels average the small flecks and the bare paper between them.
+    pressure = round(round(pressure * 255) * 32 / 255) / 32
+    light_contact = max(0, 1 - ((pressure - .46) / .34) ** 2) ** 2
+    lift = .045 if mechanical else .065
+    mid_contact = max(0, min((pressure - .57) / .23, (.9375 - pressure) / .1375))
+    engagement = pressure + (.12 if mechanical else .085) * mid_contact
+    contact = max(0, min(1, (engagement + lift * light_contact - .45) / .55))
+    density = .8 * contact ** 2 * (3 - 2 * contact)
+    fade = max(0, min(1, (pressure - .39) / .29))
+    flecks = .1 * max(0, min(1, (pressure - .1) / .15)) * (1 - fade ** 2 * (3 - 2 * fade))
+    return density + (1 - density) * flecks
+
+
 def notebook_thumbnail(data, edge, *, cancelled, dark=False):
     from pypdf import PdfReader, PdfWriter, Transformation
     from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
@@ -81,30 +95,31 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
         if highlight:
             alpha *= .36
             commands.append(f'q {highlights} gs')
-        if tool in (1, 7, 13, 14):
-            # At cover size the individual teeth average into an ink density.
-            pressure = round(points[0][2] * 32) / 32
-            light_contact = max(0, 1 - ((pressure - .46) / .34) ** 2) ** 2
-            lift = .045 if tool in (7, 13) else .065
-            mid_contact = max(0, min((pressure - .57) / .23, (.9375 - pressure) / .1375))
-            engagement = pressure + (.12 if tool in (7, 13) else .085) * mid_contact
-            contact = max(0, min(1, (engagement + lift * light_contact - .45) / .55))
-            density = .8 * contact ** 2 * (3 - 2 * contact)
-            fade = max(0, min(1, (pressure - .39) / .29))
-            flecks = .1 * max(0, min(1, (pressure - .1) / .15)) * (1 - fade ** 2 * (3 - 2 * fade))
-            alpha *= density + (1 - density) * flecks
-        paper_value = 0 if dark else 1
-        rgb = [paper_value * (1 - alpha) + alpha * value / 255 for value in rgb]
-        commands.append(' '.join(f'{value:.4f}' for value in rgb) + ' RG')
+        def stroke_color(pressure=None):
+            opacity = alpha
+            paper_value = 0 if dark else 1
+            if pressure is not None:
+                opacity *= graphite_thumbnail_density(pressure, tool in (7, 13))
+            components = [paper_value * (1 - opacity) + opacity * value / 255 for value in rgb]
+            return ' '.join(f'{value:.4f}' for value in components) + ' RG'
+
+        last_color = stroke_color()
+        commands.append(last_color)
+        graphite = tool in (1, 7, 13, 14)
         # The overview has already sampled and ordered the visible ink.
         width_scale = BRUSHES.get(15 if tool == 2 else tool, {}).get('display_width', 1)
         path = []
         for first, last in zip(points, points[1:] or points):
-            x, y, _, start_width = first
-            end_x, end_y, _, end_width = last
+            x, y, start_pressure, start_width = first
+            end_x, end_y, end_pressure, end_width = last
             if first is last:
                 end_x += .01  # PDF strokes a dot as a short round-capped segment.
             if all(isfinite(value) for value in (x, y, end_x, end_y, start_width, end_width)):
+                if graphite:
+                    color_command = stroke_color((start_pressure + end_pressure) / 2)
+                    if color_command != last_color:
+                        commands.append(color_command)
+                        last_color = color_command
                 weight = max(.75 / scale, (start_width + end_width) * width_scale / 2)
                 segment = f'{x:.3f} {y:.3f} m {end_x:.3f} {end_y:.3f} l'
                 if highlight and start_width == end_width == points[0][3]:

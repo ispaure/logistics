@@ -268,8 +268,7 @@ function graphitePaint(target, rgb, mechanical, pressure) {
 }
 
 function warmSelectedGraphite() {
-  // Prewarm the known input levels. A pressure-sensitive pen can choose a
-  // different tile at contact, then keeps that tile throughout the draft.
+  // Prewarm the default and fixed-input tiles before the first contact.
   if (active !== null) return;
   const tool = Number($('tool').value), brush = brushFor(tool);
   if (!brush.texture) return;
@@ -361,6 +360,47 @@ function geometry(target, p, family, beforePoint = null) {
   } else ribbon(target, p, family === 'ballpoint' ? (brushFor(15).display_width ?? 1) : 1);
 }
 
+function graphiteTrail(target, points, rgb, family, start = 0, contact = true) {
+  const mechanical = family === 'mechanical', smoothing = target.imageSmoothingEnabled;
+  const usePressure = pressure => {
+    target.imageSmoothingEnabled = smoothing;
+    target.fillStyle = graphitePaint(target, rgb, mechanical, pressure);
+  };
+  if (contact) {
+    usePressure(points[0][2]);
+    geometry(target, [points[0]], family);
+  }
+  let normal = null;
+  // Carry the previous edge across frame boundaries. Adjacent segments
+  // share an edge so dense input samples don't accumulate graphite there.
+  for (let i = start; i > 0; i--) {
+    const a = points[i - 1], b = points[start];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (length) {
+      normal = [(a[1] - b[1]) / length, (b[0] - a[0]) / length];
+      break;
+    }
+  }
+  for (let i = start + 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    const dx = b[0] - a[0], dy = b[1] - a[1], length = Math.hypot(dx, dy);
+    if (!length) continue;
+    const next = [-dy / length, dx / length];
+    const [nx, ny] = normal || next;
+    const ar = a[3] / 2, br = b[3] / 2;
+    usePressure((Math.round(a[2] * 255) + Math.round(b[2] * 255)) / 510);
+    target.beginPath();
+    target.moveTo(a[0] + nx * ar, a[1] + ny * ar);
+    target.lineTo(a[0] - nx * ar, a[1] - ny * ar);
+    target.lineTo(b[0] - next[0] * br, b[1] - next[1] * br);
+    target.lineTo(b[0] + next[0] * br, b[1] + next[1] * br);
+    target.closePath();
+    target.fill();
+    normal = next;
+  }
+  target.imageSmoothingEnabled = smoothing;
+}
+
 const filteredInkBounds = new WeakMap();
 function clipPaintbrush(target, points) {
   // Bound filtered paint work to actual ink, including when operations queue
@@ -399,6 +439,13 @@ function line(s, target = ctx, outline = true, dark = target === ctx && darkNote
   target.lineJoin = 'round';
   target.globalAlpha = alpha;
   if (brush.texture) {
+    const level = graphiteLevel(p[0][2]);
+    if (p.some(point => graphiteLevel(point[2]) !== level)) {
+      graphiteTrail(target, p, rgb, family);
+      target.restore();
+      if (outline) strokeOutline(s, target);
+      return;
+    }
     target.fillStyle = target.strokeStyle = graphitePaint(target, rgb, family === 'mechanical', p[0][2]);
   }
   if (family === 'highlighter') {
@@ -655,6 +702,20 @@ function flushPreview() {
       ctx.clip();
       ctx.setTransform(transform);
       draw(highlight, region);
+      ctx.restore();
+    } else if (liveGraphitePressure) {
+      const {tool, color, width} = inkSettings;
+      const {rgb, alpha} = inkColor(nativeColor(tool, color), darkNotebookPaper());
+      const start = Math.max(0, previewCount - 1);
+      let first = start;
+      while (first > 0) {
+        first--;
+        if (points[first][0] !== points[start][0] || points[first][1] !== points[start][1]) break;
+      }
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      graphiteTrail(ctx, strokePoints(points.slice(first), tool, width), rgb,
+        brushFor(tool).family, start - first, previewCount === 0);
       ctx.restore();
     } else preview(points.slice(Math.max(0, previewCount - 1)));
     previewCount = points.length

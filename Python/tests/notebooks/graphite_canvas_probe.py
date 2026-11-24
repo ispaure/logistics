@@ -64,6 +64,10 @@ for(const tool of [14,13]){
     bare:alpha.filter(value=>value<8).length/alpha.length, dark:alpha.filter(value=>value>215).length/alpha.length};
  };
  const light=deposition(.24), half=deposition(.5), medium=deposition(tool===14?.8:.75), firm=deposition(tool===14?1:.95);
+ const varied=[[20,80,.24,8],[130,80,.24,8],[200,80,.95,8],[320,80,.95,8]];
+ const variedContext=image(tool,varied,2).getContext('2d');
+ const average=x=>variedContext.getImageData(x,155,160,10).data.reduce((sum,n,i)=>i%4===3?sum+n:sum,0)/1600;
+ check(average(460)>average(60)*3,'Graphite ignored pressure changes within one saved stroke '+tool);
  check(light.mean>17&&light.mean<39&&light.bare>.80&&light.dark>.04,
   'Light graphite should leave sparse dark flecks '+JSON.stringify({tool,light}));
  check(half.mean>light.mean&&half.mean<54&&half.bare>.33&&half.bare<.83,
@@ -90,6 +94,9 @@ for(const tool of [14,13]){
  check(Array.from({length:red.length/4},(_,i)=>i*4).some(i=>red[i+3]>100&&red[i]>red[i+1]),'Graphite lost writing hue '+tool);
  metrics.push({tool,light,half,medium,firm,densified,retrace,repeat8,scales});
 }
+const tiltPoints=strokePoints([[20,80,.7,0],[70,80,.7,.9],[120,80,.7,0]],14,3);
+check(tiltPoints[1][3]>tiltPoints[0][3] && tiltPoints[2][3]===tiltPoints[0][3],
+ 'Pencil width did not follow the angle along one stroke');
 check(digest(image(14,constant))!==digest(image(13,constant)),'Pencil and Mechanical Pencil look identical');
 
 // Compare old and new app code with original, non-handwritten fixture paths.
@@ -171,6 +178,31 @@ for(const tool of [14,13]){
  previewChecks.push({tool,agreement,maxDifference,replayed,touched,commitMs,warmMoveMs});
  points=[];clearDraft();
 }
+if (state.pressure_stylus_only) {
+ const header=document.querySelector('header');
+ const controls=[header.querySelector('#notebookIdentity'),header.querySelector('.mobile-dock'),
+   ...header.querySelectorAll('.notebook-header-actions button')];
+ check(controls.length===5&&controls.every(button=>button.getBoundingClientRect().height>0),
+   'Boox notebook header is missing controls');
+ check(header.getBoundingClientRect().height<55&&controls.every(button=>Math.abs(
+   button.getBoundingClientRect().top+button.getBoundingClientRect().height/2-
+   header.getBoundingClientRect().top-header.getBoundingClientRect().height/2)<3),
+   'Boox notebook controls occupy multiple rows');
+ for (const tool of [14,13]) {
+  inkSettings={tool,color:0,width:3};
+  liveGraphitePressure=true;
+  previewCount=0;points=[];
+  ctx.clearRect(0,0,state.width,state.height);
+  const samples=[[20,80,.24,0],[130,80,.24,.9],[200,80,.95,.9],[320,80,.95,0]];
+  for(const sample of samples){points.push(sample);flushPreview()}
+  const before=canvas.toDataURL();
+  check(draftBounds===null,'Live graphite relies on a pen-up layer swap');
+  ctx.clearRect(0,0,state.width,state.height);
+  line(stroke(tool,strokePoints(samples,tool,3)),ctx);
+  check(before===canvas.toDataURL(),'Live graphite pixels differ from replay '+tool);
+  liveGraphitePressure=false;previewCount=0;points=[];
+ }
+}
 inkSettings=null;
 const warmStart=performance.now();for(let i=0;i<1000;i++)grain(ctx,[0,0,0],i%2===0);
 const warm1000Ms=performance.now()-warmStart;
@@ -198,17 +230,21 @@ def main(output, baseline='HEAD'):
     with scratch() as workspace:
         report['workspace'] = str(workspace)
         try:
-            for name, desktop, batched in [('desktop', True, True), ('mobile', False, False), ('mobile-ios', False, True)]:
+            for name, desktop, batched in [('desktop', True, True), ('mobile', False, False),
+                                           ('mobile-ios', False, True), ('boox-layout', False, True)]:
                 view = QWebEngineView()
                 profile = QWebEngineProfile(view)  # Off-the-record; no shared disk profile.
                 page = QWebEnginePage(profile, view)
                 view.setPage(page)
-                view.resize(1200, 900)
+                boox_layout = name == 'boox-layout'
+                view.resize(*(990, 1260) if boox_layout else (1200, 900))
                 view.show()
                 try:
                     loaded = []
                     view.loadFinished.connect(loaded.append)
-                    state = dict(Editor(book).state(), frame_batched_ink=batched)
+                    state = dict(Editor(book).state(), frame_batched_ink=batched,
+                                 pressure_stylus_only=boox_layout, canvas_header=boox_layout,
+                                 tablet=boox_layout)
                     html = (editor_html(state, 'logistics-notebook://graphite/', console_bridge=True, desktop=True)
                             if desktop else mobile_editor_html(state, 'logistics-notebook://graphite/', console_bridge=True))
                     view.setHtml(html)

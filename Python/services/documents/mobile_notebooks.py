@@ -14,6 +14,7 @@ import sys
 
 from features.notebooks.recovery import Repository
 from features.notebooks.mobile.panel import NotebookPanel
+from features.notebooks.mobile.viewport import is_boox
 
 
 def repository(app):
@@ -228,11 +229,14 @@ def present(app, panel, *, destination=None):
     app.notebook_panel = panel
     app.workspace.activate(session.id)
     remember_notebook(app, panel)
-    from mobile.document_location import install_document_location
-    install_document_location(panel.view, copies=panel.document.resource if panel.document is not None else None)
+    boox = is_boox(panel.view)
+    if not boox:
+        from mobile.document_location import install_document_location
+        install_document_location(panel.view, copies=panel.document.resource if panel.document is not None else None)
     panel.view._native_reader_title = lambda: notebook_title(panel) if panel.editor is not None else ''
     panel.view._document_path = lambda: notebook_location(panel)
-    if type(panel.view._impl).__module__.startswith('toga_android.') and not hasattr(panel, 'native_actions'):
+    if (type(panel.view._impl).__module__.startswith('toga_android.')
+            and not boox and not hasattr(panel, 'native_actions')):
         if app._impl.native.getSupportActionBar() is not None:
             install_notebook_controls(panel)
             panel.view._notebook_title_layout = 'native'

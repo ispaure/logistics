@@ -126,6 +126,7 @@ class ProviderUI(FilesUI):
 
     def clear_private_catalog(self, *, preserve_destination_picker=False):
         self.app.routes.folders.invalidate_private()
+        self.app.routes.retire_private_search_folders()
         factory = getattr(self.app, 'folder_controller', None)
         if factory is not None:
             factory().invalidate_folder_discovery()

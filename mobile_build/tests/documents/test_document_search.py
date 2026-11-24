@@ -127,7 +127,7 @@ class LocalDocumentSearchTests(TestCase):
         self.assertIsNotNone(app.document_views.parent)
         self.assertFalse(app.documents_search_open)
 
-    def test_matching_folders_and_filename_rows_open_directly_without_menus(self):
+    def test_matching_folders_and_filename_rows_have_direct_open_and_menus(self):
         import toga
         from mobile_build.tests.workspace.test_hub_documents import widgets
         app = self.app
@@ -147,7 +147,8 @@ class LocalDocumentSearchTests(TestCase):
         self.assertTrue(all(button.style.flex == 1 for button in titles))
         self.assertFalse(any(isinstance(w, toga.Label) and 'Nested/' in w.text for w in rows))
         menus = [w.document_actions for w in rows if hasattr(w, 'document_actions')]
-        self.assertEqual(menus, [])
+        self.assertEqual(len(menus), len(hits))
+        self.assertTrue(all(menu.load_actions()[0][0] == 'Open' for menu in menus))
         app.hub_controller().clear_document_search_results()
         self.assertTrue(all(menu.disposed for menu in menus))
 

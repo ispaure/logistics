@@ -120,11 +120,23 @@ def sync_browser_population(app, body=None):
              and not getattr(privacy, '_folder_work_paused', False)
              and getattr(app, 'scene_active', True) is not False and app.active_host)
     from .routes import contains
-    visible = ({browser for browser in mounted_file_browsers(body)
-                if not browser.closed and hasattr(browser, 'set_previews_visible')} if ready else set())
+    visible = set()
+    if ready:
+        # The native split controller can publish its outer layout as app.body.
+        # The top destination route still owns the visible library viewport.
+        routes = getattr(app, 'routes', None)
+        route = routes.body() if routes is not None else body
+        for root in (body, route):
+            visible.update(browser for browser in mounted_file_browsers(root)
+                           if not browser.closed and hasattr(browser, 'set_previews_visible'))
     for browser in visible.union(getattr(app, '_preview_file_browsers', ())):
         browser.set_previews_visible(browser in visible)
     app._preview_file_browsers = visible
+    hub = getattr(app, '_hub_controller', None)
+    media = getattr(hub, '_document_search_media', None)
+    if media is not None:
+        media.set_visible(bool(ready and (contains(body, hub.document_search_results)
+                                          or contains(route, hub.document_search_results))))
     if not ready:
         return
     paused = getattr(privacy, '_paused_file_browsers', ())
@@ -154,6 +166,11 @@ def pause_file_browser_searches(app):
     body = getattr(app, 'body', None)
     browsers = set(mounted_file_browsers(body)) if body is not None else set()
     browsers.update(getattr(app, name, None) for name in ('file_browser', 'remote_browser'))
+    browsers.update(getattr(app, '_preview_file_browsers', ()))
+    hub = getattr(app, '_hub_controller', None)
+    media = getattr(hub, '_document_search_media', None)
+    if media is not None:
+        media.set_visible(False)
     picker = getattr(app, '_editor_picker', None)
     browsers.add(getattr(picker, 'editor_browser', None))
     adaptive = getattr(app, 'adaptive', None)

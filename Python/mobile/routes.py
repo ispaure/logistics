@@ -284,6 +284,10 @@ class MobileRoutes(Routes):
         if search is not None:
             search.close()
             return True
+        for child in body.children:
+            folder = getattr(child, '_search_folder', None)
+            if folder is not None and folder.on_check_entry is not None:
+                return self.invoke_back(folder.back_action())
         browser = getattr(self.app, 'file_browser', None)
         if (browser is not None and browser.on_check_entry is not None
                 and contains(self.body(), browser.widget)):
@@ -347,6 +351,15 @@ class MobileRoutes(Routes):
                 or bool(getattr(self.app, 'documents_query', '').strip())):
             return self.invoke_back(self.app.close_document_search)
         return False
+
+    def retire_private_search_folders(self):
+        for destination, screens in self.screens.items():
+            index = next((i for i, (_, panel, _) in enumerate(screens)
+                          if any(getattr(child, '_private_search_folder', False) for child in panel.children)), None)
+            if index is not None:
+                self.trim(destination, index)
+                if self.host.state.destination == destination:
+                    self.render(destination)
 
     def install(self):
         self._installation = object()
@@ -529,6 +542,10 @@ class MobileRoutes(Routes):
             return True
         app, destination = self.app, self.host.state.destination
         body = self.body()
+        for child in body.children:
+            folder = getattr(child, '_search_folder', None)
+            if folder is not None and folder.on_check_entry is not None:
+                return self.invoke_back(folder.back_action())
 
         if any(hasattr(child, '_search_route') or hasattr(child, '_search_folder') for child in body.children):
             return self.back()

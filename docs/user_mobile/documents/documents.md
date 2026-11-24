@@ -46,11 +46,12 @@ matches as it finds them. The status shows the current location, phase, and
 how many names have been checked in that location during the current pass.
 Search reports locations it could not access. Tap **×** to leave search.
 Search opens in its own panel with one **×** control. Tap a file to open it;
-closing the reader returns to the same populated results. Tap a matching
-folder to browse it and its subfolders. Back retraces those folder visits to
-the search panel, where **×** returns to the collection or original folder.
-File Browser search uses the same behavior and opens files directly without
-row action menus. In Workspaces, the local subtabs also offer search before
+closing the reader returns to the same populated results. Supported files
+show thumbnails, and **…** beside a result opens its actions. Tap a matching
+folder to browse it and its subfolders with File Browser actions and List or
+Tiles. Back retraces those visits to the search, where results remain available
+and an unfinished scan continues. **×** returns to the collection or original
+folder. In Workspaces, the local subtabs also offer search before
 selecting a folder: **On My Phone/Tablet** searches device files, while
 **Rclone copies** searches available local copies, including unlocked copies.
 If a Markdown result belongs to a Notes Library, choose **Open in Notes Library**

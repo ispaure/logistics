@@ -440,6 +440,10 @@ class DocumentsHub:
         self._document_books_discovery = app.loop.create_task(discover())
 
     def clear_document_search_results(self):
+        media = getattr(self, '_document_search_media', None)
+        if media is not None:
+            media.close()
+            self._document_search_media = None
         for menu in getattr(self, '_document_search_menus', ()):
             menu.dispose()
         self._document_search_menus = []
@@ -465,9 +469,16 @@ class DocumentsHub:
             self.publish_document_search(hits, (), finished=False)
 
     def publish_document_search(self, hits, failures, *, finished=True, checked_localcrypt_cache=False):
-        from .browser_ui import entry_icon, wrapped_filename
+        from .browser_ui import entry_icon, sync_browser_population, wrapped_filename
+        from .control_icons import icon_button
+        from .file_items import native_menu, reference_actions
+        from .hub_controls import bind_document_card
+        from .search_panels import SearchThumbnails, visit_document_folder
 
         target = self.document_search_results
+        media = getattr(self, '_document_search_media', None)
+        if media is None:
+            media = self._document_search_media = SearchThumbnails(self.app)
         published = getattr(self, '_document_search_published', 0)
         rows = []
         for hit in hits[published:]:
@@ -475,7 +486,6 @@ class DocumentsHub:
                 if not self.app.checkpoint():
                     return
                 if hit.get('directory'):
-                    from .search_panels import visit_document_folder
                     return await visit_document_folder(self.app, hit)
                 if source['type'] == 'managed':
                     return self.app.stored_document_opener(source['resource'])()
@@ -490,8 +500,27 @@ class DocumentsHub:
             button = list_button(toga.Button(hit['name'], on_press=open_result,
                 style=Pack(height=WRAPPED_FILENAME_ROW_HEIGHT, flex=1, font_size=FILENAME_FONT)))
             wrapped_filename(button)
-            row = toga.Box(children=[entry_icon(hit.get('directory', False)), button],
+            artwork = toga.Box(children=[entry_icon(hit.get('directory', False))],
+                               style=Pack(width=48, direction=ROW, align_items=CENTER, justify_content=CENTER))
+            media.add(hit, artwork)
+            more = icon_button('overflow', 'File actions for ' + hit['name'])
+
+            def actions(hit=hit, open_result=open_result, more=more):
+                commands = [('Open', open_result)]
+                source = hit['source']
+                if source['type'] in {'local', 'crypt'}:
+                    label = 'Show in parent folder' if hit.get('directory') else 'Show in folder'
+                    commands.append((label, lambda: visit_document_folder(self.app, hit, parent=True)))
+                    if not hit.get('directory'):
+                        commands.extend(reference_actions(self.app, source, hit['name'], dict(kind='file'),
+                                                          anchor=more, favourite=True))
+                return commands
+
+            native_menu(self.app, more, actions)
+            self._document_search_menus.append(more.document_actions)
+            row = toga.Box(children=[artwork, button, more],
                            style=Pack(direction=ROW, align_items=CENTER))
+            bind_document_card(row, button)
             rows.append(row)
         if rows:
             group = getattr(self, '_document_search_group', None)
@@ -513,6 +542,7 @@ class DocumentsHub:
         if failures:
             target.add(empty_document_row('Some local locations could not be searched.'))
         self.reflow_documents_hub()
+        sync_browser_population(self.app)
 
     def open_document_search(self, widget=None, *, scope=None, destination='documents', **kwargs):
         from .search_panels import SearchRoute

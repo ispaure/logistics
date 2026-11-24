@@ -83,17 +83,17 @@ class DocumentSourceTests(TestCase):
         session.source = dict(type='remote', remote='Drive', identity='a' * 64, key='Report.pdf')
         self.assertEqual(source_icons(app, session)[-1], ('storage_unlocked', 'Connection unlocked'))
 
-    def test_reference_roundtrip_ten_item_bound_and_reopen_metadata(self):
+    def test_reference_roundtrip_twenty_item_bound_and_reopen_metadata(self):
         with TemporaryDirectory() as directory:
             history = RecentDocuments(Path(directory))
-            for index in range(12):
+            for index in range(22):
                 session = Session('live', 'provider-session', str(index), 'pdf', title=f'File {index}.pdf', transient=True)
                 history.remember_file(session, dict(type='local', path=f'/files/{index}.pdf'))
             restored = RecentDocuments(Path(directory))
             self.assertFalse(restored.error)
-            self.assertEqual(len(restored.sessions()), 10)
-            self.assertEqual(restored.sessions()[0].title, 'File 11.pdf')
-            self.assertEqual(restored.sessions()[0].source, dict(type='local', path='/files/11.pdf'))
+            self.assertEqual(len(restored.sessions()), 20)
+            self.assertEqual(restored.sessions()[0].title, 'File 21.pdf')
+            self.assertEqual(restored.sessions()[0].source, dict(type='local', path='/files/21.pdf'))
             self.assertNotIn('provider-session', restored.path.read_text())
             self.assertNotIn('password', restored.path.read_text())
 

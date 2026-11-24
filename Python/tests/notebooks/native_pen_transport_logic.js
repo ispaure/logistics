@@ -32,6 +32,7 @@ for(const pressure of [0,1])assert.equal(vm.runInContext(`coord({pointerType:'pe
 vm.runInContext('constantPenPressure=false;active=null;busy=false',context);
 const mobile=fs.readFileSync(path.replace('input.js','mobile.js'),'utf8');new vm.Script(mobile);
 context.vp={append(){}};
+context.sync=()=>{};
 context.document.createElement=()=>({append(){}});
 context.document.createTextNode=s=>s;
 vm.runInContext(mobile.slice(mobile.indexOf("  const constantPressure ="),mobile.indexOf('  let grayLabel =')),context);
@@ -57,6 +58,14 @@ assert.equal(pressure('touch'), .64);
 context.state.iphone_duo = false;
 assert.equal(pressure('pen'), .2);
 assert.equal(pressure('touch'), .64);
+context.state.pressure_stylus_only = true;
+context.brushFor = () => ({default_intensity: 80, tilt_widths: [8]});
+vm.runInContext('constantPenPressure=true',context);
+vm.runInContext("coord({pointerType:'pen',clientX:10,clientY:10,pressure:.14,nativeTilt:.1})",context)
+  .slice(2).forEach((value, index) => assert.equal(value, [.14, .1][index]));
+vm.runInContext("coord({pointerType:'pen',clientX:20,clientY:10,pressure:.87,nativeTilt:.7})",context)
+  .slice(2).forEach((value, index) => assert.equal(value, [.87, .7][index]));
+console.log(JSON.stringify({stylus_contact_pressure_and_tilt_preserved:true}));
 
 const queueSource=fs.readFileSync(path.replace('input.js','queue.js'),'utf8');
 context.queue=[{op:'save'},{op:'stroke',points:[[1,1,.5]]}];context.busy=true;context.continuousInk=false;context.active=null;

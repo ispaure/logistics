@@ -113,11 +113,11 @@ class RecentDocumentTests(unittest.TestCase):
     def test_bound_order_restore_and_private_removal(self):
         with TemporaryDirectory() as directory:
             history = RecentDocuments(Path(directory))
-            for index in range(12):
+            for index in range(22):
                 session = Session(str(index), 'managed-text', f'{index:032x}', 'text', title='Not stored')
                 history.remember(session)
-            self.assertEqual(len(history.items), 10)
-            self.assertEqual(history.items[0]['resource'], f'{11:032x}')
+            self.assertEqual(len(history.items), 20)
+            self.assertEqual(history.items[0]['resource'], f'{21:032x}')
             self.assertNotIn('Not stored', history.path.read_text())
             restored = RecentDocuments(Path(directory))
             self.assertEqual(restored.items, history.items)

@@ -3,6 +3,12 @@
 
 const fallbackPressure = .5;
 let constantPenPressure = false;
+let liveGraphitePressure = false;
+
+function stylusUsesPressure(event) {
+  return event.pointerType === 'pen' && Number.isFinite(event.pressure) && !state.iphone_duo
+    && (state.pressure_stylus_only || !constantPenPressure);
+}
 let firstFallbackMove = false;
 // Bounded content-free input diagnostics: no coordinates, labels or stroke data.
 const inputTraceCounts = Object.create(null), inputTraceRing = [];
@@ -94,9 +100,9 @@ function recordPoint(point) {
 
 function coord(e, r = canvas.getBoundingClientRect()) {
   const brush = mode === 'ink' && inkSettings ? brushFor(inkSettings.tool) : null;
-  const fixedGraphite = brush?.default_intensity !== undefined && !!state.brush_intensities;
-  const pressure = e.pointerType === 'pen' && !constantPenPressure && !(fixedGraphite && state.iphone_duo)
-    ? Math.max(0, Math.min(1, e.pressure)) : fixedGraphite
+  const fixedPressure = brush?.default_intensity !== undefined && !!state.brush_intensities;
+  const pressure = stylusUsesPressure(e)
+    ? Math.max(0, Math.min(1, e.pressure)) : fixedPressure
       ? fixedBrushPressure(inkSettings.tool) : fallbackPressure;
   const point = [Math.max(0, Math.min(state.width, (e.clientX - r.left) / r.width * state.width)), Math.max(0, Math.min(state.height, (e.clientY - r.top) / r.height * state.height)), pressure];
   if (e.pointerType === 'pen' && brush?.tilt_widths) {
@@ -167,6 +173,7 @@ canvas.onpointerdown = e => {
   if (e.nativePen) hideSwipePage();  // Android delivers pen packets directly to the canvas.
   if (!e.nativePen) canvas.setPointerCapture(active);
   inkSettings = chosenInk();
+  liveGraphitePressure = continuousInk && !!brushFor(inkSettings.tool).texture && stylusUsesPressure(e);
   firstFallbackMove = e.androidPen && ['pencil', 'mechanical', 'shader'].includes(brushFor(inkSettings.tool).family);
   start = last = coord(e);
   points = [start];
@@ -279,7 +286,9 @@ function finish(e, cancelled = false) {
     })
   } else if (mode === 'ink' && captured.length) {
     if (continuousInk) {
-      if (!['fineliner', 'ballpoint', 'highlighter'].includes(brushFor(inkSettings.tool).family)) commitDraft(inkSettings.tool);
+      if (!liveGraphitePressure && !['fineliner', 'ballpoint', 'highlighter'].includes(brushFor(inkSettings.tool).family)) {
+        commitDraft(inkSettings.tool);
+      }
       pendingInk = null
     } else pendingInk = {
       tool: inkSettings.tool,

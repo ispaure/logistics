@@ -77,7 +77,7 @@ class SearchPanelTests(TestCase):
         result_rows = list(browser.native_list.data)
         self.assertEqual({row.title for row in result_rows}, {'Needle.txt', 'Needle folder'})
         self.assertIsNone(browser.native_list.menu_provider)
-        self.assertIsNone(getattr(browser.native_list.on_primary_action, '_raw', None))
+        self.assertIsNotNone(getattr(browser.native_list.on_primary_action, '_raw', None))
         self.assertIsNone(browser.close_search_button.parent)
         self.assertEqual(panel.view._ios_toolbar_buttons, [])
         self.assertEqual(panel.view._ios_toolbar_leading, [panel.close_button])
@@ -94,6 +94,8 @@ class SearchPanelTests(TestCase):
         folder = next(entry for entry in browser.entries if entry.container)
         app.loop.run_until_complete(browser.activate_entry(folder))
         folder_browser = app.routes.body().children[0]._search_folder
+        self.assertTrue(callable(folder_browser.on_item_actions))
+        self.assertTrue(folder_browser.thumbnails.enabled)
         app.loop.run_until_complete(folder_browser.activate_entry(folder_browser.entries[0]))
         self.assertEqual(app.routes.body().children[0]._search_folder.entries[0].label, 'Inner.txt')
         app.routes.back()
@@ -167,15 +169,106 @@ class SearchPanelTests(TestCase):
             hub.refresh_document_list()
             start.assert_not_called()
         buttons = [w for w in widgets(hub.document_search_results) if isinstance(w, toga.Button)]
-        self.assertEqual({b.text for b in buttons}, {'Needle.txt', 'Needle folder'})
+        self.assertEqual({b.text for b in buttons if not hasattr(b, 'document_actions')},
+                         {'Needle.txt', 'Needle folder'})
+        self.assertEqual(sum(hasattr(b, 'document_actions') for b in buttons), 2)
         folder = next(b for b in buttons if b.text == 'Needle folder')
         app.loop.run_until_complete(folder.on_press())
+        view = app.routes.body().children[0]
+        menu = next(w.document_actions for w in widgets(view)
+                    if getattr(w, 'accessible_name', '') == 'Folder actions')
+        commands = dict(menu.load_actions())
+        self.assertIn('Tiles', commands)
+        commands['Tiles']()
+        self.assertEqual(view._search_folder.mode, 'Tiles')
+        commands['New folder…']()
+        form = app.routes.body().children[0]
+        form.children[0].value = 'A new folder'
+        app.loop.run_until_complete(form.children[1].on_press())
+        self.assertTrue((self.root / 'Needle folder/A new folder').is_dir())
+        self.assertIs(app.routes.body().children[0], view)
         app.routes.back()
         self.assertIs(app.routes.body().children[0], panel.view)
         self.assertEqual(list(hub.document_search_results.children), results)
         self.assertEqual(app.document_search.value, 'Needle')
         panel.close()
         self.assertFalse(app.documents_search_open)
+
+    def test_documents_search_loads_comic_cover_in_retained_result_row(self):
+        from base64 import b64encode
+        from unittest.mock import Mock
+        from zipfile import ZipFile
+        from mobile_build.native_tests.tests.logisticsmobile.browser_thumbnail_checks import png
+
+        app = self.app
+        path = self.root / 'Volume.cbz'
+        cover = png(30, (20, 70, 110))
+        with ZipFile(path, 'w') as archive:
+            archive.writestr('01.png', cover)
+        bridge = Mock()
+        bridge.request.return_value = {'data': b64encode(cover).decode()}
+
+        async def exercise():
+            panel = app.open_document_search()
+            hub = app.hub_controller()
+            hit = dict(source=dict(type='local', path=str(path)), name=path.name, directory=False)
+            hub.clear_document_search_results()
+            hub.publish_document_search([hit], ())
+            artwork = hub._document_search_group.children[0].children[0]
+            fallback = artwork.children[0]
+            async with asyncio.timeout(5):
+                while artwork.children[0] is fallback:
+                    await asyncio.sleep(.01)
+            bridge.request.assert_called_once()
+            panel.close()
+
+        with patch('mobile.browser_preview.local_image_bridge', return_value=bridge):
+            app.loop.run_until_complete(exercise())
+
+    def test_unlocked_comics_library_decodes_cover_from_scoped_archive(self):
+        from base64 import b64encode
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from zipfile import ZipFile
+        from services.documents.mobile_reading import DocumentReadCapabilities
+        from mobile_build.native_tests.tests.logisticsmobile.browser_thumbnail_checks import png
+
+        class PrivateLibrary(LocalFiles):
+            private = True
+            document_capabilities = DocumentReadCapabilities(True, True, True, True)
+
+            def check(self):
+                pass
+
+            def thumbnail(self, *args, **kwargs):
+                raise AssertionError('The cover should use the already-open archive.')
+
+        app = self.app
+        cover = png(30, (20, 70, 110))
+        encoded = b64encode(cover).decode()
+        with ZipFile(self.root / 'Needle folder/Volume.cbz', 'w') as archive:
+            archive.writestr('01.png', cover)
+        request = Mock(return_value={'data': encoded})
+
+        async def exercise():
+            app.show_documents_hub()
+            self.assertTrue(await app.hub_controller().browse_document_library(
+                'Unlocked', provider=PrivateLibrary(self.root), folder='Needle folder', title='Comics',
+                category='Comics'))
+            browser = app.adaptive.browsers['documents'].browser
+            browser.show_tiles()
+            entry = next(entry for entry in browser.entries if entry.suffix == '.cbz')
+            box, fallback = browser._tile_previews[entry.identity]
+            async with asyncio.timeout(5):
+                while box.children[0] is fallback:
+                    await asyncio.sleep(.01)
+            self.assertIn('image_thumbnail', {call.args[0] for call in request.call_args_list})
+            self.assertFalse(browser.icons)
+            self.assertFalse(browser.work.decoded)
+
+        with patch.object(app, 'cloud_client', SimpleNamespace(supports_streaming=True, generation=1,
+                                                              request=request)):
+            app.loop.run_until_complete(exercise())
 
     def test_workspaces_search_uses_the_selected_local_subtab_without_a_folder(self):
         app = self.app
@@ -222,7 +315,7 @@ class SearchPanelTests(TestCase):
                         'Local files', provider=LocalFiles(self.root), folder='', title='Fixture', category=category)
                     drawer = app.adaptive.browsers['documents']
                     browser = drawer.browser
-                    back, search, switch, select = drawer.folder_toolbar_actions()
+                    back, search, switch, select, *_ = drawer.folder_toolbar_actions()
                     self.assertTrue(back.enabled)
                     self.assertEqual([button.control_icon for button in (search, switch, select)],
                                      ['find', 'file_tiles', 'selected_item'])

@@ -12,6 +12,15 @@ __status__ = "Production"
 from commonUtils.ui.native.text_size import native_backend
 
 
+def is_boox(widget):
+    if not native_backend(widget).startswith('toga_android.'):
+        return False
+    from java import jclass
+    device = jclass('android.os.Build')
+    identity = f'{device.MANUFACTURER} {device.BRAND}'.casefold()
+    return 'onyx' in identity or 'boox' in identity
+
+
 def tablet_viewport(web):
     """Use native device identity where available; browser geometry is fallback."""
     if web is None:

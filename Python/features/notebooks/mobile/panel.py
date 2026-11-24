@@ -298,7 +298,8 @@ class NotebookPanel:
             state['native_pen_nonce'] = self.pen_input.view_id
         state['frame_batched_ink'] = self.has_native_canvas
         state['software_ink_preview'] = self.has_native_canvas and native_backend(self.web).startswith('toga_android.')
-        from .viewport import tablet_viewport
+        from .viewport import is_boox, tablet_viewport
+        state['pressure_stylus_only'] = is_boox(self.view)
         state['tablet'] = tablet_viewport(self.web)
         state['iphone_duo'] = self.app.presentation.is_iphone_duo()
         return state

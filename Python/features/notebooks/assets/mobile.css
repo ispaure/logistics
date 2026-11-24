@@ -219,6 +219,14 @@ header.canvas-document-header[data-title-layout=stacked]{
 header.canvas-document-header[data-title-layout=stacked] #notebookIdentity{flex:none;max-width:min(280px,100%)}
 header.canvas-document-header[data-title-layout=stacked] .mobile-dock{max-width:100%}
 header.canvas-document-header[data-title-layout=stacked] .mobile-tools{gap:0}
+.notebook-header-actions{display:flex;flex:none;align-items:center}
+header.notebook-combined-header{
+  width:max-content;gap:4px;margin-bottom:2px;
+}
+header.notebook-combined-header #notebookIdentity{flex:0 1 auto}
+@media(max-width:739px){
+  .notebook-header-actions{display:none}
+}
 @media(max-width:639px){
   header.canvas-document-header[data-title-layout=auto]{flex-wrap:wrap;gap:4px;justify-content:center}
   header.canvas-document-header[data-title-layout=auto] #notebookIdentity{flex-basis:100%;max-width:100%;order:-1}

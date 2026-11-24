@@ -141,6 +141,19 @@ def callbacks(provider, client, password=''):
                         with content.open_archive(row['path']) as archive:
                             member = next((name for name in comic_page_names(archive)
                                            if Path(name).suffix.lower() in PAGE_TYPES), None)
+                            bridge = getattr(provider, 'client', client)
+                            if (member and getattr(provider, 'private', False)
+                                    and getattr(bridge, 'supports_streaming', False)):
+                                # Decode the selected page from the same scoped archive.
+                                # This avoids reopening the encrypted path for a second
+                                # native archive traversal and keeps plaintext in memory.
+                                if archive.getinfo(member).file_size > 16 * 1024 * 1024:
+                                    return b''
+                                data = archive.read(member)
+                                check_cancelled(cancelled)
+                                reply = bridge.request('image_thumbnail', data=base64.b64encode(data).decode(),
+                                                       width=size[0], height=size[1])
+                                return base64.b64decode(reply['data'], validate=True)
                 if not member:
                     return b''
             return native_thumbnail(row['path'], size, member=member, password=password, cancelled=cancelled)

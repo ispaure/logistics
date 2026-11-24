@@ -14,7 +14,8 @@ renderEraserChoices();
     back: glyphs.prev,
     pages: glyphs.panel,
     close: '<path d="m6 6 12 12M18 6 6 18"/>',
-    hide: '<path d="m7 10 5 5 5-5M5 20h14"/>'
+    hide: '<path d="m7 10 5 5 5-5M5 20h14"/>',
+    appearance: '<path d="M3 17l4-10 4 10M4.5 14h5m10.5 3v-4a2.5 2.5 0 0 0-4.5-1.5m4.5 2h-2.5a1.75 1.75 0 0 0 0 3.5h2.5"/>'
   };
 
   function iconButton(button, key, label, caption) {
@@ -147,6 +148,20 @@ renderEraserChoices();
   pagesToggle.id = 'pagesToggle';
   let layersToggle = makeButton('layers', 'Page template and layers', e => openSheet('layers', e.currentTarget), 'Layers');
   layersToggle.id = 'layersToggle';
+  if (state.pressure_stylus_only) {
+    const actions = document.createElement('nav');
+    actions.className = 'notebook-header-actions';
+    actions.setAttribute('aria-label', 'Notebook page and view controls');
+    for (const [key, label, panel] of [
+      ['pages', 'Pages Overview', 'pages'],
+      ['layers', 'Page template and layers', 'layers'],
+      ['appearance', 'View and input', 'view']
+    ]) {
+      actions.append(makeButton(key, label, e => openSheet(panel, e.currentTarget)));
+    }
+    header.classList.add('notebook-combined-header');
+    header.insertBefore(actions, more);
+  }
   let backdrop = document.createElement('div');
   backdrop.id = 'mobileBackdrop';
   backdrop.hidden = true;
@@ -254,7 +269,7 @@ renderEraserChoices();
     const {tool, color, width} = chosenInk();
     const pressure = Number(intensity.value) / 100;
     showIntensity(pressure);
-    paintGraphiteSample(tool, color, width, pressure);
+    paintPressureSample(tool, color, width, pressure);
   };
   intensity.onchange = () => {
     const {tool} = chosenInk(), value = Number(intensity.value);
@@ -270,7 +285,7 @@ renderEraserChoices();
     intensity.setAttribute('aria-valuetext', intensityValue.textContent);
   }
 
-  function paintGraphiteSample(tool, color, width, pressure) {
+  function paintPressureSample(tool, color, width, pressure) {
     const target = graphiteSample.getContext('2d');
     const samples = [[16, 38, pressure], [40, 36, pressure], [66, 23, pressure], [90, 20, pressure], [112, 24, pressure]];
     const dark = darkNotebookPaper();
@@ -483,6 +498,7 @@ renderEraserChoices();
   createZoomControls(zoomControls);
   let fingerLabel = document.createElement('label');
   fingerLabel.append(control('finger'), document.createTextNode('Draw with finger'));
+  control('finger').addEventListener('change', sync);
   vp.append(fingerLabel);
   const constantPressure = document.createElement('input');
   constantPressure.type = 'checkbox';
@@ -493,13 +509,16 @@ renderEraserChoices();
       constantPressure.checked = constantPenPressure;
       return
     }
-    constantPenPressure = constantPressure.checked
+    constantPenPressure = constantPressure.checked;
+    sync()
   };
   const constantPressureLabel = document.createElement('label');
   constantPressureLabel.append(constantPressure, document.createTextNode('Constant stylus pressure (this open document)'));
+  constantPressureLabel.hidden = !!(state.iphone_duo || state.pressure_stylus_only);
   vp.append(constantPressureLabel);
   const constantPressureHint = document.createElement('p');
   constantPressureHint.textContent = 'For pens without pressure sensitivity, including Apple Pencil (USB-C). Pressure stays fixed while enabled.';
+  constantPressureHint.hidden = constantPressureLabel.hidden;
   vp.append(constantPressureHint);
   let grayLabel = document.createElement('label');
   grayLabel.append(control('grayscale'), document.createTextNode('Grayscale preview'));
@@ -579,7 +598,7 @@ renderEraserChoices();
     if (error) showNotice(error);
   };
   let hint = document.createElement('p');
-  hint.textContent = 'Swipe left or right with a finger to change pages. Drag with two fingers to pan; pinch with two fingers to zoom. Swipe past the last page for the + Page button. Stylus input always draws. Ballpoint, Pencil, Marker, Paintbrush, Calligraphy and Shader respond to pen pressure. Grayscale changes the preview only.';
+  hint.textContent = 'Swipe left or right with a finger to change pages. Drag with two fingers to pan; pinch with two fingers to zoom. Swipe past the last page for the + Page button. On supported pens, pressure adjusts Ballpoint, Pencil, Mechanical Pencil, Marker, Paintbrush, Calligraphy and Shader. Grayscale changes the preview only.';
   vp.append(hint);
   dp.append(control('status'));
   let addPage = document.createElement('button');
@@ -1258,15 +1277,16 @@ renderEraserChoices();
     for (let b of grid.children) b.setAttribute('aria-pressed', String(b.dataset.tool === t.value));
     for (let b of swatches.children) b.setAttribute('aria-pressed', String(b.dataset.color === c.value));
     const ink = chosenInk();
-    const graphite = brushFor(ink.tool).default_intensity !== undefined;
+    const adjustPressure = brushFor(ink.tool).default_intensity !== undefined
+      && !state.pressure_stylus_only && (state.iphone_duo || constantPenPressure || control('finger').checked);
     const pressure = fixedBrushPressure(ink.tool);
-    intensityLabel.hidden = !graphite;
-    graphiteSample.hidden = !graphite;
-    strokeSample.querySelector('svg').toggleAttribute('hidden', graphite);
-    if (graphite) {
+    intensityLabel.hidden = !adjustPressure;
+    graphiteSample.hidden = !adjustPressure;
+    strokeSample.querySelector('svg').toggleAttribute('hidden', adjustPressure);
+    if (adjustPressure) {
       intensity.value = String(Math.round(pressure * 100));
       showIntensity(pressure);
-      paintGraphiteSample(ink.tool, ink.color, ink.width, pressure);
+      paintPressureSample(ink.tool, ink.color, ink.width, pressure);
     }
     const sample = strokeSample.querySelector('path');
     sample.style.stroke = paletteColor(ink.tool, ink.color);

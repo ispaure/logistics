@@ -115,7 +115,10 @@ class FileDrawer(FileSelectionUI):
             apply_icon(self.parent_button, 'back', 'Back to Libraries')
             self.folder_select_button = browser_command(icon_button(
                 'selected_item', 'Select items', on_press=self.begin_file_selection, enabled=False))
-            self.browser.location_bar.add(self.browser.view_switch, self.folder_select_button)
+            from .file_items import native_menu
+            self.library_refresh = browser_command(native_menu(self.app, icon_button('overflow', 'Folder actions'),
+                lambda: [('Refresh folder', self.refresh)]))
+            self.browser.location_bar.add(self.browser.view_switch, self.folder_select_button, self.library_refresh)
             if self.app.routes.apple:
                 self.folder_close_button = icon_button('close', 'Exit selection', on_press=self.end_file_selection)
         self.changing_storage = True
@@ -188,6 +191,7 @@ class FileDrawer(FileSelectionUI):
         self.listing.invalidate()
         self.refresh_requested = False
         self.end_file_selection()
+        self.library_refresh.document_actions.dispose()
         self.browser.stop()
         self.provider = None
         release, self._library_release = self._library_release, None
@@ -242,7 +246,7 @@ class FileDrawer(FileSelectionUI):
     def library_toolbar_buttons(self):
         if self.browser.on_check_entry is not None:
             return []
-        return [self.browser.search_button, self.browser.view_switch, self.folder_select_button]
+        return [self.browser.search_button, self.browser.view_switch, self.folder_select_button, self.library_refresh]
 
     @property
     def file_browser(self):
@@ -278,7 +282,7 @@ class FileDrawer(FileSelectionUI):
         from .control_icons import apply_icon
         label = 'Back to Libraries' if self.folder == self.library_root else 'Parent folder'
         apply_icon(self.parent_button, 'close' if visible else 'back', 'Exit selection' if visible else label)
-        for button in (self.browser.search_button, self.browser.view_switch, self.folder_select_button):
+        for button in (self.browser.search_button, self.browser.view_switch, self.folder_select_button, self.library_refresh):
             button.style.update(display='none' if visible else 'pack',
                                 visibility='hidden' if visible else 'visible')
         header = self.browser.location_bar
@@ -452,6 +456,8 @@ class FileDrawer(FileSelectionUI):
                 self.status.value = ''
                 if self.library_root is not None:
                     self.navigation.render()
+                    from .browser_ui import sync_browser_population
+                    sync_browser_population(self.app)
                 if self.destination == 'documents' and self.library_root is None:
                     self.refresh_menu()
                     catalog = self.app.reader_manager().catalog
