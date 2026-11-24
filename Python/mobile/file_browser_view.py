@@ -288,14 +288,17 @@ class LocalFileBrowser(FileBrowser):
         if self._previews_visible != visible:
             self._previews_visible = visible
             if visible:
+                if self.thumbnails is not None:
+                    from .browser_preview import dark_notebook_thumbnails
+                    self.refresh_notebook_thumbnails(dark_notebook_thumbnails(self._app))
                 self._schedule_previews()
             else:
                 self._reset_previews()
+                if self.thumbnails is not None and self.thumbnails.private:
+                    self._clear_previews()
 
     def pause_search_work(self):
         self.set_previews_visible(False)
-        if self.thumbnails is not None and self.thumbnails.private:
-            self._clear_previews()
         super().pause_search_work()
 
     def _clear_previews(self):
@@ -387,11 +390,11 @@ class LocalFileBrowser(FileBrowser):
             index = visible[0] if visible else 0
             entries = self._list_entries
         else:
-            index = int(self.vertical_position / self.TILE_ROW_HEIGHT) * 2
+            index = int(self.vertical_position / self.TILE_ROW_HEIGHT) * self.tile_columns
             entries = self._tile_entries
-            if self._mode_anchor is not None and index + 1 < len(entries):
-                if entries[index + 1].identity == self._mode_anchor:
-                    index += 1
+            if self._mode_anchor is not None:
+                index = next((i for i in range(index, min(len(entries), index + self.tile_columns))
+                              if entries[i].identity == self._mode_anchor), index)
         anchor = entries[index].identity if 0 <= index < len(entries) else None
         self._mode_anchor = anchor if mode == 'Tiles' else None
         self.mode = mode
@@ -583,7 +586,7 @@ class LocalFileBrowser(FileBrowser):
 
     def _tile_anchor_position(self):
         index = next((i for i, entry in enumerate(self._tile_entries) if entry.identity == self._mode_anchor), 0)
-        return (index // 2) * self.TILE_ROW_HEIGHT
+        return (index // self.tile_columns) * self.TILE_ROW_HEIGHT
 
     def _update_tile_window(self, position):
         if self._restoring_tile_anchor:
@@ -618,8 +621,7 @@ class LocalFileBrowser(FileBrowser):
                 for identity, (box, placeholder) in self._tile_previews.items()}
 
     def _tile_thumbnail_size(self):
-        # Use the widest two-column layout this display can fit so a cached
-        # cover stays sharp when the viewport expands or the device rotates.
+        # Covers can serve narrower tile columns after a rotation.
         impl = self._tile_scroll._impl
         backend = type(impl).__module__
         if backend.startswith('toga_android.'):
@@ -648,6 +650,12 @@ class LocalFileBrowser(FileBrowser):
                 self._clear_previews()
             return
         targets = self._preview_targets()
+        if source.private and self.mode == 'List':
+            for identity, row in tuple(self._list_thumbnail_rows.items()):
+                if id(row) not in targets:
+                    row.thumbnail = False
+                    row.icon = self.presentation.file_icon(row.folder)
+                    del self._list_thumbnail_rows[identity]
         self._preview_completed.intersection_update(targets)
         for token, cancelled in self._preview_jobs.items():
             if token not in targets:
@@ -687,11 +695,12 @@ class LocalFileBrowser(FileBrowser):
                 # result that left its viewport or lost access during decoding.
                 self.icons.pop(key, None)
                 return
-            if size is not None:
+            if size is not None and not source.private:
                 self._tile_preview_sizes[key] = size
             self._publish_preview(target, toga.Image(src=data))
         try:
-            await self.work.thumbnail(entry, load, publish, epoch=self.epoch, cancelled=cancelled)
+            await self.work.thumbnail(entry, load, publish, epoch=self.epoch, cancelled=cancelled,
+                                      cache=not source.private)
         finally:
             self._preview_jobs.pop(token, None)
             if not cancelled.is_set():
@@ -700,7 +709,7 @@ class LocalFileBrowser(FileBrowser):
 
     def _publish_preview(self, target, image):
         if self.mode == 'List':
-            self._set_row_thumbnail(target, image)
+            self._set_row_thumbnail(target, image, cache=not self.thumbnails.private)
         else:
             box, placeholder = target
             if box.children[0] is placeholder:

@@ -72,15 +72,20 @@ def cached(browser, name):
 
 
 async def expect_formats(browser, names, message):
+    def available(name):
+        if not browser.thumbnails.private:
+            return bool(cached(browser, name))
+        return any(key.name == name and preview_attached(browser, key) for key in browser._tile_previews)
+
     try:
-        await wait_for(lambda: all(cached(browser, name) for name in names), message)
+        await wait_for(lambda: all(available(name) for name in names), message)
     except AssertionError as error:
         # Capture whether the failure is native viewport admission or decoding.
         source = browser.thumbnails
         rows = {entry.label: entry.payload for entry in browser.entries}
         missing = {}
         for name in names:
-            if name in rows and not cached(browser, name):
+            if name in rows and not available(name):
                 try:
                     data = await asyncio.to_thread(source._load, rows[name], (160, 160), lambda: False)
                     missing[name] = 'direct decode succeeded' if data else 'direct decode returned no image'
@@ -292,6 +297,7 @@ async def exercise_locked_thumbnails(app, provider, label):
     try:
         browser.show_tiles()
         await expect_formats(browser, contents, 'Unlocked LocalCrypt thumbnails did not render')
+        assert not browser.icons and not browser.work.decoded
         with patch.object(type(browser.thumbnails), 'load', delayed):
             await asyncio.to_thread(provider.create_file, folder + '/080-delayed.png', BytesIO(png(18, (70, 20, 220))))
             browser.refresh_entries(await asyncio.to_thread(provider.list, folder))

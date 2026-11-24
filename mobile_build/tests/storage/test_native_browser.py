@@ -26,6 +26,106 @@ from commonUtils.ui.native_browser import NativeBrowser
 
 
 class NativeBrowserTests(unittest.TestCase):
+    def test_tile_columns_follow_the_browser_pane_and_keep_the_visible_file(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile_build.tests.support.app import create_app
+
+        app = create_app(self)
+        provider = LocalFiles(app.private_root)
+        for index in range(48):
+            (provider.root / f'{index:02}.txt').write_text('File')
+
+        async def exercise():
+            await app.show_files(location=('Local files', ''))
+            browser = app.file_browser
+            app.file_provider, app.file_path = provider, ''
+            app.populate_file_browser(provider.list())
+            browser.show_tiles()
+            browser._reflow_tile_columns(400)
+            self.assertEqual(browser.tile_columns, 2)
+            row = 5
+            anchor = browser._tile_entries[row * 2].identity
+            browser._tile_scroll._impl.set_position(0, row * browser.TILE_ROW_HEIGHT)
+            browser._reflow_tile_columns(475)
+            self.assertEqual(browser.tile_columns, 3)
+            visible_row = row * 2 // 3
+            tiles = browser._tile_row_views[visible_row].children
+            self.assertEqual(len(tiles), 3)
+            self.assertIn(browser.entry_rows[anchor], tiles)
+            await asyncio.sleep(0)
+            self.assertEqual(browser.vertical_position, visible_row * browser.TILE_ROW_HEIGHT)
+            browser._reflow_tile_columns(645)
+            self.assertEqual(browser.tile_columns, 3)
+            browser._reflow_tile_columns(280)
+            self.assertEqual(browser.tile_columns, 2)
+            self.assertEqual(len(browser._tile_row_views[visible_row * 3 // 2].children), 2)
+            await browser.close()
+
+        app.loop.run_until_complete(exercise())
+
+    def test_unlocked_localcrypt_covers_display_without_reusable_thumbnail_caches(self):
+        from zipfile import ZipFile
+        from commonUtils.runtime.resources.local import LocalFiles
+        from services.documents.mobile_reading import DocumentReadCapabilities
+        from mobile_build.native_tests.tests.logisticsmobile.browser_thumbnail_checks import png
+        from mobile_build.tests.support.app import create_app
+
+        class LocalCryptFixture(LocalFiles):
+            private = True
+            document_capabilities = DocumentReadCapabilities(True, True, True, True)
+            locked = False
+
+            def check(self):
+                if self.locked:
+                    raise ValueError('Locked')
+
+            def thumbnail(self, path, size, *, member, password, cancelled):
+                self.check()
+                self.assert_cover(path, member)
+                return cover
+
+        app = create_app(self)
+        provider = LocalCryptFixture(app.private_root)
+        provider.assert_cover = lambda path, member: self.assertEqual((path, member), ('Nested/Book.cbz', '02.png'))
+        cover = png(25, (22, 88, 110))
+        (provider.root / 'Nested').mkdir()
+        with ZipFile(provider.root / 'Nested/Book.cbz', 'w') as archive:
+            archive.writestr('00.bmp', b'An unsupported extra page')
+            archive.writestr('10.png', cover)
+            archive.writestr('02.png', cover)
+
+        async def exercise():
+            await app.show_files(location=('Local files', ''))
+            browser = app.file_browser
+            app.file_provider, app.file_path = provider, 'Nested'
+            app.populate_file_browser(provider.list('Nested'))
+            browser.show_tiles()
+            entry, = browser.entries
+            box, placeholder = browser._tile_previews[entry.identity]
+            async with asyncio.timeout(5):
+                while box.children[0] is placeholder:
+                    await asyncio.sleep(.01)
+            self.assertFalse(browser.icons)
+            self.assertFalse(browser.work.decoded)
+            app.show_home()
+            self.assertIs(box.children[0], placeholder)
+            await app.show_files()
+            with patch.object(browser, '_visible_rows', return_value=(0,)):
+                browser.show_list()
+                row, = browser.native_list.data
+                async with asyncio.timeout(5):
+                    while not row.thumbnail:
+                        await asyncio.sleep(.01)
+                self.assertFalse(browser.icons)
+                self.assertFalse(browser.work.decoded)
+                app.show_home()
+                self.assertFalse(row.thumbnail)
+            provider.locked = True
+            self.assertFalse(browser.thumbnails.can_publish())
+            await browser.close()
+
+        app.loop.run_until_complete(exercise())
+
     def test_automatic_image_previews_exclude_private_local_subclasses(self):
         from base64 import b64decode
         from commonUtils.runtime.resources.local import LocalFiles

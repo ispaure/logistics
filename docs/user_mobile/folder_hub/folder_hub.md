@@ -40,10 +40,12 @@ running. Tapping a saved result checks that file immediately. A result
 that is missing or inaccessible leaves the list and shows a message.
 Private names stay out of the saved local index.
 
-List shows a larger thumbnail beside supported filenames. Tiles give the
-artwork more room while keeping each image’s proportions and aligning the
+List shows a larger thumbnail beside supported filenames. Tiles add columns
+when the browser pane has room, keep each image’s proportions and align the
 filenames in each row. Tap anywhere inside a tile to open the file or folder.
 In **Select items**, tap anywhere inside a tile to select or deselect it.
+Previews from unlocked LocalCrypt folders are held in memory for display
+and released when the browser is hidden or the storage is locked.
 
 In List, tap **…** beside an item. In Tiles, press and hold the tile to
 show eligible actions such as **Details**,

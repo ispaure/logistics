@@ -346,8 +346,7 @@ class MobileRoutes(Routes):
         if (getattr(self.app, 'documents_search_open', False)
                 or bool(getattr(self.app, 'documents_query', '').strip())):
             return self.invoke_back(self.app.close_document_search)
-        hub = self.app.__dict__.get('_hub_controller')
-        return hub is not None and hub.dismiss_document_selection()
+        return False
 
     def install(self):
         self._installation = object()

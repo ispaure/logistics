@@ -22,6 +22,44 @@ class SearchPanelTests(TestCase):
         (self.root / 'Needle.txt').write_text('Search file')
         (self.root / 'Needle folder/Child/Inner.txt').write_text('Inner file')
 
+    def test_documents_library_loads_local_comic_tile_thumbnails(self):
+        from base64 import b64encode
+        from unittest.mock import Mock
+        from zipfile import ZipFile
+        from mobile_build.native_tests.tests.logisticsmobile.browser_thumbnail_checks import png
+
+        app = self.app
+        cover = png(30, (20, 70, 110))
+        encoded = b64encode(cover).decode()
+        with ZipFile(self.root / 'Volume.cbz', 'w') as archive:
+            archive.writestr('01.png', cover)
+        bridge = Mock()
+        bridge.request.return_value = {'data': encoded}
+
+        async def exercise():
+            app.show_documents_hub()
+            self.assertTrue(await app.hub_controller().browse_document_library(
+                'Local files', provider=LocalFiles(self.root), folder='', title='Comics'))
+            browser = app.adaptive.browsers['documents'].browser
+            browser.show_tiles()
+            self.assertTrue(browser._previews_visible)
+            entry = next(entry for entry in browser.entries if entry.suffix == '.cbz')
+            box, fallback = browser._tile_previews[entry.identity]
+            async with asyncio.timeout(5):
+                while box.children[0] is fallback:
+                    await asyncio.sleep(.01)
+            bridge.request.assert_called_once_with(
+                'image_thumbnail', data=encoded, width=browser._tile_thumbnail_size()[0],
+                height=browser._tile_thumbnail_size()[1])
+
+            app.show_view(toga.Box(), destination='documents', route='test-reader', title='Volume')
+            self.assertFalse(browser._previews_visible)
+            self.assertTrue(app.routes.back())
+            self.assertTrue(browser._previews_visible)
+
+        with patch('mobile.browser_preview.local_image_bridge', return_value=bridge):
+            app.loop.run_until_complete(exercise())
+
     def test_file_search_retains_results_under_files_and_nested_folders(self):
         app = self.app
         app.show_documents_hub()

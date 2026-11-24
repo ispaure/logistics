@@ -30,8 +30,8 @@ Select a Books or Comics library to browse its files. Use the folder toolbar to
 search, switch between tiles and rows, or select items for available file actions.
 Back to a parent folder keeps the current layout. The selected library stays on
 the left when there is room for both panes. Rotating keeps the current folder,
-including any subfolder. Select a Notes library to open its Notes Library view. Select
-a favourite or recent document to open it from the right pane.
+including any subfolder. Select a Notes library to open its Notes Library view.
+Tap a favourite or recent file card to open it directly. Tap its three-dot button for file actions.
 If a Recent entry fails, find the file in its current folder,
 reconnect its remote, or unlock its credential.
 

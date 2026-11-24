@@ -76,28 +76,41 @@ class HubDocumentTests(unittest.TestCase):
                 self.assertEqual(badge.style.display, 'pack')
                 self.assertLess(badge.style.margin_bottom, 0)
 
-    def test_back_dismisses_the_wide_document_selection(self):
+    def test_recent_and_favourite_cards_open_directly_in_split_documents(self):
+        from mobile.favourites import catalog
+        from mobile.workspace import Session
+        from toga.style.pack import ROW
+
         app = self.app
         hub = app.hub_controller()
-        self.enterContext(patch.object(app.adaptive, 'content_width', return_value=900))
-        app.show_documents_hub(collection='Recent')
-        hub.reflow_documents_hub()
-        detail = hub._document_selection
-        opener = AsyncMock()
-        for dismiss in ('button', 'toolbar', 'system'):
-            with self.subTest(dismiss=dismiss):
-                app.loop.run_until_complete(hub.select_document_card('Recent', 'Example', opener))
-                self.assertIn('Example', labels(detail))
-                if dismiss == 'button':
-                    next(widget for widget in widgets(detail)
-                         if getattr(widget, 'accessible_name', '') == 'Back to documents').on_press()
-                elif dismiss == 'toolbar':
-                    self.assertTrue(app.routes.back())
-                else:
-                    self.assertTrue(app.routes.system_back())
-                self.assertFalse(detail.children)
-                self.assertEqual(app.native_host.state.destination, 'documents')
-        opener.assert_not_called()
+        path = app.private_root / 'Example.txt'
+        path.touch()
+        source = dict(type='local', path=str(path))
+        app.recent_documents.remember_file(
+            Session('example', 'provider-session', 'example', 'text', title=path.name, transient=True), source)
+        catalog(app).remember(source, path.name, dict(kind='text'), favourite=True)
+
+        with (patch.object(app.adaptive, 'content_width', return_value=900),
+              patch.object(hub, 'recent_opener', return_value=AsyncMock()) as recent_opener,
+              patch('mobile.favourites.reopen', new_callable=AsyncMock) as reopen):
+            for collection, section in (('Recent', 'document_recent_list'),
+                                        ('Favourites', 'document_favourites_list')):
+                with self.subTest(collection=collection):
+                    app.show_documents_hub(collection=collection)
+                    hub.reflow_documents_hub()
+                    self.assertEqual(hub._document_collection_body.style.direction, ROW)
+                    row = list(widgets(getattr(hub, section)))
+                    title = next(widget for widget in row if getattr(widget, 'text', '') == path.name)
+                    more = next(widget for widget in row
+                                if getattr(widget, 'accessible_name', '') == 'File actions for ' + path.name)
+                    self.assertIsNot(title, more)
+                    self.assertIsNotNone(more.document_actions)
+                    title.on_press()
+                    app.loop.run_until_complete(asyncio.sleep(0))
+                    self.assertFalse(hub._document_companion.children)
+            recent_opener.return_value.assert_awaited_once()
+            reopen.assert_awaited_once()
+            self.assertEqual(reopen.await_args.args[1]['source'], source)
 
     def test_replacing_a_hub_section_disposes_its_row_menus(self):
         import toga

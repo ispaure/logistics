@@ -40,8 +40,9 @@ def dark_notebook_thumbnails(app):
 
 def refresh_notebook_thumbnails(app):
     dark = dark_notebook_thumbnails(app)
-    browser = getattr(app, 'file_browser', None)
-    if browser is not None:
+    browsers = set(getattr(app, '_preview_file_browsers', ()))
+    browsers.add(getattr(app, 'file_browser', None))
+    for browser in browsers - {None}:
         browser.refresh_notebook_thumbnails(dark)
     for media in tuple(getattr(app, '_notebook_card_media', ())):
         media.refresh_notebook_thumbnails(dark)
@@ -128,10 +129,18 @@ def callbacks(provider, client, password=''):
         if native_thumbnail is not None:
             member = ''
             if suffix in ARCHIVE_SUFFIXES:
-                from services.documents.readers import PrivateReader
                 with closing(source(row, cancelled)) as content:
-                    reader = PrivateReader(Path(row['path']).name, source=content, path=row['path'])
-                    member = reader.book.cover_path() if reader.book else reader.pages[0]
+                    if suffix == '.epub':
+                        from features.books.epub import EPUBBook
+                        member = EPUBBook(row['path'], source=content).cover_path()
+                    else:
+                        from features.comics.collection.pages import PAGE_TYPES
+                        from features.comics.pages import comic_page_names
+                        # A cover needs only archive headers. Reader metadata
+                        # and unsupported pages elsewhere need not suppress it.
+                        with content.open_archive(row['path']) as archive:
+                            member = next((name for name in comic_page_names(archive)
+                                           if Path(name).suffix.lower() in PAGE_TYPES), None)
                 if not member:
                     return b''
             return native_thumbnail(row['path'], size, member=member, password=password, cancelled=cancelled)

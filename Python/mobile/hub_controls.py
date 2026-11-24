@@ -9,8 +9,9 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
+from functools import cache
 from pathlib import Path
-from weakref import WeakSet
+from weakref import WeakSet, ref
 
 import toga
 from toga.style import Pack
@@ -216,6 +217,67 @@ def card_trailing(badge, tools):
     surface(menu, radius=0, background='transparent', foreground='text', eink_outlined=False)
     return [toga.Box(children=[badge, menu], style=Pack(direction=COLUMN, align_items=CENTER)),
             *other_tools]
+
+
+@cache
+def _apple_card_tap_target():
+    from rubicon.objc import ObjCClass, ObjCProtocol, objc_method, objc_property
+    from commonUtils.ui.native.keyboard import native_value
+
+    control = ObjCClass('UIControl')
+
+    class LogisticsDocumentCardTap(ObjCClass('NSObject'), protocols=[ObjCProtocol('UIGestureRecognizerDelegate')]):
+        button = objc_property(object)
+
+        @objc_method
+        def gestureRecognizer_shouldReceiveTouch_(self, gesture, touch) -> bool:
+            view = native_value(touch.view)
+            root = native_value(gesture.view)
+            while view is not None and view != root:
+                if view.isKindOfClass(control):
+                    return False
+                view = native_value(view.superview)
+            return view is not None
+
+        @objc_method
+        def openDocumentCard_(self, gesture) -> None:
+            button = self.button()
+            if button is not None and button.enabled:
+                button.on_press()
+
+    return LogisticsDocumentCardTap
+
+
+def bind_document_card(row, button):
+    """Forward taps on passive card content to the title's open action."""
+    backend = type(row._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass, SEL
+        target = _apple_card_tap_target().alloc().init()
+        target.button = ref(button)
+        gesture = ObjCClass('UITapGestureRecognizer').alloc().initWithTarget(
+            target, action=SEL('openDocumentCard:'))
+        gesture.delegate = target
+        gesture.cancelsTouchesInView = False
+        native = row._impl.native
+        native.userInteractionEnabled = True
+        native.addGestureRecognizer(gesture)
+        row._document_card_tap = target
+    elif backend.startswith('toga_android.'):
+        from android.view import View
+        from .native.file_drag_android import TileClick
+
+        button_ref = ref(button)
+
+        def open_card():
+            target = button_ref()
+            if target is not None and target.enabled:
+                target.on_press()
+
+        listener = row._document_card_tap = TileClick(open_card)
+        native = row._impl.native
+        native.setOnClickListener(listener)
+        native.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO)
 
 
 def text_document_kind(name):

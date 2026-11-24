@@ -261,9 +261,9 @@ function grain(target, rgb, mechanical, pressure = .5) {
 }
 
 function graphitePaint(target, rgb, mechanical, pressure) {
-  // Filtering fine, sparse flecks into the surrounding paper makes them
-  // disappear at writing size. The context's saved state restores smoothing.
-  if (graphiteLevel(pressure) <= 10) target.imageSmoothingEnabled = false;
+  // Keep isolated flecks sharp at writing size. At thumbnail scale, filtering
+  // distributes subpixel flecks across the pixels they cover.
+  if (graphiteLevel(pressure) <= 10 && target.getTransform().a >= .5) target.imageSmoothingEnabled = false;
   return grain(target, rgb, mechanical, pressure);
 }
 

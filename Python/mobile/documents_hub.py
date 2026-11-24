@@ -129,15 +129,6 @@ class DocumentsHub:
         if self.document_results.parent is not target:
             self.document_results.parent.remove(self.document_results)
             target.add(self.document_results)
-        companion = self._document_selection
-        if not use_companion or self.documents_view == 'Libraries':
-            # Libraries use the retained folder route; only document cards
-            # have a preview mounted in the collection overview itself.
-            self._document_companion.clear()
-        elif companion.parent is not self._document_companion:
-            self._document_companion.clear()
-            self._document_companion.add(companion)
-
         # Mount only the active viewport. Retaining two flex children, even
         # with one excluded from display, can halve the native browser's height.
         detail = self._document_collection_detail
@@ -287,9 +278,6 @@ class DocumentsHub:
         self._document_results_pane = results
         self._document_results_scroll = toga.ScrollContainer(horizontal=False, content=results, style=Pack(flex=1))
         self._document_companion = toga.Box(style=Pack(direction=COLUMN, flex=1))
-        self._document_selection = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=8))
-        self._document_selection._clear_return_selection = self._document_selection.clear
-        self._document_preview_collection = None
         self._document_collection_detail = toga.Box(children=[self.app._documents_status_row,
             self._document_results_scroll, self._document_companion],
             style=Pack(direction=COLUMN, flex=1))
@@ -340,9 +328,6 @@ class DocumentsHub:
         if list(self.document_results.children) != [selected]:
             self.document_results.clear()
             self.document_results.add(selected)
-        if not searching and self.documents_view != self._document_preview_collection:
-            self._document_preview_collection = self.documents_view
-            self._document_selection.clear()
         discover = not getattr(self.app, '_startup_in_progress', False)
         if discover and not searching and self.documents_view == 'Libraries' and not self._document_libraries_ready:
             self.populate_document_libraries()
@@ -351,35 +336,11 @@ class DocumentsHub:
             retire_document_actions(self.document_favourites_list)
             self.document_favourites_list.clear()
             populate(self.app, self.document_favourites_list, heading=False, row_font=FILENAME_FONT,
-                     allow_remove=True, select=self.select_document_card)
+                     allow_remove=True)
         previews = getattr(selected, '_document_card_media', None)
         if previews is not None:
             previews.start()
         self.reflow_documents_hub()
-
-    async def select_document_card(self, collection, title, open_document):
-        """Keep the collection visible and put the selected file's action on the right."""
-        if (getattr(self, '_document_collection_body', None) is None
-                or self._document_collection_body.style.direction != ROW or self.documents_view != collection
-                or self.app.native_host.state.destination != 'documents'):
-            return await open_document()
-        detail = self._document_selection
-        detail.clear()
-        from commonUtils.ui.native.presentation import allow_label_to_shrink
-        from .control_icons import icon_button
-        name = toga.Label(title, style=Pack(font_size=23, font_weight='bold', margin=(12, 8)))
-        allow_label_to_shrink(name)
-        back = icon_button('back', 'Back to documents', on_press=self.dismiss_document_selection)
-        detail.add(toga.Box(children=[back, toga.Box(style=Pack(flex=1))], style=Pack(direction=ROW)),
-                   name, toga.Button('Open', on_press=open_document, style=Pack(height=48, margin=(0, 8))))
-
-    def dismiss_document_selection(self, widget=None, **kwargs):
-        detail = getattr(self, '_document_selection', None)
-        if (detail is None or not detail.children or detail.parent is not self._document_companion
-                or self._document_companion.parent is not self._document_collection_detail):
-            return False
-        detail.clear()
-        return True
 
     async def browse_document_library(self, storage, *, provider, folder, title, category=None):
         drawer = self.adaptive.browser('documents')
@@ -674,7 +635,7 @@ class DocumentsHub:
                     and owner.matches_reference(session.source)):
                 continue
             rows.append(self.recent_row(session, summary, wrap_name=True, show_source=True,
-                                        previews=previews, collection='Recent'))
+                                        previews=previews))
         if show_archive:
             rows.append(toga.Box(children=[
                 toga.Button(owner.name, on_press=lambda widget: owner.present(), style=Pack(height=48, flex=1)),

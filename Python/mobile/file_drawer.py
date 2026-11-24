@@ -427,6 +427,10 @@ class FileDrawer(FileSelectionUI):
                     if self.browser.on_check_entry is not None and (
                             self.browser.location != (selected, folder) or not can_select):
                         self.end_file_selection()
+                if self.destination == 'documents':
+                    from .browser_preview import LocalThumbnails, dark_notebook_thumbnails
+                    self.browser.configure_previews(LocalThumbnails(
+                        provider, self.provider_client, '', dark_notebooks=dark_notebook_thumbnails(self.app)))
                 self.browser.set_entries(model, folder, rows, location=(selected, folder))
                 self.browser.location_bar.update_provider(folder, provider, name=(
                     self.library_title if folder == self.library_root else selected if not folder else None))

@@ -19,6 +19,29 @@ from features.notebooks.previews import BATCH, BATCH_POINTS, POINTS, page_previe
 
 
 class PagePreviewTests(unittest.TestCase):
+    def test_graphite_pressure_survives_in_page_and_file_thumbnails(self):
+        from PySide6.QtGui import QImage
+        from features.notebooks.thumbnail import notebook_thumbnail
+
+        book = Notebook.new()
+        for y, tool, pressure in ((374, 14, .24), (748, 14, .8), (1122, 13, .24), (1496, 13, .95)):
+            book.page(0).add([[300, y, pressure], [1100, y, pressure]], tool=tool, width=3)
+        data = book.to_bytes()
+        book = Notebook.read(data)
+        page, = page_previews(book, 0)
+        self.assertEqual([item['points'][0][2:] for item in page['items']],
+                         [stroke.points[0][2:] for stroke in book.page(0).strokes])
+
+        for dark in (False, True):
+            image = QImage.fromData(notebook_thumbnail(data, 320, cancelled=lambda: False, dark=dark))
+            paper = 0 if dark else 255
+            x = image.width() // 2
+            depths = [max(abs(image.pixelColor(x, y).red() - paper) for y in range(row - 2, row + 3))
+                      for row in (64, 128, 192, 256)]
+            for light, firm in zip(depths[::2], depths[1::2]):
+                self.assertGreater(light, 4)
+                self.assertGreater(firm, light + 25)
+
     def test_file_thumbnail_dark_paper_dims_highlight_over_writing(self):
         from PySide6.QtGui import QImage
         from features.notebooks.thumbnail import notebook_thumbnail

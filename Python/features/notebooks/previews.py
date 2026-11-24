@@ -55,9 +55,10 @@ def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None, count=BATCH
             if total > POINTS and len(points) > 2:
                 count = 2 + (len(points) - 2) * (POINTS - minimum) // (total - minimum)
                 points = [points[i * (len(points) - 1) // (count - 1)] for i in range(count)]
-            # The renderer uses stored widths, never pressure, for saved ink.
+            # Use the stored widths for geometry and pressure for graphite density.
             items.append((scene_order(stroke), dict(tool=stroke.tool, color=stroke.color, color_rgba=stroke.color_rgba,
-                          points=[[round(x - left, 2), round(y, 2), 0, width] for x, y, _, width in points])))
+                          points=[[round(x - left, 2), round(y, 2), pressure, width]
+                                  for x, y, pressure, width in points])))
         for picture, data in pictures:
             items.append((scene_order(picture), dict(src=image_source(data),
                           corners=[[x - left, y] for x, y in picture.corners])))

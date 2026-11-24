@@ -233,18 +233,16 @@ class HubUI(HomeScreen, DocumentsHub):
         return [native_menu(app, button, load_actions)]
 
     def recent_row(self, session, summary, *, wrap_name=False, show_source=False, previews=None,
-                   featured=False, collection=None):
+                   featured=False):
         from .browser_ui import middle_filename, wrapped_filename
         from .document_completion import session_target
-        from .hub_controls import card_trailing
+        from .hub_controls import bind_document_card, card_trailing
 
         title, _, details = summary
         row = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
         opener = self.recent_opener(session)
-        async def choose(widget=None, **kwargs):
-            return await self.select_document_card(collection, title, opener)
 
-        name = list_button(toga.Button(title, on_press=choose if collection is not None else opener,
+        name = list_button(toga.Button(title, on_press=opener,
                                        style=Pack(height=64 if wrap_name else TOUCH_TARGET, flex=1)))
         if wrap_name:
             name.style.font_size = BODY_TEXT
@@ -280,6 +278,8 @@ class HubUI(HomeScreen, DocumentsHub):
         if currently_open or details:
             content.add(status_badges(details, currently_open=currently_open,
                                       icon_count=len(getattr(name, 'leading_icons', ()))))
+        if previews is not None:
+            bind_document_card(row, name)
         return row
 
     def document_button_icons(self, button, session):

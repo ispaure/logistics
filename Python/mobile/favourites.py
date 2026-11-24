@@ -290,9 +290,9 @@ async def reopen(app, row, *, error_title='Open favourite'):
     return False
 
 
-def populate(app, container, *, heading=True, row_font=None, allow_remove=False, limit=None, select=None):
+def populate(app, container, *, heading=True, row_font=None, allow_remove=False, limit=None):
     from .document_completion import commands, reference_target
-    from .hub_controls import DocumentCardMedia, card_trailing, source_title
+    from .hub_controls import DocumentCardMedia, bind_document_card, card_trailing, source_title
     previews = container._document_card_media = DocumentCardMedia(app) if row_font is not None else None
 
     if heading:
@@ -310,8 +310,6 @@ def populate(app, container, *, heading=True, row_font=None, allow_remove=False,
             continue
         async def open_row(widget=None, row=row, **kwargs):
             await reopen(app, row)
-        async def choose(widget=None, row=row, open_row=open_row, **kwargs):
-            return await select('Favourites', row['title'], open_row)
         async def remove(widget=None, row=row, **kwargs):
             try:
                 cipher = next((value for value in unlocked_ciphers(app)
@@ -320,7 +318,7 @@ def populate(app, container, *, heading=True, row_font=None, allow_remove=False,
                 refresh(app)
             except (OSError, ValueError, PermissionError) as error:
                 await app.main_window.dialog(toga.InfoDialog('Remove favourite', str(error)))
-        opener = toga.Button(row['title'], on_press=choose if select is not None else open_row,
+        opener = toga.Button(row['title'], on_press=open_row,
                              style=Pack(height=48, flex=1))
         controls = [opener]
         if row_font is not None:
@@ -352,8 +350,10 @@ def populate(app, container, *, heading=True, row_font=None, allow_remove=False,
             tools.append(native_menu(app, more, actions))
         badge = previews.completion_badge(progress) if previews is not None else None
         controls.extend(card_trailing(badge, tools))
-        buttons.append(toga.Box(children=controls,
-            style=Pack(direction=ROW, align_items='center')))
+        card = toga.Box(children=controls, style=Pack(direction=ROW, align_items='center'))
+        if previews is not None:
+            bind_document_card(card, opener)
+        buttons.append(card)
         if len(buttons) == limit:
             break
     if row_font is not None:

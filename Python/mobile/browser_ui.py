@@ -13,7 +13,7 @@ import asyncio
 from collections import OrderedDict
 from pathlib import PurePosixPath
 from threading import Event
-from weakref import WeakSet
+from weakref import WeakSet, ref
 import toga
 from .control_icons import apply_icon
 from toga.style import Pack
@@ -113,17 +113,18 @@ def highlight_entry(widget, selected):
 
 
 def sync_browser_population(app, body=None):
-    """Resume retained search only when its owning view is visible again."""
+    """Run previews and retained search only for the visible browser routes."""
     privacy = getattr(app, 'screen_privacy', None)
     body = body if body is not None else getattr(app, 'body', None)
     ready = (body is not None and privacy is not None and not privacy.disposed
              and not getattr(privacy, '_folder_work_paused', False)
              and getattr(app, 'scene_active', True) is not False and app.active_host)
     from .routes import contains
-    file_browser = getattr(app, 'file_browser', None)
-    set_visible = getattr(file_browser, 'set_previews_visible', None)
-    if set_visible is not None:
-        set_visible(bool(ready and contains(body, file_browser.widget)))
+    visible = ({browser for browser in mounted_file_browsers(body)
+                if not browser.closed and hasattr(browser, 'set_previews_visible')} if ready else set())
+    for browser in visible.union(getattr(app, '_preview_file_browsers', ())):
+        browser.set_previews_visible(browser in visible)
+    app._preview_file_browsers = visible
     if not ready:
         return
     paused = getattr(privacy, '_paused_file_browsers', ())
@@ -322,6 +323,34 @@ class FileBrowser(RecycledBrowser):
                                        style=Pack(direction=COLUMN))
         self.widget._clear_return_selection = self.clear_selection
         self.widget._file_browser_owner = self
+        self._watch_tile_width()
+
+    def _watch_tile_width(self):
+        impl = self._tile_scroll._impl
+        set_bounds = type(impl).set_bounds
+        browser, target = ref(self), ref(impl)
+        last_width = 0
+
+        def resize(x, y, width, height):
+            nonlocal last_width
+            set_bounds(target(), x, y, width, height)
+            if width > 0 and width != last_width:
+                last_width = width
+                owner = browser()
+                if owner is not None and not owner.closed:
+                    owner._loop.call_soon(owner._reflow_tile_columns, width)
+
+        impl.set_bounds = resize
+
+    def _reflow_tile_columns(self, width):
+        if self.closed or self.mode != 'Tiles':
+            return
+        columns = 4 if width >= 720 else 3 if width >= 456 else 2
+        if columns != self.tile_columns:
+            row, offset = divmod(max(0, self.vertical_position), self.TILE_ROW_HEIGHT)
+            first = int(row) * self.tile_columns
+            self.tile_columns = columns
+            self._render_tiles((first // columns) * self.TILE_ROW_HEIGHT + offset)
 
     def _show_completion(self):
         return (not self.closed and self.on_item_actions is not None and self.search_provider is not None
