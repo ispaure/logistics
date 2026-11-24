@@ -16,7 +16,7 @@ from commonUtils.ui.native.recycled_list import RecycledList, ListAppearance, th
 from .appearance import apple_color, android_palette, eink_enabled
 from services.appearance_palette import FILE_ICON_BLUE
 from .hub_icons import icon
-from .ui_metrics import TOUCH_TARGET, BODY_TEXT, CAPTION_TEXT
+from .ui_metrics import TOUCH_TARGET, BODY_TEXT, CAPTION_TEXT, WRAPPED_FILENAME_ROW_HEIGHT
 
 
 @lru_cache(maxsize=2)
@@ -33,7 +33,7 @@ class RecycledFileList(RecycledList):
                  row_height=None, body_text=BODY_TEXT, caption_text=CAPTION_TEXT, selection_role='hover', **kwargs):
         self.icon_kind = icon_kind
         if row_height is None:
-            row_height = 64 if title_lines == 2 else TOUCH_TARGET
+            row_height = WRAPPED_FILENAME_ROW_HEIGHT if title_lines == 2 else TOUCH_TARGET
 
         def palette(dark):
             colors = android_palette(dark)

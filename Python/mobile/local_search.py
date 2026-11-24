@@ -16,15 +16,14 @@ from commonUtils.search.providers import search_resources
 
 
 def filename_scan_label(cache_phase):
+    if cache_phase in ('cached_hints', 'crypt_cached_hints'):
+        return 'Searching saved filenames…'
+    if cache_phase in ('cached', 'device_cached', 'checking_storage'):
+        return 'Checking folders for changes…'
     return {
         'checking': 'Checking LocalCrypt cache…',
-        'cached': 'Using cached filenames…',
         'refreshing': 'Refreshing LocalCrypt names…',
-        'device_cached': 'Using cached filenames…',
-        'device_refreshing': 'Refreshing filename cache…',
-        'cached_hints': 'Searching cached filenames…',
-        'crypt_cached_hints': 'Searching cached filenames…',
-        'checking_storage': 'Checking for new files…',
+        'device_refreshing': 'Refreshing saved filenames…',
     }.get(cache_phase, 'Scanning filenames…')
 
 

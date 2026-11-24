@@ -22,7 +22,7 @@ from .hub_controls import (
     PanelGrid, append_document_group_rows, document_group, document_list, empty_document_row,
     retire_document_actions, text_document_kind,
 )
-from .ui_metrics import TOUCH_TARGET
+from .ui_metrics import TOUCH_TARGET, WRAPPED_FILENAME_ROW_HEIGHT
 
 
 COLLECTIONS = ('Libraries', 'Favourites', 'Open', 'Recent')
@@ -409,7 +409,7 @@ class DocumentsHub:
                 except (OSError, ValueError) as error:
                     await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
             button = list_button(toga.Button(hit['name'], on_press=open_result,
-                                             style=Pack(height=64, flex=1, font_size=FILENAME_FONT)))
+                style=Pack(height=WRAPPED_FILENAME_ROW_HEIGHT, flex=1, font_size=FILENAME_FONT)))
             wrapped_filename(button)
             button_icons(button, [('storage_local', 'Local document'), *(
                 [('storage_unlocked', 'Unlocked LocalCrypt')] if hit['private'] else [])])
@@ -437,7 +437,7 @@ class DocumentsHub:
             if group is None:
                 group = self._document_search_group = document_group(())
                 target.add(group)
-            append_document_group_rows(group, rows, keep_spacing=True)
+            append_document_group_rows(group, rows, compact=True)
             self._document_search_published = len(hits)
         if finished:
             count = max(published, len(hits))

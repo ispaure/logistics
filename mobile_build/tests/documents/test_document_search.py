@@ -351,7 +351,7 @@ class LocalDocumentSearchTests(TestCase):
                 self.assertTrue(await asyncio.to_thread(started.wait, 2))
                 await wait_until(lambda: '4,501 checked' in app.hub_controller()._documents_search_status.text,
                                  timeout=2, interval=.01, message='No progress in the Documents status row')
-                self.assertIn('Using cached filenames', app.hub_controller()._documents_search_status.text)
+                self.assertIn('Checking folders for changes', app.hub_controller()._documents_search_status.text)
                 hub = app.hub_controller()
                 self.assertEqual(hub._documents_search_location.text, 'Fixture')
                 self.assertEqual(list(hub._documents_search_header.children),
@@ -367,6 +367,7 @@ class LocalDocumentSearchTests(TestCase):
 
     def test_document_search_appends_hits_without_replacing_or_resorting_rows(self):
         import toga
+        from mobile.ui_metrics import WRAPPED_FILENAME_ROW_HEIGHT
         from mobile_build.tests.workspace.test_hub_documents import widgets
 
         app = self.app
@@ -380,7 +381,8 @@ class LocalDocumentSearchTests(TestCase):
 
         first = hit('Zulu - A long filename that needs to wrap in a narrow viewport.txt')
         second = hit('Alpha.txt')
-        hub.show_document_search_progress(5, '', (first,))
+        hub.show_document_search_progress(5, 'cached_hints', (first,), 'Local files')
+        self.assertEqual(hub._documents_search_status.text, 'Searching saved filenames… · 5 checked')
         group = hub._document_search_group
         original = group.children[0]
         hub.show_document_search_progress(9, '', (first, second))
@@ -389,7 +391,8 @@ class LocalDocumentSearchTests(TestCase):
         buttons = [w for w in widgets(group) if isinstance(w, toga.Button) and w.text.endswith('.txt')]
         self.assertEqual([button.text for button in buttons], [first['name'], second['name']])
         self.assertEqual(buttons[0].accessible_name, first['name'])
-        self.assertEqual(buttons[0].style.height, 64)
+        self.assertEqual(buttons[0].style.height, WRAPPED_FILENAME_ROW_HEIGHT)
+        self.assertEqual([button.parent.style.margin_bottom for button in buttons], [0, 0])
         self.assertEqual(hub._documents_search_status.text, '2 matches · LocalCrypt cache checked')
 
     def test_libraries_have_direct_lists_with_bounded_discovery(self):

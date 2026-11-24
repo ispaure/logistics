@@ -23,6 +23,7 @@ from commonUtils.ui.native.text_size import native_backend
 BODY_TEXT = 17
 CONTROL_TEXT = 16
 CAPTION_TEXT = 13
+WRAPPED_FILENAME_ROW_HEIGHT = 64
 
 
 def install_font_units():

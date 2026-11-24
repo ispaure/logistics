@@ -54,8 +54,8 @@ def document_group(rows):
         group._impl.native.setClipToOutline(True)
     return group
 
-def append_document_group_rows(group, rows, *, keep_spacing=False):
-    """Append search rows with fixed spacing so existing hit targets stay put."""
+def append_document_group_rows(group, rows, *, compact=False):
+    """Append rows without moving any existing hit targets."""
     def borderless(widget):
         if isinstance(widget, toga.Button):
             foreground = 'accent' if hasattr(widget, 'document_actions') else 'text'
@@ -70,7 +70,7 @@ def append_document_group_rows(group, rows, *, keep_spacing=False):
         if not first:
             group.add(surface(toga.Box(style=Pack(height=1, margin_left=16, margin_right=16)),
                 radius=0, background='border', outlined=False, eink_outlined=False))
-        row.style.margin_bottom = 8 if keep_spacing or index == len(rows) - 1 else 0
+        row.style.margin_bottom = 8 if not compact and index == len(rows) - 1 else 0
         row.style.margin_top = 8 if first else 0
         row.style.margin_left = row.style.margin_right = 8
         borderless(row)
