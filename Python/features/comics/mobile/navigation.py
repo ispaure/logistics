@@ -58,6 +58,13 @@ class ComicNavigation:
         return page_progress(self.visible or (self.page or 0,), self.count,
                              half=self.half if self.split else None)
 
+    def percentage(self):
+        from services.documents.completion import page_percent
+
+        page = max(self.visible, default=self.page or 0)
+        at_end = page == self.count - 1 and (not self.split or self.half == 1)
+        return page_percent(page, self.count, within=self.half / 2, at_end=at_end)
+
     @property
     def part_label(self):
         return f' · {self.half + 1}/2' if self.split else ''

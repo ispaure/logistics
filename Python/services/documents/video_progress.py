@@ -127,9 +127,11 @@ class VideoProgress:
     def valid_duration(value):
         return value if type(value) is int and 0 <= value <= 10**10 else 0
 
-    def observe(self, milliseconds, *, completed=False):
+    def observe(self, milliseconds=None, *, completed=False):
+        """Record confirmed playback, or preserve its state for a settings-only write."""
         with self.lock:
-            if type(milliseconds) not in (int, float) or not isfinite(milliseconds) or not 0 <= milliseconds <= 10**10:
+            if milliseconds is not None and (type(milliseconds) not in (int, float)
+                    or not isfinite(milliseconds) or not 0 <= milliseconds <= 10**10):
                 raise ValueError('Invalid video position.')
             settings, overrides, duration = self.settings, self.setting_overrides, self.duration
             if self.state is None:
@@ -138,8 +140,9 @@ class VideoProgress:
                     self._settings = settings
                     self.setting_overrides = overrides
                 self.duration = duration or self.duration
-            self.position = 0 if completed else int(milliseconds)
-            self.completed = self.completed or completed
+            if milliseconds is not None:
+                self.position = 0 if completed else int(milliseconds)
+                self.completed = completed
             return self.state.observe(self.record())
 
     def record(self):

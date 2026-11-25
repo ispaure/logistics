@@ -121,9 +121,11 @@ class MobileVideo:
         """Revoke playback immediately; retain resources until native teardown ends."""
         if self.retirement is not None:
             return self.retirement
-        # Sample a TV session even when the user dismisses it between watch ticks.
+        # Save a confirmed replay or TV position even between watch ticks.
         from .ios import IOSVideo
-        if isinstance(self.native, IOSVideo) and self.native.airplay_active() and self.allowed():
+        airplay = isinstance(self.native, IOSVideo) and self.native.airplay_active()
+        if (self.native is not None and (airplay or (self.progress.completed is True and not self.hidden))
+                and self.allowed()):
             try:
                 self.accept_sample(*self.native.progress_position())
             except (OSError, ValueError):
@@ -438,8 +440,10 @@ class MobileVideo:
                         self.native.cached_ranges(self.content.buffered_ranges())
                         try:
                             sample = self.native.progress_position()
+                            was_completed = self.progress.completed
                             self.accept_sample(*sample)
-                            if checkpoints % 5 == 0 or sample[1]:
+                            replayed = was_completed and not self.progress.completed
+                            if checkpoints % 5 == 0 or sample[1] or replayed:
                                 await self.flush_progress()
                         except (OSError, ValueError) as error:
                             if not self.closed and not self.hidden and self.native is not None:

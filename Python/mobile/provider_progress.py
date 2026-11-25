@@ -65,11 +65,12 @@ _WRITE_ERRORS = {ProgressStatus.WRITE_FAILED, ProgressStatus.ERROR, ProgressStat
 class ProgressWrites:
     """Debounce observations on the UI thread and drain each borrowed worker."""
 
-    def __init__(self, owner, state):
+    def __init__(self, owner, state, *, marked_read=False):
         self.owner, self.state = owner, state
         self.closed = False
         self.pending = self.task = self.worker = None
         self.generation = 0
+        self.marked_read = marked_read
         self._wake = asyncio.Event()
 
     def available(self):
@@ -101,6 +102,11 @@ class ProgressWrites:
             return
         observation = self.state.observe_bookmarks(value) if bookmarks else self.state.observe(value)
         self.queue(observation)
+
+    def observe_location(self, value, *, initial=False):
+        if not initial or self.marked_read:
+            self.observe(value)
+            self.marked_read = False
 
     def queue(self, observation):
         if observation is not None:
@@ -230,6 +236,7 @@ class ProviderProgress(ProgressWrites):
 
     def load(self):
         self.restored = self.state.load()
+        self.marked_read = self.restored.get('marked_read') is True
         if getattr(self.reader, 'image_document', False):
             from features.images.mobile.progress import ImageViewport
             self.image_viewport = ImageViewport(self.state, self.restored)
@@ -315,8 +322,7 @@ class ProviderProgress(ProgressWrites):
         if not self.visible() or value == self.last_location:
             return
         self.last_location = value
-        if not initial:
-            self.observe(value)
+        self.observe_location(value, initial=initial)
 
     def capture(self, *, initial=False):
         if not self.visible():
@@ -341,7 +347,8 @@ class ProviderProgress(ProgressWrites):
             if footer is not None:
                 footer.checkpoint_epub_progress(value)
         elif reader.kind in {'.cbz', '.zip'}:
-            value.update(resource=reader.pages[index], half=owner._provider_displayed_half)
+            value.update(resource=reader.pages[index], half=owner._provider_displayed_half,
+                         percent=reader.comic_navigation.percentage())
         self._position(value, initial=initial)
 
     def capture_pdf(self, index, location, *, initial=False):

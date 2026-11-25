@@ -65,6 +65,8 @@ class ReadingCompletion:
         saved = self.state.load()
         if self.state.load_status in {'locked', 'error', 'fenced'}:
             return None
+        if saved.get('marked_read') is True:
+            return 100
         percent = saved.get('percent')
         if (type(percent) is int and 0 <= percent <= 100
                 and (self.book is None or saved.get('percent_method') == TEXT_PROGRESS_METHOD)):
@@ -88,18 +90,19 @@ class ReadingCompletion:
         return text_completion(_book_text_starts(self.book, self.state), page, offset)
 
     def mark(self, read):
-        self.state.load()
+        saved = self.state.load()
         if self.state.load_status in {'locked', 'error', 'fenced'}:
             return self.state.load_status
-        page = self.count - 1 if read else 0
-        value = dict(page=page, percent=100 if read else 0)
+        if read:
+            position = {key: value for key, value in saved.items() if key not in {'bookmarks', 'epub_bookmarks'}}
+            return self.state.save({'page': 0, **position, 'marked_read': True})
+        value = dict(page=0, percent=0)
         if self.names:
-            value['resource'] = self.names[page]
+            value['resource'] = self.names[0]
             if self.book is not None:
-                # The EPUB layout bounds the anchor to the final rendered page.
-                value.update(offset=MAX_OFFSET if read else 0, percent_method=TEXT_PROGRESS_METHOD)
+                value.update(offset=0, percent_method=TEXT_PROGRESS_METHOD)
             else:
-                value['half'] = int(read)
+                value['half'] = 0
         return self.state.save(value)
 
 

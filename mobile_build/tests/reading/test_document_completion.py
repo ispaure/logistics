@@ -2,6 +2,7 @@
 
 import asyncio
 from contextlib import contextmanager
+from dataclasses import asdict, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event, get_ident
@@ -27,26 +28,32 @@ class DocumentCompletionTests(TestCase):
     def item(self, path):
         return FileItem(self.provider, path.name)
 
-    def test_read_jumps_to_the_end_and_unread_resets_the_locator(self):
+    def test_marking_read_preserves_the_locator_and_unread_resets_it(self):
         epub, comic = make_books(self.root)
         for path in (epub, comic):
             with self.subTest(path=path.name):
                 kind = tracked_kind(path)
                 with item_progress(self.app, self.item(path), kind) as progress:
                     self.assertEqual(progress.percentage(), 0)
+                    self.assertEqual(progress.state.save(dict(page=0, resource=progress.names[0],
+                                                               bookmarks=[0])), 'saved')
+                    self.assertEqual(progress.mark(True), 'saved')
                     self.assertEqual(progress.mark(True), 'saved')
                 with item_progress(self.app, self.item(path), kind) as reopened:
                     self.assertEqual(reopened.percentage(), 100)
                     saved = reopened.state.load()
-                    self.assertEqual(saved['page'], reopened.count - 1)
-                    self.assertEqual(saved['resource'], reopened.names[-1])
+                    self.assertEqual(saved['page'], 0)
+                    self.assertEqual(saved['resource'], reopened.names[0])
+                    self.assertEqual(saved['bookmarks'], [0])
                     self.assertEqual(reopened.mark(False), 'saved')
                 with item_progress(self.app, self.item(path), kind) as reopened:
                     self.assertEqual(reopened.percentage(), 0)
                     self.assertEqual(reopened.state.load()['page'], 0)
                     self.assertEqual(reopened.state.load()['resource'], reopened.names[0])
 
-    def test_video_completion_survives_restarting_and_unwatched_clears_it(self):
+    def test_video_completion_tracks_confirmed_replay_and_unwatched_clears_it(self):
+        from services.documents.video_settings import VideoSettingsStore
+
         path = self.root / 'Fixture.mp4'
         path.write_bytes(b'Synthetic video data' * 512)
         expected = ['Mark as Watched', 'Mark as Unwatched']
@@ -61,11 +68,20 @@ class DocumentCompletionTests(TestCase):
             self.assertEqual(progress.mark(True), 'saved')
         with item_progress(self.app, self.item(path), 'video') as reopened:
             self.assertEqual(reopened.percentage(), 100)
-            reopened.video.save(0)
+            self.assertEqual(reopened.video.position, 3500)
+            VideoSettingsStore(reopened.video, reopened.video.root).save(
+                asdict(replace(reopened.video.settings, rate=1.5)))
+            self.assertEqual(reopened.percentage(), 100)
             reopened.video.save(1200)
         with item_progress(self.app, self.item(path), 'video') as replay:
-            self.assertEqual(replay.percentage(), 100)
+            self.assertEqual(replay.percentage(), 12)
             self.assertEqual(replay.video.position, 1200)
+            self.assertEqual(replay.video.settings.rate, 1.5)
+            replay.video.save(10000, completed=True)
+            self.assertEqual(replay.percentage(), 100)
+            replay.video.save(0)
+            self.assertEqual(replay.percentage(), 0)
+            replay.video.save(2300)
             self.assertEqual(replay.mark(False), 'saved')
         with item_progress(self.app, self.item(path), 'video') as unread:
             self.assertEqual(unread.percentage(), 0)

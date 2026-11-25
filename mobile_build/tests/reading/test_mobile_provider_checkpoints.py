@@ -106,6 +106,39 @@ class MobileProviderCheckpointTests(TestCase):
                 await close_reader(app, app.private_sessions.active)
             app.loop.run_until_complete(exercise())
 
+    def test_reopening_marked_documents_resumes_the_saved_place_and_completion(self):
+        from mobile.document_completion import mark, percentage, reference_target
+
+        with mobile_app(root=self.root) as app, patch('features.pdf.document.PDFDocument.open', native_pdf):
+            app.preferences.save(comic_layout='single')
+
+            async def exercise():
+                for suffix, page in (('.epub', 0), ('.cbz', 0), ('.pdf', 1)):
+                    with self.subTest(suffix=suffix):
+                        reference = dict(type='local', path=str(self.shelf / ('Fixture' + suffix)))
+                        target = reference_target(app, reference)
+                        self.assertTrue(await _reopen_file(app, reference))
+                        owner = app.private_sessions.active
+                        if suffix == '.epub':
+                            owner.provider_epub_view.seek(1234)
+                        elif page:
+                            await owner.move_private_page(page)
+                        await close_reader(app, owner)
+                        previous = await asyncio.to_thread(percentage, target)
+                        self.assertLess(previous, 100)
+                        self.assertTrue(await mark(app, target, True))
+                        self.assertEqual(await asyncio.to_thread(percentage, target), 100)
+                        self.assertTrue(await _reopen_file(app, reference))
+                        owner = app.private_sessions.active
+                        self.assertEqual(owner._provider_displayed_index, page)
+                        if suffix == '.epub':
+                            self.assertEqual(owner.provider_epub_view.offset, 1234)
+                        await owner._provider_progress.flush()
+                        self.assertEqual(await asyncio.to_thread(percentage, target), previous)
+                        await close_reader(app, owner)
+
+            app.loop.run_until_complete(exercise())
+
     def test_rich_epub_waits_for_the_webview_to_confirm_a_seek(self):
         from mobile_build.tests.support.readers import MemoryWebView
         path = self.shelf / 'Fixture.epub'

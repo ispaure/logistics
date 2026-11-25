@@ -850,6 +850,35 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         await owner.flush_progress(object())
         owner.native.status.assert_called_once_with(owner.progress.resume_notice)
 
+    async def test_close_captures_a_replay_before_the_first_watch_tick(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from features.video.playback import VideoContent
+        from services.documents.completion import video_percent
+        from services.documents.video_progress import VideoProgress
+
+        root = Path(self.enterContext(TemporaryDirectory()))
+        path = root / 'Episode.mkv'
+        path.write_bytes(b'Video fixture' * 512)
+        for position, expected in ((3500, 100), (4300, 43)):
+            with self.subTest(position=position):
+                owner = self.player(restricted=False)
+                owner.content = VideoContent(LocalFiles(root), path.name)
+                owner.progress = VideoProgress(owner.content, root / 'Video', app=owner.app)
+                owner.progress.duration = 10000
+                owner.progress.save(3500)
+                self.assertEqual(owner.progress.mark(True), 'saved')
+                owner.last_sample = (3500, False)
+                owner.native.progress_position.return_value = (position, False)
+                await owner.close()
+                content = VideoContent(LocalFiles(root), path.name)
+                reopened = VideoProgress(content, root / 'Video', app=owner.app)
+                try:
+                    self.assertEqual(reopened.load(), position)
+                    self.assertEqual(video_percent(reopened.record()), expected)
+                finally:
+                    reopened.retire()
+                    content.close()
+
     async def test_airplay_tracks_survive_later_progress_writes_and_reopen(self):
         import json
         from commonUtils.runtime.resources.local import LocalFiles

@@ -62,7 +62,7 @@ class VideoSettingsStore:
         settings = PlaybackSettings.from_dict(values)
         with self.progress.lock:
             self.progress.apply_settings(settings, self.defaults.load(), explicit=explicit)
-            return settings, self.progress.observe(self.progress.position)
+            return settings, self.progress.observe()
 
     def save(self, values, *, explicit=()):
         settings, observation = self.observe(values, explicit=explicit)

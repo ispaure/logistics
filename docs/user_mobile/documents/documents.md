@@ -63,9 +63,10 @@ EPUBs, comics, PDFs and videos show their reading or playback percentage on
 document cards, above the File Browser row menu and in the upper-right of tiles.
 **0%** is gray, progress is blue, and **100%** is green. Use the file's action
 menu to mark a document read or unread, or a video watched or unwatched.
-Marking a book or comic read opens it at the
-end next time. Marking it unread resets its position to the start. A completed
-video stays at **100%** during a replay. Built-in help stays out of Recent.
+Marking an item read or watched keeps your saved place. When you reopen a
+document or resume playback, the percentage follows the displayed page or
+playback position again. Marking an item unread or unwatched resets its
+position to the start. Built-in help stays out of Recent.
 
 From a document with a browsable source, choose
 **••• → Show in folder** to select it in Workspaces. The document remains
