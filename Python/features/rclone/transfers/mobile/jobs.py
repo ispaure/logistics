@@ -281,15 +281,18 @@ class MirrorJobs:
             self.check(client, job, cancelled)
             target = self.guard(self.target(job))
             target.mkdir(parents=True, exist_ok=True, mode=0o700)
-            # Inspect links before rclone receives an app-private path. Partial
-            # transfers stay in the recorded destination, as with CLI sync.
-            # A disappearing destination entry is missing data for Pull to
-            # download, not a changed source snapshot as it would be for Push.
-            self.inspect(target, cancelled, copy_links=not job['crypt'], allow_missing=True)
+            # The bridge validates readable destinations as rclone visits them.
+            # LocalCrypt also requires a full inventory to reject hard links.
+            if job['crypt']:
+                progress(phase='Inspecting local transfer storage', files=0, done=0, total=0)
+                self.inspect(target, cancelled, allow_missing=True)
             self.save()
             self.sync(job, client, push=False, options=options, cancelled=cancelled, progress=progress)
             self.check(client, job, cancelled)
-            if self.inspect(target, cancelled, copy_links=not job['crypt'], allow_missing=True) is None:
+            destination = self.guard(target)
+            available = (self.inspect(destination, cancelled, allow_missing=True) is not None
+                         if job['crypt'] else destination.is_dir())
+            if not available:
                 raise FileNotFoundError('Pull destination became unavailable. Check collection storage and retry.')
             self.save()
             return PullResult('updated')

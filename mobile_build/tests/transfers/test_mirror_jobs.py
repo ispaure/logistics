@@ -48,9 +48,13 @@ class MirrorJobTests(unittest.TestCase):
     def test_missing_final_progress_does_not_turn_successful_pull_into_failure(self):
         with TemporaryDirectory() as directory:
             store, client = MirrorJobs(directory), MirrorClient()
+            phases = []
             with patch('features.rclone.transfers.mobile.transport.mirror_progress',
-                       side_effect=ValueError('Progress unavailable')):
-                job, _ = store.create(client, 'Remote', 'folder')
+                       side_effect=ValueError('Progress unavailable')), \
+                    patch.object(store, 'inspect', side_effect=AssertionError('Readable Pull must not inventory the tree')):
+                job, _ = store.create(client, 'Remote', 'folder',
+                                      progress=lambda **values: phases.append(values['phase']))
+            self.assertEqual(phases[0], 'Discovering / checking files')
             self.assertEqual((store.target(job) / 'note.txt').read_bytes(), client.data['folder/note.txt'])
             self.assertIn(job['id'], MirrorJobs(directory).jobs)
 
@@ -126,32 +130,31 @@ class MirrorJobTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 store.save()
 
-    def test_pull_downloads_entries_removed_during_local_preflight(self):
-        for remote, folder, filename in (('Remote', 'folder', 'note.txt'),
-                                         ('Secret', 'private', 'opaque-name')):
-            for removed in ('file', 'directory'):
-                with self.subTest(remote=remote, removed=removed), TemporaryDirectory() as directory:
-                    store, client = MirrorJobs(directory), MirrorClient()
-                    job, _ = store.create(client, remote, folder)
-                    target = store.target(job)
-                    # Both a missing cloud file and a directory removed after it
-                    # was queued for inspection are valid destination states.
-                    entry = target / filename if removed == 'file' else target / 'vanishing'
-                    if removed == 'directory':
-                        entry.mkdir()
-                    original = Path.stat if removed == 'file' else Path.iterdir
-                    vanished = []
-                    def disappear(path, *args, **kwargs):
-                        if path == entry and not vanished:
-                            vanished.append(path)
-                            path.unlink() if removed == 'file' else path.rmdir()
-                        return original(path, *args, **kwargs)
-                    method = 'stat' if removed == 'file' else 'iterdir'
-                    with patch.object(Path, method, disappear):
-                        store.pull(job['id'], client)
-                    self.assertTrue(vanished)
-                    expected = client.data[job['prefix'] + '/' + filename]
-                    self.assertEqual((target / filename).read_bytes(), expected)
+    def test_encrypted_pull_downloads_entries_removed_during_local_preflight(self):
+        remote, folder, filename = 'Secret', 'private', 'opaque-name'
+        for removed in ('file', 'directory'):
+            with self.subTest(removed=removed), TemporaryDirectory() as directory:
+                store, client = MirrorJobs(directory), MirrorClient()
+                job, _ = store.create(client, remote, folder)
+                target = store.target(job)
+                # Both a missing cloud file and a directory removed after it
+                # was queued for inspection are valid destination states.
+                entry = target / filename if removed == 'file' else target / 'vanishing'
+                if removed == 'directory':
+                    entry.mkdir()
+                original = Path.stat if removed == 'file' else Path.iterdir
+                vanished = []
+                def disappear(path, *args, **kwargs):
+                    if path == entry and not vanished:
+                        vanished.append(path)
+                        path.unlink() if removed == 'file' else path.rmdir()
+                    return original(path, *args, **kwargs)
+                method = 'stat' if removed == 'file' else 'iterdir'
+                with patch.object(Path, method, disappear):
+                    store.pull(job['id'], client)
+                self.assertTrue(vanished)
+                expected = client.data[job['prefix'] + '/' + filename]
+                self.assertEqual((target / filename).read_bytes(), expected)
 
     def test_pull_missing_entry_policy_does_not_hide_links_or_permission_errors(self):
         from features.rclone.transfers.local_policy import transfer_inventory

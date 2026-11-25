@@ -6,8 +6,14 @@ Desktop **Workspaces → Cloud → Pull** follows `ui_contributions.py:_get_acti
 
 1. Build a platform plan with captured credentials, mapping and options. Mobile validates an immutable `CopyMapping`.
 2. Interactive `TransferService.review` compares read-only. Full approval compares again and asks again if changed. Incomplete approval cancels and retires comparison before execution.
-3. `execute` consumes approval once, checks the binding and runs mandatory platform preflight. Programmatic `run` also preflights. Retrying an interactive execution requires fresh review.
+3. `execute` consumes approval once and checks the binding. Retrying an interactive execution requires fresh review.
 4. Keep review validity (mapping/record state) separate from execution access (credential lifetime). Cancellation keeps committed writes.
+
+For a readable mobile Pull, the bridge validates the destination root and
+checks the paths rclone lists or writes during the sync. It skips destination
+links when listing and rejects writes that would use a linked path. LocalCrypt
+and Push keep their preflight checks. An interactive review can still run a
+read-only comparison before execution.
 
 Android Pulls to a public FAT-family volume use one staged writer with
 preallocation disabled. Before writing, the native destination checks the

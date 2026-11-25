@@ -22,6 +22,7 @@ import (
 	"github.com/rclone/rclone/fs/operations"
 	"github.com/rclone/rclone/fs/rc"
 	rclonesync "github.com/rclone/rclone/fs/sync"
+	"github.com/rclone/rclone/lib/encoder"
 )
 
 const mirrorTransferConcurrency = 10
@@ -62,14 +63,21 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	if !filepath.IsAbs(localPath) || filepath.Clean(localPath) != localPath {
 		return 0, errors.New("sync requires a private absolute directory")
 	}
-	_, statErr := os.Stat(localPath)
+	info, statErr := os.Stat(localPath)
 	missing := os.IsNotExist(statErr)
+	if statErr != nil && !(review != nil && missing && !push) {
+		return 0, fmt.Errorf("checking local sync storage: %w", statErr)
+	}
+	if statErr == nil && !info.IsDir() {
+		return 0, errors.New("sync requires a private directory")
+	}
 	// Review of a new destination is read-only, including no mkdir.
 	resolved, err := filepath.EvalSymlinks(localPath)
 	if !(review != nil && missing && !push) && (err != nil || resolved != localPath) {
 		return 0, errors.New("linked sync storage is not supported")
 	}
-	if !missing {
+	readablePull := !push && cipher == nil
+	if !missing && !readablePull {
 		if review == nil {
 			mirrorPhase(run, "Inspecting local transfer storage", 0)
 		}
@@ -129,6 +137,9 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	config.BackupDir = ""
 	config.Suffix = ""
 	config.DryRun = review != nil
+	if readablePull {
+		config.Links = false
+	}
 	config.MaxStatsGroups = 8
 	config.Transfers = mirrorTransferConcurrency
 	guardSD := review == nil && !push && androidRemovablePath(runtime.GOOS, localPath)
@@ -150,7 +161,10 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	}
 	localRoot := localPath
 	var localOptions []string
-	if cipher == nil {
+	if readablePull {
+		localOptions = append(localOptions, "copy_links=false", "skip_links=true", "links=false",
+			"encoding="+strconv.Quote(encoder.OS.String()))
+	} else if cipher == nil {
 		localOptions = append(localOptions, "copy_links=true")
 	}
 	if guardSD {
@@ -162,6 +176,9 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	local, err := fs.NewFs(ctx, localRoot)
 	if err != nil {
 		return 0, err
+	}
+	if readablePull {
+		local = newReadablePullFS(local, missing)
 	}
 	if guardSD {
 		local = newRemovablePullFS(local)

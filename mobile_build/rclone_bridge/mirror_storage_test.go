@@ -11,7 +11,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/rclone/rclone/fs/object"
 )
 
 func TestPullStorageScanAllowsRemovedDescendantButPushFails(t *testing.T) {
@@ -80,5 +84,72 @@ func TestPullStorageScanPreservesRootPermissionAndCancellationErrors(t *testing.
 	cancel()
 	if err := mirrorStorageCheck(ctx, root, false, false)(root, nil, missing); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancellation hidden", err)
+	}
+}
+
+func TestReadablePullGuardsDestinationsWhileRcloneSyncs(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	ctx := context.Background()
+	if _, err := importPackage(cryptPackage(t, "Cloud:readable-pull"), ""); err != nil {
+		t.Fatal(err)
+	}
+	cloud, err := remote(ctx, "Cloud")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := connectionIdentity("Cloud")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ name, leaf, remote string }{
+		{"normal", "comic.cbz", "comic.cbz"},
+		{"linked file", "comic.rclonelink", "comic.rclonelink"},
+		{"linked directory", "nested", "nested/comic.cbz"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stamp := time.Unix(1_700_000_000, 0)
+			dst, outside := canonicalTestDir(t), canonicalTestDir(t)
+			seedRemovableTestFile(t, outside, "kept.cbz", "outside", stamp)
+			target := filepath.Join(dst, test.leaf)
+			switch test.name {
+			case "normal":
+				seedRemovableTestFile(t, dst, test.leaf, "old", stamp)
+			case "linked file":
+				if err := os.Symlink(filepath.Join(outside, "kept.cbz"), target); err != nil {
+					t.Fatal(err)
+				}
+			case "linked directory":
+				if err := os.Symlink(outside, target); err != nil {
+					t.Fatal(err)
+				}
+			}
+			prefix := "readable/" + strings.ReplaceAll(test.name, " ", "-")
+			data := "replacement"
+			info := object.NewStaticObjectInfo(prefix+"/"+test.remote, stamp.Add(time.Hour), int64(len(data)), true, nil, cloud)
+			if _, err := cloud.Put(ctx, strings.NewReader(data), info); err != nil {
+				t.Fatal(err)
+			}
+			run := strings.Repeat("d", 32)
+			_, err := mirrorSync(ctx, "Cloud", prefix, identity, dst, run, false)
+			if test.name == "normal" {
+				if got, readErr := os.ReadFile(target); err != nil || readErr != nil || string(got) != data {
+					t.Fatalf("ordinary replacement failed: %q, sync=%v, read=%v", got, err, readErr)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "linked or unsupported pull destination") {
+				t.Fatalf("expected a linked destination error, got %v", err)
+			}
+			if info, err := os.Lstat(target); err != nil || info.Mode()&os.ModeSymlink == 0 {
+				t.Fatalf("link was changed: %v", err)
+			}
+			if got, err := os.ReadFile(filepath.Join(outside, "kept.cbz")); err != nil || string(got) != "outside" {
+				t.Fatalf("file outside the copy was changed: %q %v", got, err)
+			}
+			if children, err := os.ReadDir(outside); err != nil || len(children) != 1 {
+				t.Fatalf("link led to writes outside the copy: %v %v", children, err)
+			}
+		})
 	}
 }
