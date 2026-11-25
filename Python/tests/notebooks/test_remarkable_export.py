@@ -9,9 +9,11 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
+from base64 import b64decode
 from copy import deepcopy
 from io import BytesIO
 import json
+from pathlib import Path
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -20,11 +22,13 @@ from pypdf import PdfReader
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.testing.stages import TestStage
 from features.notebooks.editor import Editor
-from features.notebooks.notebook import Notebook
-from features.notebooks.remarkable_export import PDF_SCALE, backgrounds_pdf, export_rmdoc, page_size
+from features.notebooks.notebook import Notebook, read_archive
+from features.notebooks.remarkable_export import PDF_SCALE, backgrounds_pdf, export_rmdoc, page_size, save_rmdoc
+from features.notebooks.storage import NotebookDocument
 from features.notebooks.templates import CATALOG, settings
 
 TEST_STAGE = TestStage.REGRESSION
+FIXTURES = Path(__file__).with_name('fixtures')
 
 
 class RemarkableExportTests(unittest.TestCase):
@@ -102,13 +106,132 @@ class RemarkableExportTests(unittest.TestCase):
             self.assertAlmostEqual(float(page.mediabox.width), size[0] * PDF_SCALE, places=5)
             self.assertAlmostEqual(float(page.mediabox.height), size[1] * PDF_SCALE, places=5)
             self.assertIn('Restaurant review', page.extract_text())
-            self.assertIn('Food / service / atmosphere / value', page.extract_text())
+            self.assertIn('What I ordered', page.extract_text())
             # No raster images or annotations carry template artwork or ink.
-            self.assertNotIn('/XObject', page['/Resources'])
+            self.assertEqual(len(page.images), 0)
             self.assertNotIn('/Annots', page)
-        first, second = [page.get_contents().get_data() for page in pdf.pages]
-        self.assertIn(b'40 64 Tm (Restaurant review)', first)
-        self.assertIn(b'331.5 64 Tm (Restaurant review)', second)
+        self.assertIn('Highlights', pdf.pages[0].extract_text())
+        self.assertNotIn('Highlights', pdf.pages[1].extract_text())
+
+    def test_reopened_reviews_use_the_saved_layout_instead_of_the_current_preset(self):
+        book, _ = self.fixture()
+        for page, paper in zip(book.pages, ('pro', 'move')):
+            book.members[page.template + '.template'] = (FIXTURES / f'restaurant-review-legacy-{paper}.template').read_bytes()
+        asset_path = book.pages[0].template + '.template'
+        asset = json.loads(book.members[asset_path])
+        asset['items'][0].update(data=['M', 100, 300, 'L', 600, 300], strokeColor='#102040', strokeWidth=3)
+        label = next(item for item in asset['items'] if item.get('text') == 'Restaurant / location')
+        label['text'] = 'Saved café (location) & notes'
+        book.members[asset_path] = json.dumps(asset).encode()
+        data = book.to_bytes()
+        reopened = Notebook.read(data)
+        document = NotebookDocument(reopened)
+        editor = Editor(reopened, document.checkpoint)
+        state = editor.state()
+        artwork = b64decode(state['background'].split(',', 1)[1]).decode()
+        self.assertTrue(state['template_available'])
+        self.assertIn('Saved café (location) &amp; notes', artwork)
+        self.assertIn('M 100 300 L 600 300', artwork)
+        self.assertIn('stroke="#102040" stroke-width="3"', artwork)
+        self.assertEqual(editor.page_previews(0)[0]['background'], state['background'])
+        self.assertFalse(reopened.structure_dirty)
+        self.assertFalse(reopened.metadata_dirty)
+        self.assertFalse(document.dirty)
+        self.assertEqual(read_archive(reopened.to_bytes()), read_archive(data))
+
+        exported = Notebook.read(export_rmdoc(reopened))
+        pdf = PdfReader(BytesIO(exported.members[exported.id + '.pdf']))
+        self.assertIn(label['text'], pdf.pages[0].extract_text())
+        self.assertNotIn('Restaurant / location', pdf.pages[0].extract_text())
+        self.assertIn(b'3 w 100 300 m 600 300 l S', pdf.pages[0].get_contents().get_data())
+        self.assertIn('Restaurant / location', pdf.pages[1].extract_text())
+        self.assertEqual(exported.page(0).to_bytes(), reopened.page(0).to_bytes())
+        self.assertFalse(document.dirty)
+        self.assertEqual(read_archive(reopened.to_bytes()), read_archive(data))
+        working = Notebook.read(save_rmdoc(reopened), restore_templates=False)
+        baked = PdfReader(BytesIO(working.members[working.id + '.pdf']))
+        self.assertIn(label['text'], baked.pages[0].extract_text())
+
+        editor.apply(dict(op='template', name='Logistics Restaurant review', format='pro', visible=False))
+        self.assertTrue(document.dirty)
+        self.assertIsNone(editor.state()['background'])
+        self.assertEqual(editor.state()['hidden_template_preview'], state['background'])
+        self.assertEqual(reopened.members[asset_path], book.members[asset_path])
+        new_book = Notebook.new(template='Logistics Restaurant review')
+        self.assertNotEqual(Editor(new_book).state()['background'], state['background'])
+        self.assertEqual(editor.state()['template_update_pages'], 2)
+        ink = [reopened.page(i).to_bytes() for i in range(2)]
+        references = [page.template for page in reopened.pages]
+        editor.apply(dict(op='update-template', page_id=reopened.pages[0].id))
+        self.assertEqual(editor.state()['template_update_pages'], 0)
+        self.assertEqual([page.template for page in reopened.pages], references)
+        self.assertEqual([reopened.page(i).to_bytes() for i in range(2)], ink)
+        self.assertFalse(editor.state()['template_settings']['visible'])
+        updated = Notebook.read(save_rmdoc(reopened), restore_templates=False)
+        baked = PdfReader(BytesIO(updated.members[updated.id + '.pdf']))
+        self.assertIn('What I ordered', baked.pages[1].extract_text())
+        self.assertEqual(len(baked.pages[1].images), 0)
+        editor.apply(dict(op='undo'))
+        self.assertEqual(editor.state()['template_update_pages'], 2)
+        self.assertEqual(reopened.members[asset_path], book.members[asset_path])
+
+    def test_embedded_artwork_can_export_without_a_catalog_entry(self):
+        book = Notebook.new(template='Logistics Restaurant review')
+        page = book.pages[0]
+        old = page.template
+        page.template = 'Archived restaurant review'
+        book.members[page.template + '.template'] = book.members.pop(old + '.template')
+        reopened = Notebook.read(book.to_bytes())
+        state = Editor(reopened).state()
+        self.assertTrue(state['template_available'])
+        self.assertTrue(state['template_requires_pdf'])
+        exported = Notebook.read(export_rmdoc(reopened))
+        self.assertEqual(exported.pages[0].template, 'Blank')
+        pdf = PdfReader(BytesIO(exported.members[exported.id + '.pdf']))
+        self.assertIn('What I ordered', pdf.pages[0].extract_text())
+
+    def test_regular_save_embeds_the_pdf_and_reopens_as_an_editable_notebook(self):
+        book, _ = self.fixture()
+        saved = Mock()
+        resource = SimpleNamespace(save=saved)
+        document = NotebookDocument(book, resource=resource)
+        document.save()
+        data = saved.call_args.args[0]
+        portable = Notebook.read(data, restore_templates=False)
+        self.assertEqual(portable.content['fileType'], 'pdf')
+        self.assertEqual([page.template for page in portable.pages], ['Blank', 'Blank'])
+        pdf = PdfReader(BytesIO(portable.members[portable.id + '.pdf']))
+        self.assertIn('What I ordered', pdf.pages[1].extract_text())
+        self.assertEqual(portable.page(1).to_bytes(), book.page(1).to_bytes())
+
+        reopened = Notebook.read(data)
+        editor = Editor(reopened)
+        editor.index = 1
+        self.assertTrue(editor.state()['template_editable'])
+        self.assertEqual(reopened.pages[1].template, book.pages[1].template)
+        self.assertFalse(reopened.structure_dirty)
+        editor.apply(dict(op='add-page'))
+        self.assertEqual(reopened.pages[2].template, book.pages[1].template)
+        editor.apply(dict(op='template', name='Logistics Meeting notes', format='move', visible=True))
+        again = Notebook.read(save_rmdoc(reopened), restore_templates=False)
+        baked = PdfReader(BytesIO(again.members[again.id + '.pdf']))
+        self.assertIn('Meeting notes', baked.pages[2].extract_text())
+        self.assertEqual(again.page(1).to_bytes(), portable.page(1).to_bytes())
+
+    def test_working_file_keeps_the_pdf_if_the_editable_template_assets_are_missing(self):
+        book, _ = self.fixture()
+        portable = Notebook.read(save_rmdoc(book), restore_templates=False)
+        del portable.members[book.pages[0].template + '.template']
+        reopened = Notebook.read(portable.to_bytes())
+        self.assertEqual(reopened.content['fileType'], 'pdf')
+        self.assertEqual(reopened.members[book.id + '.pdf'], portable.members[book.id + '.pdf'])
+
+    def test_regular_save_preserves_ink_that_cannot_be_baked(self):
+        book, _ = self.fixture()
+        book.page(0).strokes[0].points[0][1] = -100
+        saved = Notebook.read(save_rmdoc(book), restore_templates=False)
+        self.assertEqual(saved.content['fileType'], 'notebook')
+        self.assertEqual(saved.page(0).to_bytes(), book.page(0).to_bytes())
 
     def test_pdf_paper_geometry_retains_native_ink_coordinates(self):
         book, editor = self.fixture()
@@ -208,6 +331,40 @@ class RemarkableExportTests(unittest.TestCase):
         result = Notebook.read(export_rmdoc(book))
         self.assertEqual(result.members[result.id + '.pdf'], output.getvalue())
 
+    def test_native_best_fit_uses_each_pdf_crop_box_with_ink_in_native_units(self):
+        from pypdf import PdfWriter
+        from pypdf.generic import RectangleObject
+
+        writer = PdfWriter()
+        first = writer.add_blank_page(width=320, height=570)
+        first.cropbox = RectangleObject((5, 6, 310.5748, 560.4567))
+        writer.add_blank_page(width=510, height=680)
+        output = BytesIO()
+        writer.write(output)
+        book = Notebook.new('Native best-fit PDF')
+        book.content.update(fileType='pdf', formatVersion=2, zoomMode='bestFit',
+                            customZoomPageWidth=1404, customZoomPageHeight=1872, cPages={'pages': []})
+        book.members[book.id + '.pdf'] = output.getvalue()
+        book.add_page()
+        for index, page in enumerate(book.pages):
+            page.record['redir'] = dict(value=index)
+            book.page(index).add([[702, 532, .5], [712, 532, .5]])
+
+        loaded = Notebook.read(book.to_bytes())
+        editor = Editor(loaded)
+        for index, (width, height) in enumerate(((305.5748, 554.4567), (510, 680))):
+            with self.subTest(index=index), patch.object(editor, 'background', return_value=None):
+                editor.index = index
+                state = editor.state()
+                paper = state['pdf_paper']
+                self.assertTrue(state['fit_pdf_page'])
+                self.assertAlmostEqual(paper['width'], width * 226 / 72)
+                self.assertAlmostEqual(paper['height'], height * 226 / 72)
+                self.assertAlmostEqual(state['strokes'][0]['points'][0][0] - paper['x'], paper['width'] / 2)
+                self.assertEqual(state['strokes'][0]['points'][0][1], 532)
+                self.assertEqual(state['eraser_scale'], 1)
+                self.assertEqual(loaded.page(index).to_bytes(), book.page(index).to_bytes())
+
     def test_move_page_extends_for_hidden_ink_without_scaling_it(self):
         book, editor = self.fixture()
         editor.apply(dict(op='stroke', points=[[30, 1800, .5], [40, 1810, .5]]))
@@ -247,6 +404,9 @@ class RemarkableExportTests(unittest.TestCase):
             data = page.get_contents().get_data()
             if name == 'Blank':
                 self.assertNotIn(b' l S', data)
+            elif name == 'Logistics Restaurant review':
+                self.assertIn('What I ordered', page.extract_text())
+                self.assertEqual(len(page.images), 0)
             else:
                 self.assertIn(b' l S', data)
         for name, count in [('P Lines small', 41), ('P Lines medium', 25),
@@ -296,6 +456,12 @@ class RemarkableExportTests(unittest.TestCase):
             self.assertEqual(page.record['redir']['value'], i)
             self.assertEqual(page.record['opaque'], dict(keep=i))
             self.assertEqual(page.template, 'Blank')
+        working = Notebook.read(save_rmdoc(book))
+        self.assertEqual(working.content['fileType'], 'notebook')
+        for original, reopened in zip(book.pages, working.pages):
+            self.assertEqual(reopened.template, original.template)
+            self.assertEqual(reopened.record['opaque'], original.record['opaque'])
+            self.assertNotIn('redir', reopened.record)
 
     def test_export_copy_can_be_reopened_edited_and_saved_without_rebaking(self):
         book, editor = self.fixture()

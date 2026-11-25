@@ -11,7 +11,7 @@ __status__ = "Production"
 
 from .images import image_data, image_source
 from .ink import WIDTH, HEIGHT, notebook_ink_height
-from .templates import available, background, settings
+from .templates import TemplatePDF, artwork_background, page_artwork, settings
 
 BATCH = 16
 POINTS = 8192
@@ -21,7 +21,7 @@ STROKES = 256
 THUMBNAIL_EDGE = 288
 
 
-def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None, count=BATCH, include_images=True):
+def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None, count=BATCH, include_images=True, include_background=True):
     if type(start) is not int or not 0 <= start < len(book.pages):
         raise ValueError('Invalid page overview range.')
     previews, remaining, image_budget = [], BATCH_POINTS, BATCH_IMAGE_BYTES
@@ -64,14 +64,21 @@ def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None, count=BATCH
                           corners=[[x - left, y] for x, y in picture.corners])))
         items.sort(key=lambda item: item[0])
         redirect = page.record.get('redir', {}).get('value', -1) if book.content.get('fileType') == 'pdf' else -1
-        if redirect >= 0:
+        template_bounds = None
+        if not include_background:
+            artwork = None
+        elif redirect >= 0:
             artwork = pdf_artwork(redirect) if pdf_artwork else None
         else:
             paper = settings(book, page)
-            artwork = background(page.template, paper['format']) if paper['visible'] and available(book, page) else None
+            template = page_artwork(book, page, paper) if paper['visible'] else None
+            artwork = artwork_background(template)
+            if isinstance(template, TemplatePDF):
+                template_bounds = template.bounds
         if bounds is not None:
             bounds = dict(bounds, x=bounds['x'] - left)
         previews.append(dict(index=index, width=WIDTH - 2 * left, height=height,
                              items=[item for _, item in items],
-                             background=artwork, pdf_paper=bounds, warning=ink.warning, template=page.template))
+                             background=artwork, pdf_paper=bounds, template_background_bounds=template_bounds,
+                             warning=ink.warning, template=page.template))
     return previews

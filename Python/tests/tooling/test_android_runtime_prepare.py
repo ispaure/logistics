@@ -95,7 +95,7 @@ class AndroidRuntimePolicyTests(unittest.TestCase):
         from mobile_build import tools
         for changed in (False, True):
             with self.subTest(changed_source=changed), TemporaryDirectory() as directory:
-                root = Path(directory)
+                root = Path(directory).resolve()
                 cache = root / 'cache'
                 cache.mkdir()
                 output = root / 'result.json'
@@ -112,13 +112,16 @@ class AndroidRuntimePolicyTests(unittest.TestCase):
                             mobile_runtime.test(root, cache, 'caller-serial', output)
                     else:
                         mobile_runtime.test(root, cache, 'caller-serial', output)
-                    stage.assert_called_once_with(root, root / 'runtime-payload', testbed=True, allow_dirty=True)
+                    payload = stage.call_args.args[1]
+                    self.assertEqual(payload.parent.parent, root / 'tmp/runs/scratch')
+                    stage.assert_called_once_with(root, payload, testbed=True, allow_dirty=True)
+                    self.assertFalse(payload.parent.exists())
                     argv = launch.call_args.args[0]
                     self.assertEqual(argv[argv.index('--') + 1:],
                         ['-m', 'mobile.smoke', '--target', 'android', '--local-source-sha256', manifest['source_sha256']])
                     self.assertEqual(argv[4], 'caller-serial')
                     self.assertEqual(command.call_args.args[0][-2:], ['markdown-it-py==4.2.0', 'mdurl==0.1.2'])
                     verify.assert_called_once_with(output.with_suffix('.log'), 'android', output,
-                                                   local_manifest=root / 'runtime-payload/source.json')
+                                                   local_manifest=payload / 'source.json')
                     self.assertEqual(launch.call_args.args[2], 1800)
                     self.assertFalse(launch.call_args.kwargs['check'])

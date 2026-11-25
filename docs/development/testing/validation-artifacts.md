@@ -60,7 +60,12 @@ records the original attested result and its scope.
 
 For Manager CLI event capture, add `--events --event-format compact` to
 `start`, `run` or `resume`. Compact streams send live case deltas and periodic
-checkpoints. Consult the retained result and JUnit for final outcomes.
+checkpoints. For unattended runs, omit `--events` unless a live consumer needs
+it. The Manager retains the result and JUnit for final outcomes.
+
+Local Android runtime validation stages its testbed payload in managed scratch.
+It removes that payload when the phase exits and keeps the runtime log and
+verified report at the run's recorded paths.
 
 ## Run an isolated probe
 
@@ -72,7 +77,28 @@ and credentials to fixtures and save needed evidence before cleanup.
 
 ## Historical evidence
 
-Preserve older evidence in `test-results/` and `mobile_build/logs/` at its recorded location.
+Registered standalone raw logs, screenshots and recordings expire after 14
+days during Build Manager maintenance. The report stays at its recorded path.
+Successful disposable mobile storage probes and iOS file-drag tests register
+their named raw files under `tmp/test-results/` when they finish. Failed
+probes keep their diagnostics for investigation.
+
+For a completed local probe, register a retained JSON or XML report followed by
+the exact raw files you reviewed. This also works for eligible historical
+standalone runs beneath `test-results/`.
+
+```sh
+python -m logistics_build.build_retention --register-standalone-evidence REPORT RAW_FILE
+python -m logistics_build.build_retention --standalone-evidence
+python -m logistics_build.build_retention --standalone-evidence --apply
+```
+
+Keep needed visuals with their recorded report by placing `.keep` in the run
+directory. The policy preserves release records, Manager run history, pinned
+files, work under a hold, unregistered evidence and changed files. It requires
+the registered report to match at cleanup time.
+
+Preserve other historical evidence in `test-results/` and `mobile_build/logs/` at its recorded location.
 The local archive is `test-results/mobile-evidence/`. Releases and offline help
 exclude evidence, including legacy wiki copies. Keep reusable drivers and
 fixtures with their test owners.

@@ -159,8 +159,9 @@ def preview_matrix(view, editor, desktop, output):
                 assert abs(preview['width'] / preview['height'] - bounds['width'] / bounds['height']) < .002, preview
                 assert preview['visible'] == (template != 'Blank') and preview['ready'], preview
                 if preview['visible']:
-                    assert abs(preview['scale'] - 1404 / bounds['width']) < .002, preview
-                    assert abs(preview['left'] + bounds['x'] / bounds['width']) < .002, preview
+                    scale, left = (1, 0) if preset == 'restaurant' else (1404 / bounds['width'], -bounds['x'] / bounds['width'])
+                    assert abs(preview['scale'] - scale) < .002, preview
+                    assert abs(preview['left'] - left) < .002, preview
                 assert js("$('cancelTemplate').click();!$('templatePicker').open && !busy && !queue.length")
                 assert editor.state() == before and book.members == members and book.page(0).to_bytes() == ink
                 assert js(choice + "$('templatePicker').open")

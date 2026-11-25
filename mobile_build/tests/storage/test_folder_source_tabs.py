@@ -400,7 +400,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(group.parent.style.height, folder.parent.style.height)
         self.assertEqual(group._impl._surface_roles[1], 'text')
         self.assertEqual(folder._impl._surface_roles[1], 'text')
-        self.assertTrue(folder.parent._impl._surface_eink_outlined)
+        self.assertFalse(folder.parent._impl._surface_eink_outlined)
         self.assertFalse(group._impl._surface_eink_outlined)
         for heading in app.folder_tree_buttons.values():
             self.assertEqual(list(heading.parent.children), [heading])

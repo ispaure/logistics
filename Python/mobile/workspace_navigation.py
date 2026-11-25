@@ -827,6 +827,13 @@ class WorkspaceFrame:
         left.style.width, left.style.flex = drawer_width, 0
         self.main.style.width, self.main.style.flex = available, 0
         self.row.insert(0, left)
+        if (type(self.row._impl).__module__.startswith('toga_android.')
+                and self.navigation.app.preferences.values.get('android_eink') == 'true'):
+            if not hasattr(self, 'drawer_separator'):
+                from .appearance import surface
+                self.drawer_separator = surface(toga.Box(style=Pack(width=1)), radius=0,
+                    background='transparent', outlined=False, eink_outlined=True)
+            self.row.insert(1, self.drawer_separator)
         self.row.style.width = available
         self.compact_open = True
         if type(self.row._impl).__module__.startswith('toga_iOS.'):

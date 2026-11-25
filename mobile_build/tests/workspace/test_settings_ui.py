@@ -651,6 +651,9 @@ class SettingsUITests(unittest.TestCase):
                              ['Start at Home', 'Resume last document', 'Keep open documents'])
             group = choice.parent.parent
             note = section.children[section.children.index(group) + 1]
+            self.assertTrue(choice._impl._surface_eink_outlined)
+            self.assertFalse(group._impl._surface_eink_outlined)
+            self.assertFalse(note._impl._surface_eink_outlined)
             self.assertEqual(note.text.replace('\n', ' '),
                              'Saved files stay where they are. Recoverable unsaved drafts stay in Documents → Recent.')
             self.assertLess(note.style.font_size, label.style.font_size)

@@ -76,7 +76,9 @@ copy and move commands remain available and can use the file-manager clipboard.
 
 Search and size charts use saved folder metadata. If you can see a file in
 its folder and cannot find it in search, choose **Refresh index** and let the
-scan finish. That checks the whole subtree. Open **Index details…** to
+scan finish. That checks the whole subtree and takes priority over automatic
+indexing once the current work can yield. **Queued for indexing** appears while
+the refresh is waiting its turn. Open **Index details…** to
 find scan errors, and use **Measure** in the size chart to switch between
 allocated disk space and file contents. **Settings → File indexing** controls
 automatic scan depth and refreshes.

@@ -530,7 +530,7 @@ func TestActiveTransferRowsAreBoundedAndResetBetweenRuns(t *testing.T) {
 		entries = append(entries, rc.Params{"name": fmt.Sprintf("folder/file-%d", i), "bytes": int64(i), "size": int64(100)})
 	}
 	rows := boundedActiveTransfers(entries)
-	if len(rows) != 3 || rows[2].Name != "folder/file-2" || rows[2].Bytes != 2 {
+	if len(rows) != 10 || rows[9].Name != "folder/file-9" || rows[9].Bytes != 9 {
 		t.Fatalf("unexpected active rows: %#v", rows)
 	}
 	invalid := boundedActiveTransfers([]rc.Params{{"name": "", "bytes": int64(1)}, {"name": "unknown", "bytes": int64(-1), "size": int64(-1)}})

@@ -37,11 +37,12 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
     from .brushes import BRUSHES, NATIVE_HIGHLIGHTS, PALETTE
     from .notebook import Notebook
     from .previews import page_previews
-    from .templates import available, geometry, rule_style, settings, template_name
+    from .remarkable_export import BackgroundConversionError, merge_pdf_template, pdf_template_line
+    from .templates import TemplateLine, TemplatePDF, page_artwork, settings
 
     book = Notebook.read(data, max_bytes=MAX_PDF)
     check_cancelled(cancelled)
-    scene, = page_previews(book, 0, count=1, include_images=False)
+    scene, = page_previews(book, 0, count=1, include_images=False, include_background=False)
     scale = 320 / max(scene['width'], scene['height'])
     width, height = scene['width'] * scale, scene['height'] * scale
     page = book.pages[0]
@@ -56,7 +57,8 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
     commands = [f'q {scale:g} 0 0 {-scale:g} 0 {height:g} cm', '1 J 1 j']
     redirect = page.record.get('redir', {}).get('value', -1)
     pdf = book.members.get(book.id + '.pdf')
-    if pdf and redirect >= 0:
+    pdf_background = bool(pdf and redirect >= 0)
+    if pdf_background:
         reader = PdfReader(BytesIO(pdf))
         if not reader.is_encrypted and redirect < len(reader.pages):
             backing = reader.pages[redirect]
@@ -68,17 +70,16 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
                 .translate((width - float(box.width) * ratio) / 2, height - float(box.height) * ratio))
     else:
         paper = settings(book, page)
-        if paper['visible'] and available(book, page):
-            name = template_name(page.template)
-            paths, _ = geometry(name, paper['format'])
-            color, weight = rule_style(name)
-            rgb = [value / 255 for value in bytes.fromhex(color[1:])]
-            if dark:
-                rgb = [1 - value for value in rgb]
-            commands.append(' '.join(f'{value:.4f}' for value in rgb) + f' RG {weight:g} w')
-            for path in paths:
-                _, x, y, _, end_x, end_y = path.split()
-                commands.append(f'{x} {y} m {end_x} {end_y} l S')
+        if paper['visible']:
+            artwork = page_artwork(book, page, paper) or ()
+            if isinstance(artwork, TemplatePDF):
+                try:
+                    merge_pdf_template(cover, artwork, scale=scale, left=0, height=scene['height'], sources={})
+                    pdf_background = True
+                except BackgroundConversionError:
+                    pass
+            else:
+                commands.extend(pdf_template_line(item, dark=dark) for item in artwork if isinstance(item, TemplateLine))
 
     highlights = NameObject('/NotebookHighlight')
     for line in scene['items']:
@@ -140,7 +141,7 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
         blend_modes = DictionaryObject({
             highlights: DictionaryObject({NameObject('/BM'): NameObject('/Screen')}),
         })
-        if pdf and redirect >= 0:
+        if pdf_background:
             # Invert only the background, before emitting ink in its display colors.
             invert = NameObject('/NotebookInvert')
             blend_modes[invert] = DictionaryObject({NameObject('/BM'): NameObject('/Difference')})

@@ -136,6 +136,7 @@ class NativeSpeechOverlayTests(TestCase):
             overlay.panel.hide.assert_called_once()
 
     def test_android_modal_drawer_dims_window_and_restores_on_dismiss(self):
+        from mobile.palette import argb
         overlay = self.overlay()
         overlay.dim = True
         container = MagicMock()
@@ -147,8 +148,9 @@ class NativeSpeechOverlayTests(TestCase):
         root = MagicMock()
         params = SimpleNamespace(flags=0, dimAmount=0)
         root.getRootView().getLayoutParams.return_value = params
+        edge = MagicMock()
         modules = {
-            'android.graphics.drawable': SimpleNamespace(ColorDrawable=MagicMock()),
+            'android.graphics.drawable': SimpleNamespace(ColorDrawable=MagicMock(), GradientDrawable=lambda: edge),
             'android.view': SimpleNamespace(Gravity=SimpleNamespace(TOP=1, END=2),
                 WindowManager=SimpleNamespace(LayoutParams=SimpleNamespace(FLAG_DIM_BEHIND=2))),
             'android.widget': SimpleNamespace(FrameLayout=lambda context: root, PopupWindow=MagicMock()),
@@ -156,8 +158,11 @@ class NativeSpeechOverlayTests(TestCase):
             'toga_android.container': SimpleNamespace(Container=lambda: container),
             'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
         }
-        with patch.dict('sys.modules', modules):
+        with patch.dict('sys.modules', modules), patch('mobile.palette.eink_enabled', return_value=True):
             overlay.android(owner)
+        root.setForeground.assert_called_once_with(edge)
+        edge.setStroke.assert_called_once_with(1, argb('#000000'))
+        overlay.popup.setElevation.assert_called_once_with(0)
         self.assertEqual(params.flags, 2)
         self.assertEqual(params.dimAmount, .35)
         context.getSystemService('window').updateViewLayout.assert_called_once_with(root.getRootView(), params)

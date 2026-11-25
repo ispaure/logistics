@@ -24,7 +24,7 @@ from .images import image_data, validate_png
 from .notebook import Notebook, TABLET_MAX_ARCHIVE
 from .remarkable_export import export_rmdoc, needs_background_pdf
 from .remarkable_ssh import UUID
-from .templates import available
+from .templates import page_artwork, settings
 
 
 @dataclass(frozen=True)
@@ -99,7 +99,7 @@ def _validate(book, cancelled):
             redirect = page.record.get('redir', {}).get('value', -1)
             if redirect >= pdf_pages:
                 raise ValueError('A page refers to a missing embedded PDF background.')
-        elif not available(book, page):
+        elif page_artwork(book, page, settings(book, page)) is None:
             raise ValueError('A template is unavailable for upload preparation; the source is unchanged.')
 
 
@@ -113,7 +113,7 @@ def prepare_upload(data: bytes, *, cancelled=lambda: False) -> PreparedUpload:
     check_cancelled(cancelled)
     if not isinstance(data, bytes):
         raise TypeError('Upload preparation accepts immutable archive bytes.')
-    book = Notebook.read(data, max_bytes=TABLET_MAX_ARCHIVE)
+    book = Notebook.read(data, max_bytes=TABLET_MAX_ARCHIVE, restore_templates=False)
     _validate(book, cancelled)
     converted = needs_background_pdf(book)
     archive = export_rmdoc(book, cancelled=cancelled) if converted else data

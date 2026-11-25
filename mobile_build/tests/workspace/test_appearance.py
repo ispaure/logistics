@@ -196,21 +196,29 @@ class AppearanceTests(unittest.TestCase):
                                                    RippleDrawable=ripple)}
         try:
             with patch.dict(sys.modules, modules):
-                for index, (dark, eink, colors) in enumerate((
-                        (False, False, LIGHT), (True, False, DARK),
-                        (False, True, EINK), (False, False, LIGHT))):
+                for index, (dark, eink, colors, row) in enumerate((
+                        (False, False, LIGHT, False), (True, False, DARK, False),
+                        (False, True, EINK, False), (False, True, EINK, True),
+                        (False, False, LIGHT, True))):
                     set_eink_enabled(eink)
                     drawable.reset_mock()
                     clear_surface_caches()
+                    impl._list_row = row
+                    impl.native.getBackground.return_value.setColor.reset_mock()
                     impl.native.getResources().getConfiguration().uiMode = 0x20 if dark else 0x10
                     if index == 0:
                         outline_command(impl)
                     else:
                         paint_surface(impl, 8)
-                    if eink:
+                    if eink and not row:
                         drawable.setStroke.assert_called_with(2, argb(colors['border']))
                     else:
                         drawable.setStroke.assert_not_called()
+                    ripple_tint = impl.native.getBackground.return_value.setColor
+                    if eink and row:
+                        ripple_tint.assert_called_once_with(0x66000000)
+                    else:
+                        ripple_tint.assert_not_called()
                     drawable.setColor.assert_called_with(argb(colors['surface']))
                     # High contrast changes colors/outlines while preserving normal geometry.
                     drawable.setCornerRadius.assert_called_with(16)
@@ -223,6 +231,76 @@ class AppearanceTests(unittest.TestCase):
                     impl.native.setSelected.assert_not_called()
         finally:
             set_eink_enabled(False)
+
+    def test_eink_surface_defaults_keep_passive_surfaces_and_list_rows_flat(self):
+        import toga
+        from unittest.mock import patch
+        from mobile import appearance
+
+        label, wrapper, button = toga.Label('Status'), toga.Box(), toga.Button('Open')
+        with patch.object(appearance._surface_painter, 'paint') as painter:
+            for widget, has_outline in ((label, False), (wrapper, False), (button, True)):
+                with self.subTest(widget=type(widget).__name__):
+                    appearance.surface(widget)
+                    style = painter.call_args.args[1]
+                    self.assertFalse(style.outlined)
+                    self.assertEqual(style.high_contrast_outlined, has_outline)
+
+            button._impl._list_row = True
+            appearance.paint_surface(button._impl, 12)
+            self.assertFalse(painter.call_args.args[1].high_contrast_outlined)
+
+            appearance.surface(button, outlined=True)
+            style = painter.call_args.args[1]
+            self.assertTrue(style.outlined)
+            self.assertTrue(style.high_contrast_outlined)
+
+            appearance.surface(button, outlined=True, eink_outlined=False)
+            style = painter.call_args.args[1]
+            self.assertTrue(style.outlined)
+            self.assertFalse(style.high_contrast_outlined)
+
+            appearance.surface(wrapper, eink_outlined=True)
+            style = painter.call_args.args[1]
+            self.assertFalse(style.outlined)
+            self.assertTrue(style.high_contrast_outlined)
+
+    def test_android_progress_restores_independent_native_tints_after_eink(self):
+        import toga
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock, call, patch
+        from mobile.appearance import paint_accent_control
+        from mobile.palette import set_eink_enabled
+
+        class Impl:
+            __module__ = 'toga_android.widgets.progressbar'
+
+        self.addCleanup(set_eink_enabled, False)
+        set_eink_enabled(False)
+        impl = Impl()
+        impl.interface = toga.ProgressBar(max=100, value=21)
+        impl.native = Mock()
+        fill, indeterminate = object(), object()
+        impl.native.getProgressTintList.return_value = fill
+        impl.native.getProgressBackgroundTintList.return_value = None
+        impl.native.getIndeterminateTintList.return_value = indeterminate
+        colors = NS(valueOf=lambda value: value)
+        with patch.dict('sys.modules', {'android.content.res': NS(ColorStateList=colors)}):
+            paint_accent_control(impl)
+            self.assertEqual(impl.native.mock_calls, [])
+            set_eink_enabled(True)
+            paint_accent_control(impl)
+            paint_accent_control(impl)
+            set_eink_enabled(False)
+            paint_accent_control(impl)
+            paint_accent_control(impl)
+        self.assertEqual(impl.native.mock_calls, [
+            call.getProgressTintList(), call.getProgressBackgroundTintList(), call.getIndeterminateTintList(),
+            call.setProgressTintList(argb('#000000')), call.setProgressBackgroundTintList(argb('#767676')),
+            call.setIndeterminateTintList(argb('#000000')),
+            call.setProgressTintList(fill), call.setProgressBackgroundTintList(None),
+            call.setIndeterminateTintList(indeterminate),
+        ])
 
     def test_command_boundaries_contrast_with_light_dark_and_chat_surfaces(self):
         from mobile.palette import EINK

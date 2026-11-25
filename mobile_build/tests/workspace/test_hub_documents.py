@@ -145,7 +145,7 @@ class HubDocumentTests(unittest.TestCase):
             for menu in menus(new_home) + menus(hub.document_recent_list):
                 menu.dispose.assert_not_called()
 
-    def test_document_sections_have_one_outline_and_borderless_row_actions(self):
+    def test_document_sections_and_row_actions_stay_flat_in_eink(self):
         import toga
         from mobile import palette
         self.addCleanup(palette.set_eink_enabled, False)
@@ -158,7 +158,7 @@ class HubDocumentTests(unittest.TestCase):
                 self.assertEqual(len(groups), 1 if section is self.app.document_recent_list else 0)
                 if not groups:
                     continue
-                self.assertTrue(groups[0]._impl._surface_eink_outlined)
+                self.assertFalse(groups[0]._impl._surface_eink_outlined)
                 for child in widgets(groups[0]):
                     if child is not groups[0]:
                         self.assertFalse(getattr(child._impl, '_surface_eink_outlined', False))
@@ -171,6 +171,7 @@ class HubDocumentTests(unittest.TestCase):
             self.assertIs(overview.parent, home.content)
             groups = [widget for widget in widgets(overview) if getattr(widget, '_document_group', False)]
             self.assertEqual(len(groups), 1)
+            self.assertFalse(groups[0]._impl._surface_eink_outlined)
             self.assertTrue(any(text.partition(' · ')[0] == 'Open' for text in labels(groups[0])))
 
     def test_empty_document_messages_stay_outside_action_groups(self):

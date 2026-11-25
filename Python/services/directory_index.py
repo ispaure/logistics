@@ -28,8 +28,9 @@ _hosts = {}
 
 class ScanPolicy:
     """Debounced foreground demand with a bounded turn for deferred work."""
-    def __init__(self, cache):
+    def __init__(self, cache, *, prioritize_refresh=False):
         self.cache = cache
+        self.prioritize_refresh = prioritize_refresh
         self.coordinator = None
         self.lock = RLock()
         self.owners = {}
@@ -59,6 +60,12 @@ class ScanPolicy:
     def _choose(self, jobs):
         if not jobs or self.owners and not any(self.owners.values()):
             return None
+        if self.prioritize_refresh:
+            # Active receipts arrive in running-first order. Finish an in-flight
+            # refresh before starting another, so atomic validation can commit.
+            refresh = next((job for job in jobs if job['full']), None)
+            if refresh is not None:
+                return refresh
         now = monotonic()
         for job in jobs:
             self.served.setdefault(job['id'], now)
@@ -94,12 +101,16 @@ class ScanPolicy:
         with self.lock:
             if self.owners and not any(self.owners.values()):
                 return True
-            if monotonic()-self.started.get(job['id'], monotonic()) < self.quanta.get(job['id'], .5):
+            if self.prioritize_refresh and job['full']:
+                return False
+            within_turn = monotonic()-self.started.get(job['id'], monotonic()) < self.quanta.get(job['id'], .5)
+            if within_turn and not self.prioritize_refresh:
                 return False
         jobs = self.coordinator.active_jobs()
         with self.lock:
             chosen = self._choose(jobs)
-            return chosen is not None and chosen['id'] != job['id']
+            return (chosen is not None and chosen['id'] != job['id']
+                    and (not within_turn or self.prioritize_refresh and chosen['full']))
 
 
 def register(coordinator, policy):

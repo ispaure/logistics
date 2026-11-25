@@ -48,6 +48,14 @@ Set `vm.fedora_mode=container-on-ubuntu` and `vm.fedora_container_host` to an au
 
 Select the dedicated Windows 11 guest. **Test machines → Allow Windows filesystem tests…** enables the required normal-user symlink capability. WinError 1314 blocks full acceptance. Validate with the entire suite after the symlink probe. The portable Git/uv catalog is `logistics_build/build_manager_tools.json`. An explicit `vm.windows_prepared_reference` can reuse verified tools. The backend collects logs before removing owned workspaces and records actual process exits. Use the [setup reconciliation command](build-manager-journeys.md#retried-guest-validation) for incomplete attempts.
 
+Local Windows checks and explicit tool preparation also retry cleanup of
+disposable tool installations left by earlier Logistics runs on the selected
+guest. After one day, retention can remove the Python environment, dependency
+cache, portable tools and downloads from a workspace with a recorded disposable
+preparation and matching guest ownership. It keeps source, reports, receipts,
+active workspaces, pinned workspaces and separately prepared reusable tools.
+Files left before this retention record was introduced require separate review.
+
 ## Local guest setup with unpublished manager pins
 
 Set `tools.manager_checkout` to an explicitly reviewed local checkout containing the exact manager pin and its pinned commonUtils. Transfer selects committed objects without resetting the branch. Clear an obsolete selector to use published-pin installation. A verified owned tooling cache can restore missing objects locally from the installed exact SDK. Unrecognized or dirty caches require tooling repair. After dependency sync the guest reinstalls the transferred SDK. Hosted desktop setup likewise verifies and reinstalls the exact `LOGISTICS_MANAGER_CHECKOUT` after sync.
@@ -92,10 +100,21 @@ Debug development-device plans may select zero test platforms. Release-device pr
 | Source snapshots | Three newest plus five days, 24 GiB soft budget |
 | Device recipes | Three newest plus one day, 12 GiB per platform across both workspace roots |
 | Compiler caches | 12 GiB shared budget, one day, one-hour grace |
+| Compiler output of newly completed device preparations | Retired at the next maintenance pass once the signed app package matches the preparation receipt |
 | Metadata-identified Xcode DerivedData | Three newest plus one day, 12 GiB, one-hour access protection |
 | Enrolled legacy build outputs | Three newest plus five days |
+| Verified legacy Android runtime staging | Seven days after staging, once the emulator lease is closed and the source manifest matches the retained test report |
+| Registered standalone raw evidence | Fourteen days after it was written, with its matching report and file identity still present |
 
 Budget pressure can retire oldest eligible entries after the grace period. Active leases and `.keep` pins win. Durable workflow holds protect their source/artifacts; independent compiler caches require a pin or active lock. Xcode ownership uses `info.plist` WorkspacePath and active process checks. Shared SDKs, signing keys, counters, main app/data, personal simulators and unclassified evidence stay protected.
+
+For the registered Manager results layouts on macOS, post-run maintenance
+shares disk blocks between the staging APK and its exact archived copy once
+the workflow is complete. It verifies both files against the APK hash in the
+run receipt. Both paths remain independently writable. For older runs outside
+those layouts, preview with `python -m logistics_build.build_retention --coalesce-test-apks RUN_DIRECTORY`.
+Add `--apply` to coalesce the verified copies. Different packages, active runs,
+pinned runs and files on volumes without clone support keep their existing storage.
 
 New independent Android Debug and supported iOS Build recipes use `tmp/build/mobile/<platform>/`. Older and mixed-signing recipes can use `mobile_build/.tools/build-manager/workspaces/devices/`; old iOS runners can build in snapshots. Known compiler caches also use `tmp/cache/compiler/` and marked legacy roots. Keep artifact references with their actual workspace. Replan expired inputs.
 

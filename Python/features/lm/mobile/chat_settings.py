@@ -52,6 +52,8 @@ class ChatSettingsPanel:
             value=str(self.chat_profile['settings']['max_tokens']), style=Pack(height=48))
         self.chat_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
         self.chat_config_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
+        self.presentation.surface(self.chat_config_status, radius=0, background='settings_group',
+                                  foreground='muted', outlined=False, eink_outlined=False)
         self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
         def label(text, *, heading=False, field=False):
             control = FittedLabel(text, style=Pack(font_size=16 if heading else 14 if field else 12,

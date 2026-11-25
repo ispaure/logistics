@@ -653,7 +653,8 @@ async function paintPagePreview(page, image) {
     try {
       await artwork.decode();
       if (!image.isConnected) return;
-      const bounds = containedBackgroundBounds(artwork, page.pdf_paper || {x: 0, y: 0, width: page.width, height: page.height});
+      const bounds = containedBackgroundBounds(artwork, page.pdf_paper || page.template_background_bounds ||
+        {x: 0, y: 0, width: page.width, height: page.height});
       target.drawImage(artwork, bounds.x, bounds.y, bounds.width, bounds.height);
     } catch {
       // A failed background decode must still leave the ink visible.

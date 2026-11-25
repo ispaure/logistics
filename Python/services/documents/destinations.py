@@ -43,14 +43,14 @@ class DestinationRequest:
     max_bytes: int
     store: object
     source_document: object
+    notebook_setup: tuple[str, str] | None = None
 
     @classmethod
     def capture(cls, provider, folder, filename, data, extensions, *, notebook,
                 creating, session_count, session_limit, store, source_document,
                 notebook_template='Blank', notebook_format='pro'):
-        from features.notebooks.notebook import MAX_ARCHIVE, Notebook
-        if creating and notebook:
-            data = Notebook.new(Path(filename).stem, template=notebook_template, paper_format=notebook_format).to_bytes()
+        from features.notebooks.notebook import MAX_ARCHIVE
+
         maximum = MAX_ARCHIVE if notebook else 1024 * 1024
         if Path(filename).suffix.lower() not in extensions or len(data) > maximum:
             raise ValueError('Choose a text, source or configuration filename; saves are limited to 1 MiB.')
@@ -64,7 +64,8 @@ class DestinationRequest:
             if getattr(provider, 'remote_storage', False):
                 raise ValueError('Cloud files are read-only. Create locally and use Push.')
         return cls(provider, folder, filename, bytes(data), tuple(extensions), notebook,
-                   creating, maximum, store, source_document)
+                   creating, maximum, store, source_document,
+                   (notebook_template, notebook_format) if creating and notebook else None)
 
     def resolve(self, *, cancelled):
         model = ResourceSelection(self.provider, mode='save', extensions=self.extensions)
@@ -82,6 +83,14 @@ class DestinationRequest:
     def publish(self, destination, revision, *, cancelled):
         from .mobile_storage import document_copies
         try:
+            data = self.data
+            if self.notebook_setup is not None:
+                from features.notebooks.notebook import Notebook
+                from features.notebooks.remarkable_export import save_rmdoc
+
+                template, paper_format = self.notebook_setup
+                book = Notebook.new(Path(self.filename).stem, template=template, paper_format=paper_format)
+                data = save_rmdoc(book, cancelled=cancelled)
             if self.provider.private and self.source_document is not None:
                 self.store.privatize(self.source_document)
             copies = None if self.notebook else document_copies(self.provider)
@@ -90,15 +99,15 @@ class DestinationRequest:
                 if self.notebook:
                     from features.notebooks.notebook import Notebook
                     with self.provider.open(destination) as stream:
-                        Notebook.read(stream.read(len(self.data) + 1))
+                        Notebook.read(stream.read(len(data) + 1))
                     return None
                 reader = copies.open(destination)
-                if reader.data != self.data:
+                if reader.data != data:
                     raise ValueError('The saved file changed after publication.')
                 kind, content = reader.page(0)
                 return reader, kind, content
 
-            prepared = DocumentResource.publish(self.provider, destination, self.data,
+            prepared = DocumentResource.publish(self.provider, destination, data,
                 max_bytes=self.max_bytes, expected_revision=revision, cancelled=cancelled,
                 after_publish=lambda revision: reopen())
             return DestinationPublication(destination, 'published', copies, prepared)

@@ -37,6 +37,8 @@ def retain_test_apk(apk, destination, expected):
     """Publish exact validated bytes outside Gradle's replaceable outputs."""
     import shutil
     import tempfile
+    from logistics_build.test_apk_storage import clone_file
+
     apk, destination = Path(apk), Path(destination)
     if destination.is_symlink():
         raise ValueError('Retained Android test APK must not be linked.')
@@ -45,21 +47,18 @@ def retain_test_apk(apk, destination, expected):
             raise ValueError('Retained Android test APK differs from this build.')
         return destination
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(dir=destination.parent, prefix='.test-apk-', delete=False) as stream:
-            temporary = Path(stream.name)
-            with apk.open('rb') as source:
+    with tempfile.TemporaryDirectory(dir=destination.parent, prefix='.test-apk-') as directory:
+        temporary = Path(directory) / destination.name
+        if sys.platform != 'darwin' or not clone_file(apk, temporary):
+            with apk.open('rb') as source, temporary.open('xb') as stream:
                 shutil.copyfileobj(source, stream)
-            stream.flush()
-            os.fsync(stream.fileno())
+                stream.flush()
+                os.fsync(stream.fileno())
+        temporary.chmod(0o600)
         if checksum(temporary) != expected or checksum(apk) != expected:
             raise ValueError('Android test APK changed while retaining validated bytes.')
         os.replace(temporary, destination)
         return destination
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
 
 
 def verify_test_apk(root, report):
@@ -129,7 +128,8 @@ def main():
     args.result.parent.mkdir(parents=True,exist_ok=True)
     if args.action=='runtime':
         from logistics_build.mobile_runtime import test
-        return test(args.root,args.runtime_cache,record['serial'],args.result)
+        return test(args.root, args.runtime_cache, record['serial'], args.result,
+                    storage_root=os.environ.get('LOGISTICS_STORAGE_OWNER_ROOT'))
     from mobile_build.validation.ui_tools import run, collect_owned_android_evidence
     logs = args.result.parent / ('native-attempt-' + uuid4().hex)
     logs.mkdir()

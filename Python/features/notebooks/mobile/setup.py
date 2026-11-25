@@ -97,7 +97,8 @@ class NotebookTemplateChoices(toga.Box):
                 if key is not None:
                     row = self.template_rows[key]
                     selected = key == template
-                    surface(row, background='hover' if selected else 'surface', foreground='text', outlined=selected)
+                    surface(row, background='hover' if selected else 'surface', foreground='text',
+                            outlined=selected, eink_outlined=selected, eink_selected=selected)
                     accessible_name(row, row.text + (', selected' if selected else ''))
             self._highlighted = template
         self.changed(template, paper_format)

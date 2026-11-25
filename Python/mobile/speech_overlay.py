@@ -186,6 +186,7 @@ class SpeechOverlay:
         from android.widget import FrameLayout, PopupWindow
         from toga_android.container import Container
         from java import dynamic_proxy
+        from .palette import argb, eink_enabled
         context = owner._impl.native.getContext()
         def edge_bounds():
             from android.graphics import Rect
@@ -211,19 +212,30 @@ class SpeechOverlay:
         from android.util import TypedValue
         value = TypedValue()
         context.getTheme().resolveAttribute(16842801, value, True)  # colorBackground
-        if self.android_radius:
+        high_contrast = eink_enabled()
+        radius = self.container.scale_in(self.android_radius)
+        color = argb('#ffffff') if high_contrast else value.data
+        if self.android_radius or high_contrast:
             from android.graphics.drawable import GradientDrawable
+        if self.android_radius:
             from android.view import ViewOutlineProvider
             background = GradientDrawable()
-            background.setColor(value.data)
-            background.setCornerRadius(self.container.scale_in(self.android_radius))
+            background.setColor(color)
+            background.setCornerRadius(radius)
             root.setBackground(background)
             root.setOutlineProvider(ViewOutlineProvider.BACKGROUND)
             root.setClipToOutline(True)
             self.popup.setBackgroundDrawable(ColorDrawable(0))
         else:
-            self.popup.setBackgroundDrawable(ColorDrawable(value.data))
-        self.popup.setElevation(self.container.scale_in(12))
+            self.popup.setBackgroundDrawable(ColorDrawable(color))
+        if high_contrast:
+            edge = GradientDrawable()
+            edge.setColor(0)
+            edge.setCornerRadius(radius)
+            edge.setStroke(max(1, self.container.scale_in(1)), argb('#000000'))
+            # A foreground keeps the single edge visible over scroll content.
+            root.setForeground(edge)
+        self.popup.setElevation(0 if high_contrast else self.container.scale_in(12))
         self.popup.setOutsideTouchable(True)
         overlay = self
 

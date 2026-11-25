@@ -44,7 +44,11 @@ Use **Page → Page Template…** or **Layers & template → Change Template…*
 
 **Paper view** selects display framing for all pages in the open notebook. Move centers the smaller writing area and expands for existing outlying ink. Pro shows the margins. Reopen to restore automatic framing, which fits the saved Pro or Move format for pages sized in the template picker.
 
-**Save / Save As** keeps editable template settings. **Export Copy…** embeds custom layouts as fixed vector PDF backgrounds with separate native ink. Keep the original to change templates later. Export can refuse unavailable artwork, unsupported object bounds or ink above the top edge. Choose supported artwork or hide it when appropriate. Existing PDF-backed copies retain their original PDF.
+When the saved preset differs from the current design, **Update to latest layout** replaces that preset across the notebook. The picker shows how many pages will change. This keeps page sizes, visibility and handwriting in place and supports Undo.
+
+**Save / Save As** keeps editable template settings and embeds supported custom layouts as vector PDF backgrounds with separate native ink. Reopening in Logistics uses the saved template even if the layout for new notebooks has changed. You can import the saved file directly on reMarkable, where the layout appears as a PDF background. An older Logistics notebook gets the PDF on its next save. **Export Copy…** makes a separate file with a fixed background. Unsupported imported artwork or ink is preserved on Save and can prevent a portable export. Existing PDF-backed files keep their PDF.
+
+A file re-exported by reMarkable may lose the editable template data. Logistics can still open its PDF background and retained handwriting.
 
 ## Eraser types and sizes
 

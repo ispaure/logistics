@@ -31,7 +31,7 @@ function templateControls() {
   panel.innerHTML = `<p id="templateDescription" class="hint"></p>
     <button type="button" id="changeTemplate">Change Template…</button>
     <label>Paper view <select id="paperView" aria-label="Paper view"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>
-    <p id="templateExportHint" class="hint" hidden>Save keeps editable template settings. Export Copy uses fixed PDF backgrounds for reMarkable; handwriting stays editable.</p>`;
+    <p id="templateExportHint" class="hint" hidden>Save embeds supported layouts as PDF backgrounds for reMarkable. Handwriting stays editable.</p>`;
   const dialog = document.createElement('dialog');
   dialog.id = 'templatePicker';
   dialog.setAttribute('aria-labelledby', 'templatePickerTitle');
@@ -47,6 +47,10 @@ function templateControls() {
       <figure id="templatePreview" role="img" aria-label="Template preview"><img alt="" decoding="async" hidden></figure>
       <p id="templatePreviewStatus" class="hint" role="status"></p>
     </div>
+    <div id="templateUpdate" hidden>
+      <p id="templateUpdateDescription" class="hint"></p>
+      <button type="button" id="updateTemplate" aria-describedby="templateUpdateDescription">Update to latest layout</button>
+    </div>
     <p id="templateCompatibility" class="hint"></p>
     <div class="template-actions"><button type="button" id="cancelTemplate">Cancel</button>
       <button type="submit" id="applyTemplate">Apply</button></div>
@@ -54,6 +58,12 @@ function templateControls() {
   document.body.append(dialog);
   $('changeTemplate').onclick = openTemplatePicker;
   $('cancelTemplate').onclick = () => dialog.close();
+  $('updateTemplate').onclick = () => {
+    if (!dialog.open || active !== null || busy || !state.template_editable || state.read_only ||
+        dialog.dataset.page !== state.page_id || $('templateUpdate').hidden) return;
+    dialog.close();
+    send({op: 'update-template', page_id: state.page_id});
+  };
   dialog.querySelector('form').onsubmit = event => {
     event.preventDefault();
     if (active !== null || busy || !state.template_editable || state.read_only ||
@@ -119,17 +129,26 @@ function updateTemplatePreview() {
   const image = preview.querySelector('img');
   const bounds = move ? state.move_paper : state.template_bounds;
   const candidates = Object.hasOwn(templateArtwork, name) ? templateArtwork[name] : null;
+  const current = !name || (name === state.template_name && $('templateFormat').value === state.template_settings?.format);
+  const saved = current && (state.background || state.hidden_template_preview);
+  const candidate = candidates?.[move ? 1 : 0] || candidates?.[0];
+  const updatePages = name === state.template_name ? state.template_update_pages : 0;
+  $('templateUpdate').hidden = !updatePages;
+  $('templateUpdateDescription').textContent = updatePages === 1
+    ? 'Updates the layout on one page. Handwriting stays in place.'
+    : updatePages ? 'Updates the layout on ' + updatePages + ' pages. Handwriting stays in place.' : '';
   $('applyTemplate').disabled = $('templateVisible').disabled = $('templateFormat').disabled = !candidates;
-  $('templatePreviewStatus').textContent = candidates ? '' : 'Template artwork unavailable.';
+  $('templatePreviewStatus').textContent = candidates || saved ? '' : 'Template artwork unavailable.';
   preview.style.aspectRatio = bounds.width + ' / ' + bounds.height;
-  const source = $('templateVisible').checked && (candidates?.[move ? 1 : 0] || candidates?.[0]);
+  const source = $('templateVisible').checked && (saved || candidate?.source);
   image.hidden = !source;
   if (!source) {
     image.removeAttribute('src');
     return;
   }
-  image.style.width = (state.template_bounds.width / bounds.width * 100) + '%';
-  image.style.left = (-bounds.x / bounds.width * 100) + '%';
+  const frame = (saved ? state.template_background_bounds : candidate.bounds) || state.template_bounds;
+  image.style.width = (frame.width / bounds.width * 100) + '%';
+  image.style.left = ((frame.x - bounds.x) / bounds.width * 100) + '%';
   if (image.getAttribute('src') !== source) image.src = source;
 }
 
@@ -291,9 +310,7 @@ function render() {
     $('templateDescription').textContent = state.template_description || '';
     const dialog = $('templatePicker');
     if (dialog.open && (!editable || dialog.dataset.page !== state.page_id)) dialog.close();
-    const name = state.template_name || state.template || 'Blank';
-    $('templateExportHint').hidden = !state.template_editable ||
-      !(name.startsWith('Logistics ') || (name !== 'Blank' && state.template_settings?.visible === false));
+    $('templateExportHint').hidden = !state.template_requires_pdf;
   }
   const background = $('pdfBackground');
   background.hidden = !state.background;
@@ -304,8 +321,7 @@ function render() {
   if (document.activeElement !== $('notebookName')) $('notebookName').value = state.name;
   $('pageinfo').textContent = (state.index + 1) + ' / ' + state.count;
   $('warning').textContent = state.warning || '';
-  $('templateNotice').textContent = state.template && state.template !== 'Blank' && state.templates &&
-    (!Object.prototype.hasOwnProperty.call(state.templates, state.template_name) || state.template_available === false) ?
+  $('templateNotice').textContent = state.template && state.template !== 'Blank' && state.template_available === false ?
     'Template ' + state.template + ' is preserved; its artwork is unavailable here.' : '';
   $('undo').disabled = !state.undo;
   $('redo').disabled = !state.redo;
@@ -430,7 +446,8 @@ function backgroundContentBounds(image = $('pdfBackground')) {
 }
 
 function backgroundPaperBounds() {
-  return state.pdf_paper || state.template_bounds || {x: 0, y: 0, width: state.width, height: state.height};
+  return state.pdf_paper || state.template_background_bounds || state.template_bounds ||
+    {x: 0, y: 0, width: state.width, height: state.height};
 }
 
 function containedBackgroundBounds(image, bounds) {

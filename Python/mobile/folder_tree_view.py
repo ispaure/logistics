@@ -100,7 +100,7 @@ class FolderTreeView:
                 (record.button, 'text'),
                 (record.indicator, getattr(record.indicator, '_folder_foreground', 'folder')),
                 (record.menu, 'muted'),
-            ), eink_outlined=True)
+            ))
             self._select_button(record.button, selected)
 
     @staticmethod

@@ -132,6 +132,19 @@ font preferences and CSS dimensions in their respective units.
 
 [Shared appearance APIs](../../../Python/commonUtils/docs/development/reference/ui/appearance/appearance.md)
 
+### Android high contrast surfaces
+
+Use `mobile.appearance.surface` for native surface colors. High contrast leaves
+passive text and layout wrappers flat by default. A standalone command retains
+its outline. Use `list_button` for navigation rows and `selection_row` for
+selectable content. Opt into `eink_outlined=True` when a pane, group, or control
+needs a visible edge. Put the edge on the outermost surface that communicates
+the boundary and use spacing or type for its read-only contents.
+
+Check selection, keyboard focus, and progress in grayscale. The transfer probe
+checks live appearance changes and ten concurrent files with synthetic data.
+Check physical E Ink legibility separately.
+
 ### Shared locked/unlocked folder artwork
 
 Edit `services/folders/appearance.py` paths, fills, stroke and state colors.

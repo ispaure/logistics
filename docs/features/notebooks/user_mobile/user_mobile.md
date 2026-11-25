@@ -22,7 +22,11 @@ Open **Change Template…** from **Notebook actions → Layers** or **Pages Over
 
 Choose **Paper view** in Layers for framing across the open notebook. Automatic framing fits the saved Pro or Move format for pages sized in the template picker. Other pages adapt to screen size and posture, with Move framing on narrow portrait phones. Reset keeps a manual choice and reopening restores automatic framing. See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes).
 
-**Save / Save As** retains editable template settings. **Export .rmdoc** uses fixed PDF backgrounds for custom and hidden templates, with separate native ink. Keep the original to change templates later. Export can refuse unavailable artwork, unsupported object bounds or ink above the top edge.
+When a saved preset differs from the current design, tap **Update to latest layout** to update that preset on the indicated pages. This keeps page sizes, visibility and handwriting in place and supports Undo.
+
+**Save / Save As** retains editable template settings and embeds supported custom layouts as vector PDF backgrounds with separate native ink. Reopening in Logistics uses the saved layout even if the template for new notebooks has changed. You can import the saved file directly on reMarkable, where the layout appears as a PDF background. An older Logistics notebook gets the PDF on its next save. **Export .rmdoc** makes a separate file with a fixed background. Unsupported imported artwork or ink is preserved on Save and can prevent a portable export.
+
+A file re-exported by reMarkable may lose the editable template data. Logistics can still open its PDF background and retained handwriting.
 
 ## Eraser types and sizes
 
@@ -40,7 +44,9 @@ Use **Aa → View and input → Paper appearance** to choose Follow system (the 
 
 ## Image cutouts and protected PDFs
 
-Tap **Select / move** twice and choose **Capture cutouts and arrange images**. Lasso visible content and **Paste** it on a visible layer. Use **New cutout** to start over an image. Tap an image to move, resize, rotate, copy, cut, delete or **Arrange** it. The editor clipboard clears on close. Captures are capped at four megapixels and about 3 MiB. Native **Add image** picker acceptance is pending.
+Tap **Select / move** twice and choose **Capture cutouts and arrange images**. Lasso visible content and **Paste** it on a visible layer. Use **New cutout** to start over an image. Tap an image to move, resize, rotate, copy, cut, delete or **Arrange** it. The editor clipboard clears on close. Captures are capped at four megapixels and about 3 MiB.
+
+On iPhone and iPad, use **Choose from Photos…** or **Take a photo…** from the same **Select / move** menu. The photo goes on the active layer as a standard-dynamic-range PNG, with a long edge up to 1,600 pixels and a size up to 1.25 MiB. A picture taken here is stored in the notebook when you save.
 
 Use **Unlock PDF** for an encrypted embedded PDF. Retry a wrong password in the same form. Save and Export keep the encrypted PDF and the password stays in session memory.
 

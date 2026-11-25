@@ -105,6 +105,9 @@ def run(output, source_app=None):
             entry_point='tests.logisticsmobile.file_drag_gesture_probe', result_name='file-drag-result.json',
             runtime_id=runtime_id(load(ROOT), 'iphone'), source_app=source_app,
             exercise=partial(exercise, project=project))
+    from logistics_build.standalone_evidence import register_probe
+    register_probe(ROOT, output / 'file-drag-result.json',
+                   ('xctest.log', 'xctest-build.log', 'file-drag-events.jsonl'))
 
 
 def main():

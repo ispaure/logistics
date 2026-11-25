@@ -441,24 +441,79 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('secret', surface.children[0].text)
 
     async def test_live_transfer_keeps_completed_history_and_updates_per_file_bars(self):
+        from features.rclone.transfers.mobile.execution import TransferState
+        from features.rclone.transfers.presentation import progress_model
+        from toga.style.pack import COLUMN, ROW
+
         surface, _ = self.surface()
+        surface.host.presentation = Mock()
         surface.recover_rendering()
         surface.recover_rendering()
-        surface.update(dict(mode='progress', busy=True, phase='transfer', operation='Pull',
-            bytes_per_second=2_500_000, file_delete_attempts=2, active=1,
-            active_files=[dict(name='Album/Photo.jpg', bytes=1_000_000, size=4_000_000)],
-            history=[dict(time=1, operation='push', source='Local', destination='Remote:', bytes=0)]))
         fallback = surface.native_fallback
+        fallback.android = True
+        fallback.reflow(720)
+        active_files = [dict(name=f'Album/Photo-{index}.jpg', bytes=1_000_000, size=4_000_000)
+                        for index in range(10)]
+        active_files[-1]['size'] = 0
+        state = TransferState(busy=True, operation='pull', percentage=25, metrics=dict(
+            phase='Transferring', bytes_per_second=2_500_000, file_delete_attempts=2,
+            active=10, active_files=active_files))
+        surface.update(dict(progress_model(state), history=[
+            dict(time=1, operation='push', source='Local', destination='Remote:', bytes=0)]))
+        self.assertEqual([label.text for label in fallback.stage_labels],
+                         ['✓ Scan', '● Transfer', '○ Verify'])
+        self.assertEqual(fallback.stage_labels[1].accessible_name, 'Transfer, in progress')
         self.assertEqual(fallback.title.text, 'Pulling')
+        painted = {args[0]: kwargs for args, kwargs in surface.host.presentation.surface.call_args_list}
+        for widget in (fallback.status, fallback.amount, *fallback.stage_labels, *fallback.rows.children,
+                       fallback.history.children[1]):
+            self.assertFalse(painted[widget]['eink_outlined'])
+        self.assertTrue(painted[fallback.card]['eink_outlined'])
+        self.assertTrue(painted[fallback.file_group]['eink_outlined'])
+        self.assertFalse(painted[fallback.file_group].get('outlined', False))
+        self.assertEqual(list(fallback.file_group.children), [fallback.file_heading, fallback.rows])
+        self.assertGreaterEqual(fallback.rows.style.margin_left, 6)
+        self.assertEqual(fallback.rows.style.margin_left, fallback.rows.style.margin_right)
+        self.assertGreaterEqual(fallback.rows.style.margin_bottom, 8)
+        row_content = fallback.rows.children[0].children[0]
+        self.assertEqual(fallback.file_heading.style.margin_left,
+                         fallback.rows.style.margin_left + row_content.style.margin_left)
+        self.assertIn('Totals reflect work found so far.', fallback.status.text)
+        self.assertEqual(fallback.file_heading.text, 'Copying now · 10 files')
+        self.assertEqual(len(fallback.rows.children), 10)
         self.assertIn('2.50 MB/s', [value.text for value in fallback.fact_cells])
         self.assertEqual(fallback.history.children[0].text, 'Completed transfers')
-        detail, bar = fallback.file_cells[0]
+        detail, bar = fallback.file_cells[1]
         self.assertEqual(bar.value, 25)
         self.assertEqual(detail.text, '1.0 MB of 4.0 MB')
+        unknown, unknown_bar = fallback.file_cells[-1]
+        self.assertIsNone(unknown_bar)
+        self.assertEqual(unknown.text, '1.0 MB copied')
+        line = detail.parent
+        self.assertIs(bar.parent, line)
+        self.assertEqual(line.style.direction, ROW)
+        fallback.reflow(155)
+        self.assertEqual(line.style.direction, COLUMN)
+        fallback.reflow(340)
+        self.assertEqual(line.style.direction, ROW)
+        self.assertEqual(detail.style.width,
+                         fallback.body.style.width - 2 * fallback.file_heading.style.margin_left
+                         - line.style.gap - 64)
+        self.assertEqual(detail.text, '1.0 MB of 4.0 MB')
         surface.update(dict(surface.model,
-            active_files=[dict(name='Album/Photo.jpg', bytes=3_000_000, size=4_000_000)]))
+            active_files=[dict(active_files[1], bytes=3_000_000), *active_files[2:],
+                          dict(active_files[0], name='Album/Photo-10.jpg')]))
+        self.assertEqual([label.text for label in fallback.stage_labels], ['✓ Scan', '● Transfer', '○ Verify'])
         self.assertIs(fallback.file_cells[0][1], bar)
+        self.assertIs(bar.parent, line)
         self.assertEqual(bar.value, 75)
+        state.metrics.update(phase='Checking / finishing sync', done=4_000_000, active=0, active_files=[])
+        surface.update(progress_model(state))
+        self.assertIn('Finding and comparing more files', ' '.join(fallback.status.text.split()))
+        self.assertFalse(fallback.rows.children)
+        self.assertIsNone(fallback.file_heading.parent)
+        self.assertIs(surface.host.presentation.surface.call_args.args[0], fallback.file_group)
+        self.assertFalse(surface.host.presentation.surface.call_args.kwargs['eink_outlined'])
 
     async def test_native_review_keeps_confirmation_and_stale_revision_guards(self):
         surface, handler = self.surface()

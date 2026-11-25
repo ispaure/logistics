@@ -128,9 +128,12 @@ class Editor:
                 with _pdf_reader(data) as opened:
                     return self.pdf_bounds(page_index, reader=opened)
             marked_export = reader.metadata and reader.metadata.get('/LogisticsNativeUnits') == '226'
-            if not marked_export and not self.expanded_pdf_layout():
+            native_layout = (book.content.get('formatVersion') == 2 and
+                             book.content.get('zoomMode') in ('bestFit', 'fitToHeight'))
+            if not marked_export and not native_layout:
                 self._pdf_geometry = (key, None)
                 return None
+            # For native PDFs the legacy zoom dimensions do not describe the paper.
             page = reader.pages[index]
             width = float(page.cropbox.width) * page.user_unit / PDF_SCALE
             height = float(page.cropbox.height) * page.user_unit / PDF_SCALE
@@ -434,6 +437,12 @@ class Editor:
             from .templates import select
             select(book, self.index, action['name'], action['format'], action['visible'],
                    lock_size=action.get('fixed_size', False))
+        elif op == 'update-template':
+            from .templates import update_template
+            page = book.pages[self.index]
+            if page.id != action['page_id']:
+                raise ValueError('The active page changed. Reopen the template picker to update the layout.')
+            update_template(book, page)
         elif op == 'duplicate-page':
             book.copy_page(book, self.index, self.index + 1)
             self.index += 1
@@ -591,14 +600,19 @@ class Editor:
 
     def state(self):
         from .templates import (
-            CATALOG, TEMPLATE_NOTICE, available, background, description, fixed_size, settings, template_name, view_bounds,
+            CATALOG, TEMPLATE_NOTICE, TemplatePDF, artwork_background, description, fixed_size, page_artwork, settings,
+            template_name, template_requires_pdf, template_updates, view_bounds,
         )
         ink = self.notebook.page(self.index)
         page = self.notebook.pages[self.index]
         paper = settings(self.notebook, page)
+        preset = template_name(page.template)
+        updates = template_updates(self.notebook, preset)
         pdf = self.notebook.content.get('fileType') == 'pdf'
         mapped_pdf = pdf and page.record.get('redir', {}).get('value', -1) >= 0
-        template_available = available(self.notebook, page)
+        artwork = page_artwork(self.notebook, page, paper)
+        template_preview = None if mapped_pdf else artwork_background(artwork)
+        template_available = artwork is not None and (mapped_pdf or not isinstance(artwork, TemplatePDF) or template_preview is not None)
         template_description = ('This document has fixed PDF backgrounds. Notebook template changes are unavailable.'
             if pdf else description(page.template, artwork_available=template_available))
         from .images import image_payloads
@@ -620,17 +634,21 @@ class Editor:
                     scene_order=ink.order, page_id=page.id, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH - 2 * left, height=self.page_height(), pdf_paper=paper_bounds, tools=TOOLS, colors=COLORS,
                     template_bounds=None if pdf else view_bounds([]),
-                    exported_template_paper=paper_bounds is not None and not expanded,
+                    template_background_bounds=artwork.bounds if isinstance(artwork, TemplatePDF) else None,
+                    fit_pdf_page=paper_bounds is not None and not expanded,
                     brushes=EXPANDED_BRUSHES if expanded else BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
                     highlight_ids=HIGHLIGHT_IDS, native_highlights=NATIVE_HIGHLIGHTS,
                     shaders=SHADERS, widths=WIDTHS, eraser_scale=self.eraser_scale(),
                     strokes=[self.canvas_stroke(s) for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=page.template,
-                    template_name=template_name(page.template),
+                    template_name=preset,
                     templates=CATALOG, template_notice=TEMPLATE_NOTICE, template_description=template_description,
                     template_settings=paper, template_editable=not pdf,
                     template_fixed_size=not pdf and fixed_size(self.notebook, page),
                     template_available=template_available,
+                    template_update_pages=sum(item.template in updates for item in self.notebook.pages) if updates else 0,
+                    template_requires_pdf=not pdf and template_requires_pdf(self.notebook, page, paper),
+                    hidden_template_preview=template_preview if not pdf and not paper['visible'] else None,
                     move_paper=move_paper, compact_paper=compact_paper,
-                    background=self.background() if mapped_pdf else background(page.template, paper['format']) if paper['visible'] and template_available else None,
+                    background=self.background() if mapped_pdf else template_preview if paper['visible'] else None,
                     undo=bool(self.undo), redo=bool(self.redo))

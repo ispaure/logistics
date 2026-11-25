@@ -275,13 +275,15 @@ class EditorPicker(DestinationForm):
         await self.show_editor_browser('save', name, data, operation=operation)
 
     async def show_notebook_destination(self, panel):
+        from features.notebooks.remarkable_export import save_rmdoc
+
         epoch, navigation = self._epoch, self.app.navigation_generation
         source = getattr(getattr(panel, 'document', None), 'resource', None)
         operation = PickerOperation(origin=self._capture_origin(panel, managed=False),
                                     source_policy=source.policy if source is not None else None,
                                     binary_owner=panel, privacy_gate=panel.privacy_gate)
         name = panel.editor.notebook.name + '.rmdoc'
-        data = await asyncio.to_thread(panel.editor.notebook.to_bytes)
+        data = await asyncio.to_thread(save_rmdoc, panel.editor.notebook)
         if epoch != self._epoch or navigation != self.app.navigation_generation or not self.active_host:
             return
         await self.show_editor_browser('save', name, data, operation=operation)

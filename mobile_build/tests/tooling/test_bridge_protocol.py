@@ -73,12 +73,13 @@ class BridgeProtocolTests(unittest.TestCase):
 
     def test_active_progress_files_are_bounded_and_validate_names_and_counters(self):
         row = dict(name='Photos/Maples.jpg', bytes=128, size=1024)
-        for rows in ([row] * 4, [dict(row, bytes=-1)], [dict(row, size=True)],
+        for rows in ([row] * 11, [dict(row, bytes=-1)], [dict(row, size=True)],
                      [dict(row, name=None)], [dict(row, name='é' * 2049)]):
             with self.subTest(rows=rows), self.assertRaisesRegex(ValueError, 'mirror_progress'):
                 mirror_progress(Mock(request=Mock(return_value=dict(phase='Transferring', done=128, total=1024, active_files=rows))), 'run')
-        result = mirror_progress(Mock(request=Mock(return_value=dict(phase='Transferring', done=128, total=1024, active_files=[row]))), 'run')
-        self.assertEqual(result['active_files'], [row])
+        rows = [dict(row, name=f'Photos/Maples-{index}.jpg') for index in range(10)]
+        result = mirror_progress(Mock(request=Mock(return_value=dict(phase='Transferring', done=128, total=1024, active_files=rows))), 'run')
+        self.assertEqual(result['active_files'], rows)
 
     def test_malformed_success_result_frees_native_response_before_reporting_error(self):
         client = CloudClient.__new__(CloudClient)

@@ -338,6 +338,9 @@ def prepare(path, digest):
     if platform == 'android':
         validate_android_identity(data)
     data.update(package=str(package), package_sha256=file_sha256(package), bundle_id=BUNDLE)
+    if not data.get('shared_report'):
+        # Installation and retry consume the signed package and receipt.
+        data['compiler_output_disposable'] = True
     check_source(data); save_json(workspace / 'prepared.json', data)
     return data
 

@@ -158,6 +158,19 @@ h1,h2,h3,h4,h5,h6 { font-size:1.15em; margin:16px 0 8px } .muted { color:var(--m
 button { touch-action:manipulation } button:focus-visible { outline:2px solid var(--accent) }
 #latest { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); padding:10px 16px; min-height:48px; border:1px solid var(--line); border-radius:24px; background:var(--chat_background); color:var(--ink); font:inherit; font-size:.8em }
 #empty { padding:12vh 16px 24px; text-align:center } #empty h1 { font-size:1.25em; margin:0 0 8px } #copy-status { position:fixed; bottom:0; background:var(--chat_background); color:var(--ink); font-size:.8em }
+/* Android inserts and removes this marker while the transcript stays open. */
+html.logistics-chat-eink {
+  --text:#000; --muted:#000; --accent:#000; --control_border:#000;
+  --chat_background:#fff; --surface:#fff; --hover:#fff;
+}
+html.logistics-chat-eink article, html.logistics-chat-eink article.user {
+  width:auto; max-width:none; margin:0; padding:12px; border:0; border-radius:0;
+}
+html.logistics-chat-eink article + article { border-top:1px solid #000 }
+html.logistics-chat-eink .role {
+  position:static; width:auto; height:auto; overflow:visible;
+  clip-path:none; white-space:normal; font-weight:bold; margin-bottom:4px;
+}
 </style></head><body><main id="messages" aria-label="Conversation"></main>
 <section id="empty"><h1>Start a conversation</h1><p class="muted" id="hint">Write a message below.</p></section>
 <button id="latest" hidden>Latest message ↓</button><div id="copy-status" role="status"></div></body></html>'''
@@ -177,6 +190,10 @@ const bottom = () => window.scrollTo(0, document.documentElement.scrollHeight);
 const nearBottom = () => document.documentElement.scrollHeight - window.innerHeight - window.scrollY < 80;
 if (!window.chatView) {
  window.chatView = { key:null, entries:[] };
+ const syncContrast = () => document.documentElement.classList.toggle(
+  'logistics-chat-eink', document.getElementById('logistics-eink') !== null);
+ syncContrast();
+ new MutationObserver(syncContrast).observe(document.head, {childList:true});
  latest.addEventListener('click', bottom);
  window.addEventListener('scroll', () => { latest.hidden = nearBottom(); }, {passive:true});
 }

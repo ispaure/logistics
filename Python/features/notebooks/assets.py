@@ -15,8 +15,16 @@ from pathlib import Path
 _ROOT = Path(__file__).with_name('assets')
 
 
-@lru_cache(maxsize=None)
-def asset(name):
+def _asset_path(name):
     if Path(name).name != name:
         raise ValueError('Notebook assets must be direct children of assets/.')
-    return (_ROOT / name).read_text(encoding='utf-8')
+    return _ROOT / name
+
+
+@lru_cache(maxsize=None)
+def asset(name):
+    return _asset_path(name).read_text(encoding='utf-8')
+
+
+def asset_bytes(name):
+    return _asset_path(name).read_bytes()

@@ -85,6 +85,7 @@ def decode_envelope(data):
 # Python limits bound the encoded JSON, before crossing ctypes. Native review
 # decoding intentionally has no cap; Python callers still use the general cap.
 PACKAGE_LIMIT = 1024 * 1024
+MAX_ACTIVE_TRANSFERS = 10
 
 
 def request_limit_bytes(action):
@@ -156,7 +157,7 @@ def validate_result(action, value):
                 invalid()
         if "active_files" in value:
             rows = value['active_files']
-            if not isinstance(rows, list) or len(rows) > 3:
+            if not isinstance(rows, list) or len(rows) > MAX_ACTIVE_TRANSFERS:
                 invalid()
             for row in rows:
                 if (not isinstance(row, dict) or not isinstance(row.get('name'), str)

@@ -1493,17 +1493,19 @@ def main():
                             entry_point='tests.logisticsmobile.file_drag_gesture_probe',
                             result_name='file-drag-android-result.json', observe=observe_touch,
                             gpu=args.android_gpu, probe_timeout=330)
-                return
-            if args.probe == 'download-recovery':
+            elif args.probe == 'download-recovery':
                 from mobile_build.validation.android_download_recovery import android_fixture
                 with android_fixture(workspace, args.output) as observe:
                     run_android(workspace, payload, args.output, env, options,
                         bundle='io.github.ispaure.logisticsnotebookqa', gpu=args.android_gpu,
                         entry_point='tests.logisticsmobile.download_recovery_probe',
                         result_name='download-recovery-result.json', observe=observe, probe_timeout=360)
-                return
-            run_android(workspace, payload, args.output, env, options,
-                        device=args.device, tablet=args.android_tablet, gpu=args.android_gpu, **profile)
+            else:
+                run_android(workspace, payload, args.output, env, options,
+                            device=args.device, tablet=args.android_tablet, gpu=args.android_gpu, **profile)
+    if not args.device:
+        from logistics_build.standalone_evidence import register_mobile_probe
+        register_mobile_probe(REPO, args.output, args.platform)
 
 
 if __name__ == '__main__':

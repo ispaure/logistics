@@ -18,14 +18,20 @@ import argparse
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
+import time
 import unittest
 from unittest.mock import Mock, patch
 
 from build_manager.guest_tools import LINUX_BOOTSTRAP, WINDOWS_PREPARE, linux_parameters
-from logistics_build import vm_backend, windows_backend
+from logistics_build import vm_backend, windows_backend, windows_tool_retention
 
 
 class GuestToolPreparationTests(unittest.TestCase):
+    def setUp(self):
+        private = self.enterContext(TemporaryDirectory())
+        self.enterContext(patch.object(windows_tool_retention, 'config_directory',
+                                       return_value=Path(private).resolve()))
+
     def test_portable_download_trust_preserves_custom_policy_and_restores_environment(self):
         from logistics_build.notebook_validation import download_certificates
         import certifi
@@ -313,6 +319,10 @@ class GuestToolPreparationTests(unittest.TestCase):
                         if cleanup_fails:
                             raise OSError('cleanup failed')
 
+                    def provision(_vm, output, **_runtime):
+                        output.write_text(json.dumps(dict(prepared, tests_run=False)))
+                        return prepared
+
                     def shutdown(vm):
                         guest.collect.assert_called_once()
                         if not transfer_fails:
@@ -323,14 +333,19 @@ class GuestToolPreparationTests(unittest.TestCase):
                     guest.collect.side_effect = collect
                     guest.remove_paths.side_effect = remove
                     client.shutdown.side_effect = shutdown
+                    prepare.side_effect = provision
                     expected_failure = transfer_fails or cleanup_fails or shutdown_fails
                     self.assertEqual(windows_backend._run_attempt(args), int(expected_failure))
                     client.shutdown.assert_called_once_with('test-vm')
                     if reuse:
                         prepare.assert_not_called()
                     else:
-                        prepare.assert_called_once_with('test-vm', args.results / 'prepared.json',
+                        receipt = prepare.call_args.args[1]
+                        prepare.assert_called_once_with('test-vm', receipt,
                                                         architecture='x86_64', version='3.12.2')
+                        self.assertEqual(json.loads((args.results / 'prepared.json').read_text())['token'],
+                                         prepared['token'])
+                        self.assertEqual(receipt.exists(), transfer_fails or cleanup_fails)
                     if transfer_fails:
                         guest.remove_paths.assert_not_called()
                     else:
@@ -364,6 +379,38 @@ class GuestToolPreparationTests(unittest.TestCase):
         wait.assert_called_once_with(5)
         self.assertEqual(result, dict(status='passed', vm_shutdown=dict(
             command='succeeded', observed_state='stopped', state_verified=True)))
+
+    def test_windows_retention_retries_and_only_forgets_confirmed_expired_tools(self):
+        client = Mock()
+        with windows_tool_retention.WindowsToolRetention(client, 'test-vm').lease() as retention:
+            expires = time.time() - windows_tool_retention.WINDOWS_TOOL_MAX_AGE - 60
+
+            def record(character, *, vm='test-vm', stale=True):
+                path = retention.root / (character + '.json')
+                path.write_text(json.dumps(dict(vm=vm, token=character * 32, status='failed', tests_run=False)))
+                if stale:
+                    os.utime(path, (expires, expires))
+                return path
+
+            disposable = record('a')
+            blocked = record('b')
+            in_use = record('c')
+            recent = record('d', stale=False)
+            wrong_vm = record('e', vm='another-vm')
+
+            client.powershell.side_effect = (RuntimeError('temporary error'),
+                json.dumps(dict(removed=['a' * 32], errors=[])))
+            with patch('builtins.print'):
+                retention.prune(preserve='c' * 32)
+                self.assertTrue(disposable.is_file())
+                retention.prune(preserve='c' * 32)
+            self.assertFalse(disposable.exists())
+            self.assertTrue(all(path.is_file() for path in (blocked, in_use, recent, wrong_vm)))
+            self.assertEqual(client.powershell.call_count, 2)
+            for call in client.powershell.call_args_list:
+                vm, _, values = call.args
+                self.assertEqual(vm, 'test-vm')
+                self.assertEqual(values, dict(tokens=['a' * 32, 'b' * 32], paths=windows_tool_retention.TOOL_PATHS))
 
     def test_windows_timeout_keeps_setup_failure_and_verifies_late_stop(self):
         from logistics_build import guest_results

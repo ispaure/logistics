@@ -41,12 +41,15 @@ def configure(project):
     shutil.copyfile(awake, support / awake.name)
     pencil = Path(__file__).resolve().parents[2] / 'Python/features/notebooks/mobile/ios/NotebookInputWindow.m'
     shutil.copyfile(pencil, support / pencil.name)
-    pencil_include = '#import \"../Support/NotebookInputWindow.m\"'
+    photos = pencil.with_name('NotebookPhotoPicker.m')
+    shutil.copyfile(photos, support / photos.name)
     include = '#import "../Support/ScrollingTitle.m"'
     previous = launcher.read_text()
     text = previous
-    if pencil_include not in text:
-        text = pencil_include + '\n' + text
+    for native in (pencil, photos):
+        native_include = f'#import \"../Support/{native.name}\"'
+        if native_include not in text:
+            text = native_include + '\n' + text
     awake_include = '#import "../Support/ScreenAwake.m"'
     if awake_include not in text:
         text = awake_include + '\n' + text

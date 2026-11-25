@@ -6,13 +6,23 @@ In **Workspaces**, use an online folder's **••• → Pull…** to create or
 its on-device copy. Use a managed copy's **••• → Push…** to update the remote.
 Both use rclone Sync.
 Destination files and empty folders can be replaced or deleted without a backup.
+Rclone removes destination-only files after transfers succeed. Replacements
+free the old file's space as each new copy takes its place.
 One transfer runs at a time. Existing local copies stay available for browsing.
+Files copied to the destination by another tool can appear as replacements
+if their modification times differ. On SMB, a timestamp difference can
+trigger a full copy even if the file contents are identical.
 
 Tap the **Transfers** icon next to **Server** in Workspaces. The overview
 shows the active transfer above interrupted downloads and completed transfers.
-Tap the active card for its source, destination, MB/s, and individual
-file progress as the source reports it. Percentages use known bytes or file
-counts. Removal counters show attempts. Resumable downloads show **Verified on disk** after copying. A finished folder is published once it passes verification.
+Tap the active card for its source, destination, MB/s, and the progress of
+each file currently copying. Scroll to see all active files. On Android, a
+file with a known size shows its progress bar next to the copied-size text
+when the panel has room. The file and byte
+totals can grow while rclone compares more of the source with the destination.
+Percentages use the work found so far. Removal counters show attempts.
+Resumable downloads show **Verified on disk** after copying. A finished
+folder is published once it passes verification.
 
 **Back** and **Continue browsing** return to the screen that opened the details.
 If you started a transfer in the File Browser, they return to that folder.

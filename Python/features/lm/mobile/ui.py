@@ -132,9 +132,12 @@ class ChatUI(ChatSettingsPanel):
         self.chat_transcript_card = toga.Box(
             children=[self.chat_conversation_heading, self.chat_setup_box, self.chat_transcript],
             style=Pack(direction=COLUMN, flex=1))
-        self.presentation.surface(self.chat_prompt, radius=12, background='surface', foreground='text', outlined=False)
-        self.presentation.surface(self.chat_send, radius=12, background='text', foreground='window', outlined=False)
-        self.presentation.surface(self.chat_status, radius=0, background='chat_background', foreground='muted', outlined=False)
+        self.presentation.surface(self.chat_prompt, radius=12, background='surface', foreground='text',
+                                  outlined=False, eink_outlined=False)
+        self.presentation.surface(self.chat_send, radius=12, background='text', foreground='window',
+                                  outlined=False, eink_outlined=False)
+        self.presentation.surface(self.chat_status, radius=0, background='chat_background', foreground='muted',
+                                  outlined=False, eink_outlined=False)
         self.chat_messages = toga.Box(children=[self.chat_transcript_card, self.chat_status_box, self.chat_composer],
             style=Pack(direction=COLUMN, flex=1))
         self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
@@ -625,7 +628,8 @@ class ChatUI(ChatSettingsPanel):
             control.enabled = not busy
         self.presentation.apply_icon(self.chat_send, 'stop' if self.state.generating else 'up',
                    'Stop' if self.state.generating else 'Send')
-        self.presentation.surface(self.chat_send, radius=24, background='text', foreground='window', outlined=False)
+        self.presentation.surface(self.chat_send, radius=24, background='text', foreground='window',
+                                  outlined=False, eink_outlined=False)
         self.update_chat_readiness()
         self.chat_conversation_list.enabled = not busy
         if not busy:

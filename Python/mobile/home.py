@@ -84,7 +84,7 @@ class HomeScreen:
                 style=Pack(height=TOUCH_TARGET + 12, flex=1, font_size=13,
                            font_weight='bold', margin_left=8 if shortcuts.children else 0))
             button_icons(button, [(glyph, '')])
-            shortcuts.add(surface(button, outlined=True, foreground='text'))
+            shortcuts.add(surface(button, outlined=True, foreground='text', eink_outlined=False))
         if shortcuts.children:
             secondary.add(heading('Your libraries'), shortcuts)
         notice = getattr(getattr(self.app, 'recovery_notice', None), 'text', '')

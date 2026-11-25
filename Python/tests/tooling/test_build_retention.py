@@ -14,6 +14,7 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import os
 import json
+from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import time
@@ -23,7 +24,9 @@ from unittest.mock import patch
 
 from logistics_build.build_retention import (clean, compiler_cache, compiler_cache_group,
                                             COMPILER_CACHE_MARKER, delete_storage, enroll_output,
-                                            prune_device_workspaces, scratch, snapshot_intermediates,
+                                            device_intermediates, prune_device_workspaces,
+                                            prune_legacy_android_payloads, prune_packaged_device_caches,
+                                            scratch, snapshot_intermediates,
                                             storage_inventory)
 from logistics_build.device_workspace_paths import DEVICE_WORKSPACES, LEGACY_DEVICE_WORKSPACES
 from build_manager.locking import workspace_lock
@@ -40,6 +43,70 @@ def device_workspace(root, base, number, stamp, platform='android'):
 
 
 class BuildRetentionTests(unittest.TestCase):
+    def test_packaged_device_cache_can_retire_early_with_verified_package(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            paths = [device_workspace(root, DEVICE_WORKSPACES, n, time.time()) for n in range(1, 5)]
+            for path in paths:
+                (path / 'build').mkdir()
+                package = path / 'app.apk'
+                package.write_bytes(b'package bytes')
+                expected = sha256(package.read_bytes()).hexdigest()
+                (path / 'prepared.json').write_text(json.dumps(dict(
+                    workspace=str(path), platform='android', package=str(package), package_sha256=expected,
+                    compiler_output_disposable=path != paths[3])))
+            (paths[1] / 'app.apk').write_bytes(b'different')
+            (paths[2] / '.keep').touch()
+            durable_hold(paths[0], 'package can still be deployed')
+            with patch('logistics_build.build_retention.cache_idle', return_value=True):
+                specs = list(device_intermediates(root))
+                expected = [str(paths[0] / 'build')]
+                with workspace_lock(paths[0] / 'operation.lock'):
+                    self.assertFalse(prune_packaged_device_caches(specs, apply=True))
+                self.assertEqual(prune_packaged_device_caches(specs), expected)
+                self.assertEqual(prune_packaged_device_caches(specs, apply=True), expected)
+            self.assertFalse((paths[0] / 'build').exists())
+            self.assertTrue((paths[0] / 'app.apk').is_file())
+            self.assertTrue(all((path / 'build').is_dir() for path in paths[1:]))
+
+    def test_legacy_android_cleanup_requires_matching_proof_and_preserves_evidence(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            android = root / 'mobile_build/.tools/build-manager/workspaces/android'
+            old = time.time() - 8 * 86400
+            token = 'c' * 32
+            manifest = {'source_sha256': 'a' * 64}
+            workspaces = [android / f'emulator-{n:032x}' for n in range(1, 5)]
+            for workspace in workspaces:
+                device = workspace / 'device'
+                device.mkdir(parents=True)
+                (device / 'removed-lease.json').write_text(json.dumps(
+                    dict(token=token, name='build-manager-' + token, workspace=str(device))))
+                payload = workspace / 'runtime-payload'
+                payload.mkdir()
+                (payload / 'source.json').write_text(json.dumps(manifest))
+                (workspace / 'runtime.json').write_text(json.dumps(dict(
+                    success=True, target='android', source=manifest, local_source_sha256=manifest['source_sha256'])))
+                (workspace / 'runtime.log').touch()
+                (workspace / 'validated-test.apk').touch()
+                os.utime(payload, (old, old))
+            (workspaces[1] / 'runtime.json').write_text('{}')
+            (workspaces[2] / 'device/lease.json').touch()
+            durable_hold(workspaces[3], 'fixture')
+            expected = [str(workspaces[0] / 'runtime-payload')]
+            durable_hold(android, 'parent-fixture')
+            self.assertFalse(prune_legacy_android_payloads(root, apply=True))
+            durable_hold(android, 'parent-fixture', release=True)
+            with workspace_lock(android / 'operation.lock'):
+                self.assertFalse(prune_legacy_android_payloads(root, apply=True))
+            self.assertEqual(prune_legacy_android_payloads(root), expected)
+            self.assertTrue(Path(expected[0]).exists())
+            self.assertEqual(prune_legacy_android_payloads(root, apply=True), expected)
+            self.assertFalse(Path(expected[0]).exists())
+            self.assertTrue(all((path / 'runtime-payload').is_dir() for path in workspaces[1:]))
+            self.assertTrue(all((workspaces[0] / filename).is_file()
+                                for filename in ('runtime.json', 'runtime.log', 'validated-test.apk')))
+
     def test_device_workspace_age_and_protection_across_roots(self):
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()

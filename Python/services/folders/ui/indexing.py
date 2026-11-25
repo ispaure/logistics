@@ -21,7 +21,7 @@ class IndexService(qt.QObject):
 
     def __init__(self):
         super().__init__()
-        self.policy = ScanPolicy(directory_cache)
+        self.policy = ScanPolicy(directory_cache, prioritize_refresh=True)
         self.coordinator = IndexCoordinator(directory_cache, notify=self._activity,
                                             set_priority=self._set_priority,
                                             select_job=self.policy.select_job, should_yield=self.policy.should_yield)

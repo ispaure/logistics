@@ -41,9 +41,12 @@ def load_source_modules(repo):
             raise ValueError('Invalid mobile source manifest: ' + owner)
         selected = []
         for name in data['modules']:
-            if (not isinstance(name, str) or not name or '\\' in name or ':' in name
-                    or PurePosixPath(name).is_absolute() or '..' in PurePosixPath(name).parts
-                    or PurePosixPath(name).as_posix() != name or PurePosixPath(name).suffix not in {'.py', '.java', '.m', '.swift', '.js', '.css', '.html'}):
+            if not isinstance(name, str) or not name or '\\' in name or ':' in name:
+                raise ValueError('Invalid mobile source path in ' + owner)
+            path = PurePosixPath(name)
+            asset = len(path.parts) == 2 and path.parts[0] == 'assets' and path.suffix in {'.pdf', '.png'}
+            source = path.suffix in {'.py', '.java', '.m', '.swift', '.js', '.css', '.html'}
+            if path.is_absolute() or '..' in path.parts or path.as_posix() != name or not (source or asset):
                 raise ValueError('Invalid mobile source path in ' + owner)
             if name in selected:
                 raise ValueError('Duplicate mobile source path in ' + owner)

@@ -23,14 +23,19 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class TemplateCatalogTests(unittest.TestCase):
-    def test_packaged_templates_are_generated_without_artwork_assets(self):
+    def test_catalog_packages_the_supplied_pdf_artwork(self):
         root = Path(templates.__file__).parent
         manifest = json.loads((root / 'mobile_sources.json').read_text())
-        artwork = {'.png', '.jpg', '.jpeg', '.svg', '.pdf', '.template', '.rmdoc'}
-        self.assertFalse([name for name in manifest['modules'] if Path(name).suffix in artwork])
-        self.assertFalse([p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in artwork])
+        expected = {'assets/' + name for name in templates.DINING_ASSETS.values()}
+        self.assertTrue(expected.issubset(manifest['modules']))
         for name in templates.CATALOG:
             for paper_format in templates.FORMATS:
+                if name == templates.DINING_JOURNAL:
+                    asset = templates.embedded_artwork(templates.native_template(name, paper_format))
+                    self.assertIsInstance(asset, templates.TemplatePDF)
+                    self.assertEqual(asset.paper_format, paper_format)
+                    self.assertEqual(asset.data, (root / 'assets' / templates.DINING_ASSETS[paper_format]).read_bytes())
+                    continue
                 paths, texts = templates.geometry(name, paper_format)
                 if name != 'Blank':
                     self.assertTrue(paths)

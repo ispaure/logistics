@@ -404,7 +404,8 @@ class TransferFeedbackTests(TestCase):
         for source in ('Local', 'rclone', 'Network shares'):
             app.change_folder_source(source)
             app.refresh_transfer_status()
-            self.assertEqual(list(app._files_status_row.children), [app.folder_source_tabs, button])
+            self.assertEqual(list(app._files_status_row.children), [app.folder_source_tabs])
+            self.assertIs(button.parent, app.body.children[0]._destination_actions[0])
             self.assertIn('42%', button.accessible_name)
             self.assertEqual(button._impl._surface_roles[0], 'transparent')
         button.on_press()
@@ -442,6 +443,27 @@ class TransferFeedbackTests(TestCase):
         self.assertIsNone(getattr(app, '_sync_status_tick', None))
         app.transfer_busy = False
         app.transfer_notification = False
+
+    def test_eink_sync_indicator_distinguishes_activity_completion_and_stop(self):
+        app = self.app
+        app.show_locations()
+        button = app.folder_transfers_button
+        with patch('mobile.transfer_status.eink_enabled', return_value=True):
+            button.update(True, 42, False)
+            active = button.renderer.icons['sync-progress']
+            self.assertEqual(active.arcs[0][-1], 360 * 42 / 100)
+            button.update(False, 100, True, notified=True)
+            completed = button.renderer.icons['sync-progress']
+            self.assertEqual(completed.fallback, '✓')
+            self.assertIn('finished', button.accessible_name)
+            button.update(False, 42, False, notified=True)
+            stopped = button.renderer.icons['sync-progress']
+            self.assertEqual(stopped.fallback, '×')
+            self.assertIn('stopped', button.accessible_name)
+        button.update(False, 42, False, notified=True)
+        ordinary = button.renderer.icons['sync-progress']
+        self.assertEqual(ordinary.fallback, '↻')
+        self.assertLess(ordinary.stroke_width, active.stroke_width)
 
     def test_completion_timeout_clears_notice_but_cannot_dismiss_a_later_transfer(self):
         app = self.app

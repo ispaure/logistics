@@ -306,7 +306,7 @@ def status_badges(details, *, currently_open=False, icon_count=0):
 def document_group(rows, *, outlined=False):
     """One rounded surface for a document section, with quiet inset dividers."""
     group = surface(toga.Box(style=Pack(direction=COLUMN, margin_bottom=8)), radius=16,
-                    outlined=outlined)
+                    outlined=outlined, eink_outlined=False)
     group._document_group = True
     append_document_group_rows(group, rows)
     backend = type(group._impl).__module__

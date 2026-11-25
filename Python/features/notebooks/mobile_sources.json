@@ -51,6 +51,10 @@
     "remarkable_export.py",
     "previews.py",
     "assets/base.css",
+    "assets/Dining_Journal_Paper_Pro_Move_v6.pdf",
+    "assets/Dining_Journal_Paper_Pro_Move_v6_preview.png",
+    "assets/Dining_Journal_Paper_Pro_v6.pdf",
+    "assets/Dining_Journal_Paper_Pro_v6_preview.png",
     "assets/boot.js",
     "assets/controls.html",
     "assets/desktop.css",
@@ -69,6 +73,8 @@
     "assets/touch_navigation.js",
     "assets/zoom.js",
     "mobile/ios_native_pen.py",
-    "mobile/ios/NotebookInputWindow.m"
+    "mobile/ios_photos.py",
+    "mobile/ios/NotebookInputWindow.m",
+    "mobile/ios/NotebookPhotoPicker.m"
   ]
 }

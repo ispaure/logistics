@@ -297,9 +297,9 @@ class LibraryPanels:
         button = self.panel_tabs[name]
         self.host.tab_style(button, selected)
         self.host.presentation.surface(button, radius=0, background='transparent',
-            foreground='accent' if selected else 'muted', outlined=False)
+            foreground='accent' if selected else 'muted', outlined=False, eink_outlined=False)
         self.host.presentation.surface(self.panel_tab_indicators[name], radius=0,
-            background='accent' if selected else 'transparent', outlined=False)
+            background='accent' if selected else 'transparent', outlined=False, eink_outlined=False)
 
     def install_panel_actions(self):
         """Reuse the library's existing commands, keeping the tree viewport clear."""

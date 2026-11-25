@@ -58,7 +58,7 @@ CFBundleDisplayName = "Logisticks"
 CFBundleName = "Logisticks"
 UIFileSharingEnabled = true
 LSSupportsOpeningDocumentsInPlace = true
-NSCameraUsageDescription = "Capture photos immediately and take bursts from Home."
+NSCameraUsageDescription = "Take photos for notebooks or capture photo bursts from Home."
 NSPhotoLibraryAddUsageDescription = "Save your burst camera photos directly to your Photos library."
 NSLocalNetworkUsageDescription = "Connect to SMB file shares, your LM server and video casting receivers on your local network."
 

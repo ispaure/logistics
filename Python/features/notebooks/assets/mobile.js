@@ -482,6 +482,21 @@ renderEraserChoices();
   const selectionChoices = document.createElement('div');
   selectionChoices.className = 'sheet-actions';
   selectionChoices.append(lassoButton, captureButton);
+  for (const [source, label] of [['photos', 'Choose from Photos…'], ['camera', 'Take a photo…']]) {
+    if (!state.photo_sources?.includes(source)) continue;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.onclick = () => {
+      if (active !== null || busy || state.read_only || state.warning || state.password_required) return;
+      const {x, y, width, height} = paperBounds();
+      closeSheet();
+      if (mode !== 'capture') toggleCapture();
+      sync();
+      send({op:'insert-photo', source, layer:$('layer').value, page_id:state.page_id, bounds:[x,y,width,height]});
+    };
+    selectionChoices.append(button);
+  }
   panels.selection.append(selectionChoices);
   selectButton.setAttribute('aria-haspopup', 'dialog');
   selectButton.setAttribute('aria-expanded', 'false');

@@ -436,6 +436,7 @@ class NotebookWorkspace(qt.QWidget):
             return False
         from services.documents.storage import DocumentResource, DocumentPolicy
         from services.documents.ui.editors import choose_editor_resource
+        from ..remarkable_export import save_rmdoc
         from ..storage import NotebookDocument
         document = self.document
         canvas = self.bridge
@@ -458,7 +459,7 @@ class NotebookWorkspace(qt.QWidget):
             self._pending_choice = choice
             recovery = self.repository if DocumentPolicy.for_provider(choice.provider).persistent else None
             def work(cancelled):
-                data = book.to_bytes()
+                data = save_rmdoc(book, cancelled=cancelled)
                 DocumentResource.publish(choice.provider, choice.path, data, max_bytes=book.max_bytes,
                                          validate=lambda data: Notebook.read(data, max_bytes=book.max_bytes),
                                          cancelled=cancelled)

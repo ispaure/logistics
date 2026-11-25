@@ -89,6 +89,8 @@ class RcloneTransferProbe(LogisticsMobile):
                 ('progress-verify', dict(phase='Sync complete; verifying local copy', files=64, done=250000000, total=250000000))):
                 self.publish_mirror_progress(1, values)
                 await self.sample(self.transfer_view, name, report, evidence)
+            if type(self._impl).__module__.startswith('toga_android.'):
+                await self.sample_android_contrast(report, evidence)
             # Leave the screen through its real action; updates must remain offscreen.
             self.publish_mirror_progress(1, dict(phase='Transferring', files=28, done=125000000, total=250000000))
             await self.wait_surface(self.transfer_view)
@@ -225,6 +227,65 @@ class RcloneTransferProbe(LogisticsMobile):
             if task is not None:
                 await task
             (Path(self.paths.cache) / 'rclone-transfer-result.json').write_text(json.dumps(report, indent=2))
+
+    async def sample_android_contrast(self, report, evidence):
+        from mobile.appearance import configure_android_eink
+        from mobile.palette import argb
+        from toga.style.pack import ROW
+
+        def set_contrast(enabled):
+            self.preferences.values['android_eink'] = 'true' if enabled else 'false'
+            configure_android_eink(self)
+            self.refresh_native_theme()
+
+        def fill(progress):
+            tint = progress._impl.native.getProgressTintList()
+            return None if tint is None else tint.getDefaultColor()
+
+        surface = self.transfer_view
+        fallback = surface.native_fallback
+        original_fill = fill(fallback.progress)
+        active_files = [dict(name=f'Library/Collected editions/Volume {index + 1:02}.cbz',
+                             bytes=16_000_000 + index * 4_000_000, size=64_000_000)
+                        for index in range(10)]
+        values = dict(phase='Transferring', files=28, total_files=64, done=125_000_000,
+                      total=250_000_000, active=len(active_files), active_files=active_files)
+        self.publish_mirror_progress(1, values)
+        await self.sample(surface, 'progress-regular-ten-files', report, evidence)
+        set_contrast(True)
+        try:
+            await self.sample(surface, 'progress-eink', report, evidence)
+            assert len(fallback.file_cells) == 10
+            assert len(fallback.rows.children) == 10
+            assert list(fallback.file_group.children) == [fallback.file_heading, fallback.rows]
+            assert fallback.file_group._impl._surface_eink_outlined
+            assert not fallback.file_group._impl._surface_roles[2]
+            assert all(not row._impl._surface_eink_outlined for row in fallback.rows.children)
+            assert fill(fallback.progress) == argb('#000000')
+            inline_rows = 0
+            for detail, bar in fallback.file_cells:
+                label_view, bar_view = detail._impl.native, bar._impl.native
+                assert label_view.isAttachedToWindow() and bar_view.isAttachedToWindow()
+                assert detail.parent is bar.parent
+                if detail.parent.style.direction == ROW:
+                    assert label_view.getRight() <= bar_view.getLeft() or bar_view.getRight() <= label_view.getLeft()
+                    assert label_view.getTop() < bar_view.getBottom() and bar_view.getTop() < label_view.getBottom()
+                    inline_rows += 1
+                else:
+                    assert label_view.getBottom() <= bar_view.getTop()
+                assert bar_view.getWidth() > 0
+                assert fill(bar) == argb('#000000')
+            scroll = fallback.children[0]
+            scroll.vertical_position = scroll.max_vertical_position
+            await asyncio.sleep(.2)
+            await capture_window(self, evidence / 'progress-eink-last-files.png')
+            report['android_eink_active_rows'] = len(fallback.file_cells)
+            report['android_eink_inline_rows'] = inline_rows
+        finally:
+            set_contrast(False)
+        assert surface.native_fallback is fallback
+        assert fill(fallback.progress) == original_fill
+        report['android_eink_progress_restored'] = True
 
     async def selected_downloads(self, report, evidence):
         from commonUtils.runtime.operations import check_cancelled

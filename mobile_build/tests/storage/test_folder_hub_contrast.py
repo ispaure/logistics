@@ -1,4 +1,4 @@
-"""Workspaces keeps a single row outline and a visible monochrome selection."""
+"""Workspaces keeps plain rows and a visible monochrome selection."""
 
 # AUTHORSHIP INFORMATION
 
@@ -113,12 +113,18 @@ class FolderHubContrastTests(unittest.TestCase):
         folder_hub_style.source_tab(tab, False)
         self.drawable.return_value.setColor.assert_called_with(palette.argb('#ffffff'))
 
-    def test_monochrome_outline_encloses_the_row_without_child_borders(self):
+    def test_monochrome_selection_keeps_the_only_row_outline(self):
         palette.set_eink_enabled(True)
         row = self.widget(button=False)
         folder_hub_style.folder_row(row)
-        self.drawable.return_value.setStroke.assert_called_with(1, palette.argb('#000000'))
+        self.drawable.return_value.setStroke.assert_not_called()
         self.drawable.return_value.setCornerRadius.assert_called_with(8)
+        appearance.selection_row(row, True)
+        self.drawable.return_value.setStroke.assert_called_with(1, palette.argb('#000000'))
+        self.drawable.return_value.setColor.assert_called_with(palette.argb('#000000'))
+        self.drawable.reset_mock()
+        appearance.selection_row(row, False)
+        self.drawable.return_value.setStroke.assert_not_called()
         palette.set_eink_enabled(False)
         self.drawable.reset_mock()
         appearance.paint_surface(row._impl, 8)
@@ -174,4 +180,4 @@ class FolderHubContrastTests(unittest.TestCase):
         self.assertEqual(row.children[-1].style.margin_right, 0)
         self.assertTrue(all(child.style.margin_top == child.style.margin_bottom == 0
                             for child in row.children))
-        self.drawable.return_value.setStroke.assert_called_with(1, palette.argb('#000000'))
+        self.drawable.return_value.setStroke.assert_not_called()

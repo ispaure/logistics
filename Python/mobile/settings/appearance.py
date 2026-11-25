@@ -29,6 +29,7 @@ def appearance(app):
     app.android_eink_choice = toga.Switch('High contrast / E Ink',
         value=app.preferences.values['android_eink'] == 'true', style=Pack(height=48))
     box.add(switch_row(app, 'High contrast / E Ink', app.android_eink_choice,
-        'Use black text on white, stronger borders and simpler controls. Overrides dark mode and reader colors; images stay unchanged.'))
+        'Use black text on white, simpler panels, and clearer controls and selections. '
+        'Overrides dark mode and reader colors. Images stay unchanged.'))
     app.android_eink_choice.on_change = app.change_android_eink
     return box

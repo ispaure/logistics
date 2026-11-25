@@ -79,7 +79,11 @@ def page_button(text, *, destructive=False, **kwargs):
 
 def group_rows(rows, *, icon_inset=False):
     from ..appearance import surface
-    return _forms.group_rows(rows, surface=surface, icon_inset=icon_inset,
+    def group_surface(widget, **kwargs):
+        if isinstance(widget, toga.Selection):
+            kwargs['eink_outlined'] = True
+        return surface(widget, **kwargs)
+    return _forms.group_rows(rows, surface=group_surface, icon_inset=icon_inset,
                              background='settings_group', separator='settings_separator')
 
 
@@ -121,7 +125,7 @@ def settings_presentation(section):
             section.add(note)
         elif isinstance(child, (toga.Selection, toga.NumberInput)):
             child.style.font_size = OPTION_FONT_SIZE
-            surface(child, radius=0, background='transparent', outlined=False, eink_outlined=False)
+            surface(child, radius=0, background='transparent', outlined=False, eink_outlined=True)
             child.style.margin_top = 4
             child.style.margin_bottom = 8
             rows.append(child)
@@ -134,7 +138,7 @@ def settings_presentation(section):
                 child.style.margin_top = 12
                 choice = children[index + 1]
                 choice.style.font_size = OPTION_FONT_SIZE
-                surface(choice, radius=0, background='transparent', outlined=False, eink_outlined=False)
+                surface(choice, radius=0, background='transparent', outlined=False, eink_outlined=True)
                 consumed.add(choice)
                 choice.style.margin_top = 4
                 choice.style.margin_bottom = 12

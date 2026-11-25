@@ -29,7 +29,7 @@ function compactTemplate() {
   return fixedTemplateSize() && state.template_settings.format === 'move'
 }
 function defaultViewportChoice() {
-  if (fixedTemplateSize() || state.exported_template_paper)
+  if (fixedTemplateSize() || state.fit_pdf_page)
     return {view: compactTemplate() ? 'move' : 'pro', zoom: 'page'};
   if (!mobileViewport()) return {view: 'pro', zoom: 'fit'};
   if (document.body.classList.contains('notebook-laptop')) return {view: 'pro', zoom: 'fit'};

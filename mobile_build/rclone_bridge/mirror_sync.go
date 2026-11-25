@@ -23,6 +23,8 @@ import (
 	rclonesync "github.com/rclone/rclone/fs/sync"
 )
 
+const mirrorTransferConcurrency = 10
+
 type transferOptionsKey struct{}
 type transferOptions struct {
 	TrackRenames bool
@@ -127,7 +129,7 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	config.Suffix = ""
 	config.DryRun = review != nil
 	config.MaxStatsGroups = 8
-	config.Transfers = 10
+	config.Transfers = mirrorTransferConcurrency
 	if review != nil {
 		ctx = operations.WithLogger(ctx, review.logger(cipher))
 	}
@@ -215,9 +217,9 @@ func mirrorSyncStats(run string, stats *accounting.StatsInfo) {
 	}
 }
 
-// Only the visible live rows cross the native UI bridge, independent of job size.
+// Include every worker's live row while keeping progress independent of job size.
 func boundedActiveTransfers(transfers []rc.Params) []activeTransfer {
-	rows := make([]activeTransfer, 0, 3)
+	rows := make([]activeTransfer, 0, min(len(transfers), mirrorTransferConcurrency))
 	for _, entry := range transfers {
 		name, ok := entry["name"].(string)
 		if !ok || name == "" || len(name) > 4096 {
@@ -232,7 +234,7 @@ func boundedActiveTransfers(transfers []rc.Params) []activeTransfer {
 			size = 0
 		}
 		rows = append(rows, activeTransfer{Name: name, Bytes: done, Size: size})
-		if len(rows) == 3 {
+		if len(rows) == mirrorTransferConcurrency {
 			break
 		}
 	}

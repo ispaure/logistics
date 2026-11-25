@@ -235,7 +235,8 @@ def ios(project=None, *, include_watch=False):
                 f'-Wl,-force_load,$(SRCROOT)/Support/liblogisticscloud-{variant}.a',
                 '-Wl,-u,_LogisticsCloud', '-Wl,-u,_LogisticsCloudFree', '-Wl,-export_dynamic',
                 '-framework', 'CoreFoundation', '-framework', 'Security',
-                '-framework', 'AVFoundation', '-framework', 'Photos', '-lresolv']
+                '-framework', 'AVFoundation', '-framework', 'Photos', '-framework', 'PhotosUI',
+                '-framework', 'ImageIO', '-framework', 'CoreGraphics', '-lresolv']
     if found != 2:
         raise ValueError('Unexpected Briefcase iOS build configuration; refusing to silently omit the bridge.')
     pbx.write_bytes(plistlib.dumps(data, sort_keys=False))

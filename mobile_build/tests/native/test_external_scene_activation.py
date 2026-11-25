@@ -46,6 +46,8 @@ class ExternalSceneActivationTests(unittest.TestCase):
             self.assertEqual(plistlib.loads(info.read_bytes()), result)
             self.assertEqual(main.read_text().count('#import "../Support/ScrollingTitle.m"'), 1)
             self.assertTrue((root / 'Support/ScrollingTitle.m').is_file())
+            self.assertEqual(main.read_text().count('#import "../Support/NotebookPhotoPicker.m"'), 1)
+            self.assertTrue((root / 'Support/NotebookPhotoPicker.m').is_file())
 
     def test_ios27_registers_once_and_releases_previous_controller(self):
         delegate = object()

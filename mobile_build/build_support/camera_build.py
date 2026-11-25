@@ -34,6 +34,6 @@ def configure(project):
         launcher.write_text(text)
     info = project / 'LogisticsMobile/LogisticsMobile-Info.plist'
     data = plistlib.loads(info.read_bytes())
-    data['NSCameraUsageDescription'] = 'Take photos from Home or power the optional outer-display cover while reading.'
+    data['NSCameraUsageDescription'] = 'Take photos for notebooks or from Home, or power the optional outer-display cover while reading.'
     data['NSPhotoLibraryAddUsageDescription'] = 'Save your burst camera photos directly to your Photos library.'
     info.write_bytes(plistlib.dumps(data, sort_keys=False))

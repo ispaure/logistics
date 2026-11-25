@@ -632,7 +632,8 @@ async def notes_editor(app, library, path):
             return await super().perform(action, **options)
 
         async def prepare_save_as(self):
-            return notebook_title(self), await asyncio.to_thread(self.editor.notebook.to_bytes)
+            from features.notebooks.remarkable_export import save_rmdoc
+            return notebook_title(self), await asyncio.to_thread(save_rmdoc, self.editor.notebook)
 
         async def save_as(self, prepared):
             # A copy must not retarget the library tab or silently abandon its draft.

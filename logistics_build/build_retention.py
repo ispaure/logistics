@@ -13,7 +13,7 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import argparse
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import json
 import os
 from pathlib import Path
@@ -31,6 +31,7 @@ OUTPUT_MARKER = '.manager-build-output'
 GIB = 1024 ** 3
 SNAPSHOT_BUDGET = 24 * GIB
 DEVICE_BUDGET = 12 * GIB  # Per platform; newest three and active/pinned work win.
+WINDOWS_TOOL_MAX_AGE = 24 * 60 * 60
 
 RESERVED_OUTPUTS = {'firebase', 'testflight', 'mobile_app', 'logisticsmobile',
                     'physical-device', 'cloud-host', 'go-cache'}
@@ -248,6 +249,34 @@ def cache_access(path):
     return (path.parent / 'prepared.json').stat().st_mtime
 
 
+def packaged_device_cache(path):
+    """Require proof that a new recipe finished and kept the signed package."""
+    from commonUtils.runtime.streams import file_sha256
+    from logistics_build.storage_extras import read
+
+    try:
+        record = read(path.parent / 'prepared.json')
+        if record.get('compiler_output_disposable') is not True:
+            return False
+        package = path.parent / ('app.zip' if path.parent.parent.name == 'ios' else 'app.apk')
+        return (record['package'] == str(package) and not linked(package)
+                and file_sha256(package) == record['package_sha256'])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
+def prune_packaged_device_caches(groups, *, apply=False):
+    removed = []
+    for _, spec in groups:
+        owned = spec['eligible']
+        build = spec['root'] / 'build'
+        if not build.is_dir() or linked(build) or not packaged_device_cache(build):
+            continue
+        removed += prune(**dict(spec, eligible=lambda path: owned(path) and packaged_device_cache(path)),
+                         keep=0, age_days=0, apply=apply)
+    return removed
+
+
 def snapshot_intermediates(root):
     parent = Path(root) / 'mobile_build/.tools/build-manager/snapshots'
     if not parent.is_dir() or any(linked(p) for p in (parent, *parent.parents)):
@@ -277,6 +306,54 @@ def snapshot_intermediates(root):
                    dict(root=cache_root, eligible=eligible, lock_path=lambda p, snapshot=snapshot: snapshot.with_suffix('.lock')))
 
 
+def verified_legacy_android_payload(payload):
+    """Recognize staging whose report already retained the exact source manifest."""
+    from logistics_build.storage_extras import read
+
+    if payload.name != 'runtime-payload':
+        return False
+    workspace = payload.parent
+    device = workspace / 'device'
+    if (linked(device) or any(os.path.lexists(device / name) for name in ('lease.json', 'avds', 'user'))
+            or linked(workspace / 'runtime.log') or not (workspace / 'runtime.log').is_file()):
+        return False
+    try:
+        record = read(device / 'removed-lease.json')
+        token = record['token']
+        manifest = read(payload / 'source.json')
+        report = read(workspace / 'runtime.json')
+        return (bool(re.fullmatch('[0-9a-f]{32}', token)) and record['name'] == 'build-manager-' + token
+                and record['workspace'] == str(device) and report.get('success') is True
+                and report.get('target') == 'android' and manifest == report['source']
+                and report.get('local_source_sha256') == manifest['source_sha256']
+                and bool(re.fullmatch('[0-9a-f]{64}', manifest['source_sha256'])))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return False
+
+
+def prune_legacy_android_payloads(root, *, apply=False):
+    android = Path(root) / 'mobile_build/.tools/build-manager/workspaces/android'
+    if not android.is_dir() or any(linked(path) for path in (android, *android.parents)):
+        return []
+    removed = []
+    with ExitStack() as locks:
+        try:
+            locks.enter_context(workspace_lock(android / 'operation.lock'))
+        except RuntimeError:
+            return removed
+        if has_retention_protection(android):
+            return removed
+        for payload in android.glob('emulator-*/runtime-payload'):
+            workspace = payload.parent
+            if (not re.fullmatch('emulator-[0-9a-f]{32}', workspace.name)
+                    or linked(workspace) or has_retention_protection(workspace)):
+                continue
+            removed += prune(workspace, eligible=verified_legacy_android_payload,
+                             keep=0, age_days=7, apply=apply, ownership_files=('source.json',),
+                             protection=nested_workflow_hold_reason)
+    return removed
+
+
 def clean(root=ROOT, *, apply=False, snapshots=True, warnings=None):
     root = Path(root)
     mobile = root / 'mobile_build'
@@ -291,7 +368,13 @@ def clean(root=ROOT, *, apply=False, snapshots=True, warnings=None):
                          apply=apply, lock_path=lambda p: p.with_suffix('.lock'))
         for platform in ('ios', 'android'):
             removed += prune_device_workspaces(root, platform, apply=apply)
-        caches = [dict(spec, last_used=cache_access) for _, spec in device_intermediates(root)]
+        removed += prune_legacy_android_payloads(root, apply=apply)
+        device_caches = list(device_intermediates(root))
+        packaged = prune_packaged_device_caches(device_caches, apply=apply)
+        removed += packaged
+        package_caches = {Path(path) for path in packaged}
+        caches = [dict(spec, last_used=cache_access) for _, spec in device_caches
+                  if spec['root'] / 'build' not in package_caches]
         caches += [spec for _, spec in snapshot_intermediates(root)]
         caches.extend(dict(spec, last_used=lambda p: (p / COMPILER_CACHE_MARKER).stat().st_mtime)
                       for spec in compiler_cache_groups(root).values())
@@ -301,7 +384,7 @@ def clean(root=ROOT, *, apply=False, snapshots=True, warnings=None):
             try:
                 removed += prune(**storage_group(root), age_days=1, max_bytes=12 * GIB,
                                  order_key=access_order, last_used=lambda p: access_order(p)[0], apply=apply)
-            except (OSError, subprocess.SubprocessError) as error:
+            except (OSError, RuntimeError, subprocess.SubprocessError) as error:
                 message = 'Xcode cache cleanup unavailable: ' + str(error)
                 print(message, file=sys.stderr)
                 if warnings is not None:
@@ -312,15 +395,21 @@ def clean(root=ROOT, *, apply=False, snapshots=True, warnings=None):
                              last_used=lambda p: (p / MARKER).stat().st_mtime, apply=apply)
         if sys.platform == 'darwin':
             removed += clean_simulators(root, apply=apply, warnings=warnings)
+        from logistics_build.standalone_evidence import prune as prune_standalone_evidence
+        removed += prune_standalone_evidence(root, apply=apply)
     for group in scratch_groups(root).values():
         removed += prune(**group, keep=1, age_days=1, apply=apply)
     return removed
 
 
 def storage_maintenance(root=ROOT):
+    from logistics_build.test_apk_storage import coalesce_test_apks
+
     warnings = []
     removed = clean(root, apply=True, warnings=warnings)
-    return dict(status='incomplete' if warnings else 'passed', removed=removed, warnings=warnings)
+    coalesced = coalesce_test_apks(root, apply=True)
+    return dict(status='incomplete' if warnings else 'passed', removed=removed, warnings=warnings,
+                coalesced_test_apks=coalesced)
 
 
 def clean_builds(mobile):
@@ -355,6 +444,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--apply', action='store_true', help='Delete expired owned outputs')
+    evidence = parser.add_mutually_exclusive_group()
+    evidence.add_argument('--register-standalone-evidence', nargs='+', type=Path,
+                          metavar='PATH', help='Register a retained standalone report followed by reviewed raw files')
+    evidence.add_argument('--standalone-evidence', action='store_true',
+                          help='Preview or apply cleanup of expired registered standalone evidence only')
+    parser.add_argument('--coalesce-test-apks', nargs='*', type=Path, metavar='RUN',
+                        help='Preview exact duplicate Android test APKs for saved Manager runs, optionally at explicit run paths')
     parser.add_argument('--enroll-directory', type=Path, help='Adopt a reviewed disposable temporary build directory (five days)')
     parser.add_argument('--enroll-simulator', help='Adopt an explicitly disposable simulator UUID (one day)')
     parser.add_argument('--enroll-output', action='append', default=[], metavar='NAME',
@@ -362,6 +458,30 @@ def main():
     parser.add_argument('--scratch', nargs=argparse.REMAINDER,
                         help='Run a command with disposable cwd and commonUtils storage; {workspace} arguments expand to its path')
     args = parser.parse_args()
+    if args.register_standalone_evidence or args.standalone_evidence:
+        from logistics_build import standalone_evidence
+
+        if args.coalesce_test_apks is not None or args.enroll_directory or args.enroll_simulator or args.enroll_output or args.scratch:
+            parser.error('Review standalone evidence in a separate operation.')
+        if args.register_standalone_evidence:
+            report, *attachments = args.register_standalone_evidence
+            if args.apply or not attachments:
+                parser.error('Register a report and at least one raw attachment separately from cleanup.')
+            try:
+                result = dict(registered=standalone_evidence.register(args.root, report, attachments))
+            except (OSError, ValueError, RuntimeError) as error:
+                parser.error(str(error))
+        else:
+            result = dict(apply=args.apply, expired=standalone_evidence.prune(args.root, apply=args.apply))
+        print(json.dumps(result, indent=2))
+        return 0
+    if args.coalesce_test_apks is not None:
+        if args.enroll_directory or args.enroll_simulator or args.enroll_output or args.scratch:
+            parser.error('Review test APK copies separately from adoption and scratch execution.')
+        from logistics_build.test_apk_storage import coalesce_test_apks
+        copies = coalesce_test_apks(args.root, apply=args.apply, runs=args.coalesce_test_apks or None)
+        print(json.dumps(dict(apply=args.apply, coalesced_test_apks=copies), indent=2))
+        return 0
     if args.enroll_directory or args.enroll_simulator:
         if args.apply or args.enroll_output or args.scratch or args.enroll_directory and args.enroll_simulator:
             parser.error('Adopt one disposable location separately from other operations.')

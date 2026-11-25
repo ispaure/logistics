@@ -35,14 +35,15 @@ window.notebookUpdate = function(next, error) {
     deferredUpdate = () => window.notebookUpdate(next, error);
     return
   }
-  if (queue[0]?.op === 'paste-image' && !error) imageSelection = next.images?.at(-1)?.id || null;
+  if (['paste-image', 'insert-photo'].includes(queue[0]?.op) && !error &&
+      next.images?.length > (state.images?.length || 0)) imageSelection = next.images.at(-1).id;
   state = next;
   pendingInk = null;
   pendingErase = null;
   wholeErasePreview.clear();
   busy = false;
   queue.shift();
-  $('status').textContent = error || state.save_status || 'Saved on this device. Export a copy to share.';
+  $('status').textContent = error || state.save_status || 'Saved on this device.';
   if (error) queue = [];
   render();
   if (state.password_required) $('pdfUnlockStatus').textContent = error;

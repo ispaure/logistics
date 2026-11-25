@@ -23,6 +23,7 @@ class NativeTransferFallback(toga.Box):
         super().__init__(style=Pack(direction=COLUMN, flex=1))
         self.surface = surface
         self.presentation = getattr(surface.host, 'presentation', None)
+        self.android = type(self._impl).__module__.startswith('toga_android.')
         self.title = FittedLabel('Transfers', style=Pack(font_size=22, font_weight='bold'))
         self.status = self.label('', size=15, muted=True)
         self.amount = self.label('', size=36, bold=True)
@@ -40,9 +41,11 @@ class NativeTransferFallback(toga.Box):
         self.fact_cells = []
         self.file_heading = self.label('Copying now', size=17, bold=True)
         self.rows = toga.Box(style=Pack(direction=COLUMN, gap=9))
+        self.file_group = toga.Box(children=[self.rows], style=Pack(direction=COLUMN, gap=12))
         self.buttons = toga.Box(style=Pack(direction=COLUMN, gap=8, margin=12))
         self.row_signature = self.button_signature = None
         self.file_cells = []
+        self.active_cards = {}
         self.scope = self.remote = None
         self._fitted_width = None
         self._layout_subscription = None
@@ -51,15 +54,16 @@ class NativeTransferFallback(toga.Box):
                                 style=Pack(direction=COLUMN, margin=16, gap=8))
         self.card = toga.Box(children=[self.summary], style=Pack(direction=COLUMN))
         if self.presentation:
-            self.presentation.surface(self.card, radius=16, background='surface')
-            self.presentation.surface(self.amount, radius=0, background='transparent', foreground='accent')
+            self.presentation.surface(self.card, radius=16, background='surface', eink_outlined=True)
+            self.presentation.surface(self.amount, radius=0, background='transparent',
+                                      foreground='accent', eink_outlined=False)
         self.review_page = self.label('', size=13, muted=True)
         self.review_navigation = toga.Box(style=Pack(direction=ROW, gap=8))
         self.review_filters = None
         self.history_signature = None
         self.active_card = None
         self.history = toga.Box(style=Pack(direction=COLUMN, gap=8))
-        self.body = toga.Box(children=[self.card, self.rows],
+        self.body = toga.Box(children=[self.card, self.file_group],
                              style=Pack(direction=COLUMN, gap=12, margin=12))
         content = toga.Box(children=[self.body], style=Pack(direction=COLUMN, align_items=CENTER))
         self.add(toga.ScrollContainer(content=content, horizontal=False, style=Pack(flex=1)), self.buttons)
@@ -71,7 +75,8 @@ class NativeTransferFallback(toga.Box):
     def label(self, text, *, size=14, bold=False, muted=False):
         label = FittedLabel(text, style=Pack(font_size=size, font_weight='bold' if bold else 'normal'))
         if self.presentation and muted:
-            self.presentation.surface(label, radius=0, background='transparent', foreground='muted')
+            self.presentation.surface(label, radius=0, background='transparent',
+                                      foreground='muted', eink_outlined=False)
         return label
 
     def button(self, title, action, enabled=True, **args):
@@ -87,7 +92,8 @@ class NativeTransferFallback(toga.Box):
                 self.presentation.action_button(control)
             else:
                 foreground = 'destructive' if action in ('stop', 'discard-download') else 'muted'
-                self.presentation.surface(control, radius=10, background='transparent', foreground=foreground)
+                self.presentation.surface(control, radius=10, background='transparent',
+                                          foreground=foreground, eink_outlined=True)
         return control
 
     def reflow_surface(self, frame=None):
@@ -121,8 +127,12 @@ class NativeTransferFallback(toga.Box):
             cell_width = inner if len(row.children) == 1 else max(24, (inner - 12) // 2)
             for cell in row.children:
                 fit_section(cell, cell_width)
-        fit_text(self.file_heading, content_width)
-        fit_section(self.rows, content_width)
+        fit_text(self.file_heading, content_width - self.file_heading.style.margin_left
+                 - self.file_heading.style.margin_right)
+        if self.android and self.active_cards:
+            self.reflow_file_rows(content_width)
+        else:
+            fit_section(self.rows, content_width)
         fit_section(self.history, content_width, fit=fit_transfer_control)
         if self.active_card is not None:
             fit_section(self.active_card, content_width, fit=fit_transfer_control)
@@ -131,6 +141,8 @@ class NativeTransferFallback(toga.Box):
 
     def render(self, model):
         mode = model.get('mode')
+        if mode != 'progress':
+            self.show_copying_group(False)
         if mode == 'overview':
             self.render_overview(model)
             return
@@ -165,7 +177,7 @@ class NativeTransferFallback(toga.Box):
             if buttons and self.buttons.parent is not self.body:
                 if self.buttons.parent is self:
                     self.remove(self.buttons)
-                self.body.insert(self.body.children.index(self.rows), self.buttons)
+                self.body.insert(self.body.children.index(self.file_group), self.buttons)
             elif not buttons and self.buttons.parent is not None:
                 self.buttons.parent.remove(self.buttons)
             if not model.get('detail'):
@@ -209,31 +221,23 @@ class NativeTransferFallback(toga.Box):
                 ('Transfer settings', 'settings', True, {}), ('Cancel', 'background', True, {})])
         if mode in ('progress', 'review') and rows != self.row_signature:
             self.row_signature = rows
-            self.rows.clear()
             if mode == 'progress':
-                if rows and self.file_heading.parent is None:
-                    self.body.insert(self.body.children.index(self.rows), self.file_heading)
-                elif not rows and self.file_heading.parent is self.body:
-                    self.body.remove(self.file_heading)
-            if mode == 'progress':
-                self.file_cells = []
-                for name, known in rows:
-                    detail = self.label('', size=13, muted=True)
-                    bar = toga.ProgressBar(max=100, value=0, style=Pack(height=6)) if known else None
-                    controls = [self.label(name, size=14, bold=True), detail]
-                    if bar is not None:
-                        accessible_name(bar, 'Progress for ' + name)
-                        controls.append(bar)
-                    self.rows.add(self.history_card(*controls))
-                    self.file_cells.append((detail, bar))
+                if not self.active_cards:
+                    self.rows.clear()
+                self.show_copying_group(bool(rows))
+                self.render_active_cards(rows)
             else:
+                self.rows.clear()
+                self.active_cards.clear()
                 for kind, name in rows:
                     self.rows.add(self.history_card(self.label(name, size=14, bold=True),
                                                     self.label(kind.capitalize(), size=12, muted=True)))
         if mode == 'progress':
             count = model.get('active', len(rows))
-            heading = f'Copying now · {len(rows)} of {count} files' if count > len(rows) else 'Copying now'
-            if self.file_heading.text != heading:
+            files = 'file' if count == 1 else 'files'
+            visible = f'{len(rows)} of ' if count > len(rows) else ''
+            heading = f'Copying now · {visible}{count} {files}'
+            if getattr(self.file_heading, '_settings_source_text', self.file_heading.text) != heading:
                 self.file_heading.text = heading
             for row, (detail, bar) in zip(active_files, self.file_cells):
                 done, total = row.get('bytes', 0), row.get('size', 0)
@@ -254,6 +258,73 @@ class NativeTransferFallback(toga.Box):
                 self.buttons.add(self.button(title, action, enabled, **args))
         if self._fitted_width is not None:
             self.reflow(self._fitted_width)
+
+    def show_copying_group(self, visible):
+        if visible == (self.file_heading.parent is self.file_group):
+            return
+        if visible:
+            self.file_group.insert(0, self.file_heading)
+        else:
+            self.file_group.remove(self.file_heading)
+        if self.android:
+            # Keep the native list background inside the frame's stroke and corners.
+            inset = 6 if visible else 0
+            self.rows.style.update(margin_left=inset, margin_right=inset, margin_bottom=8 if visible else 0)
+            self.file_heading.style.update(margin_top=10, margin_left=12 + inset, margin_right=12 + inset)
+            if self.presentation:
+                self.presentation.surface(self.file_group, radius=16, background='transparent',
+                                          eink_outlined=visible)
+
+    def render_active_cards(self, rows):
+        for key in self.active_cards.keys() - set(rows):
+            card, _, _ = self.active_cards.pop(key)
+            self.rows.remove(card)
+        self.file_cells = []
+        for index, key in enumerate(rows):
+            if key not in self.active_cards:
+                name, known = key
+                detail = self.label('', size=13, muted=True)
+                bar = toga.ProgressBar(max=100, value=0, style=Pack(height=6)) if known else None
+                controls = [self.label(name, size=14, bold=True), detail]
+                if bar is not None:
+                    accessible_name(bar, 'Progress for ' + name)
+                    if self.android:
+                        controls[1] = toga.Box(children=[detail, bar],
+                            style=Pack(direction=ROW, align_items=CENTER, gap=10))
+                        bar.style.flex = 1
+                    else:
+                        controls.append(bar)
+                card = self.history_card(*controls)
+                if self.android:
+                    card.children[0].style.update(margin_top=6, margin_bottom=6)
+                self.active_cards[key] = card, detail, bar
+            card, detail, bar = self.active_cards[key]
+            if index >= len(self.rows.children) or self.rows.children[index] is not card:
+                if card.parent is self.rows:
+                    self.rows.remove(card)
+                self.rows.insert(index, card)
+            self.file_cells.append((detail, bar))
+
+    def reflow_file_rows(self, width):
+        width -= self.rows.style.margin_left + self.rows.style.margin_right
+        for card, detail, bar in self.active_cards.values():
+            content = card.children[0]
+            available = max(24, width - content.style.margin_left - content.style.margin_right)
+            fit_text(content.children[0], available)
+            detail_width = available
+            if bar is not None:
+                line = detail.parent
+                # Give the byte counts a shared column while reserving room for a readable bar.
+                inline = available >= 176
+                line.style.direction = ROW if inline else COLUMN
+                bar.style.flex = 1 if inline else 0
+                if inline:
+                    line.style.align_items = CENTER
+                    detail_width = min(228, available - line.style.gap - 64)
+                else:
+                    del line.style.align_items
+                detail.style.width = detail_width
+            fit_text(detail, detail_width)
 
     def render_review_navigation(self, model):
         if self.review_filters is None:
@@ -293,10 +364,20 @@ class NativeTransferFallback(toga.Box):
         if self.progress_stage != stage:
             self.progress_stage = stage
             for index, (label, name) in enumerate(zip(self.stage_labels, ('Scan', 'Transfer', 'Verify'))):
-                label.text = '✓ ' + name if stage is not None and index < stage else name
+                current = index == stage
+                completed = stage is not None and index < stage
+                marker = '✓ ' if completed else ''
+                if self.android and not completed:
+                    marker = '● ' if current else '○ '
+                label.text = marker + name
+                if self.android:
+                    label.style.font_weight = 'bold' if current else 'normal'
+                    state = 'in progress' if current else 'complete' if completed else 'pending'
+                    accessible_name(label, f'{name}, {state}')
                 if self.presentation:
                     self.presentation.surface(label, radius=0, background='transparent',
-                                              foreground='accent' if index == stage else 'muted')
+                                              foreground='accent' if current else 'muted',
+                                              eink_outlined=False)
         show_bar = bool(model.get('busy')) or phase == 'complete'
         controls = [self.title, self.status]
         if stage is not None:
@@ -454,7 +535,7 @@ class NativeTransferFallback(toga.Box):
         contents = toga.Box(children=controls, style=Pack(direction=COLUMN, gap=6, margin=12))
         card = toga.Box(children=[contents], style=Pack(direction=COLUMN))
         if self.presentation:
-            self.presentation.surface(card, radius=12, background='surface')
+            self.presentation.surface(card, radius=12, background='surface', eink_outlined=False)
         return card
 
     def clear_private_content(self):
@@ -490,6 +571,8 @@ class NativeTransferFallback(toga.Box):
         self.history_signature = None
         self.row_signature = self.button_signature = None
         self.file_cells = []
+        self.active_cards.clear()
+        self.show_copying_group(False)
         self.scope = self.remote = None
 
 
@@ -531,9 +614,13 @@ def progress_status(model):
     if model.get('busy'):
         if model.get('retrying'):
             return f"Retrying · Attempt {model.get('attempt', 0)} of {model.get('max_attempts', 0)}"
-        return {'scan': model.get('status') or 'Finding and comparing files…',
-                'verify': model.get('status') or 'Verifying the destination…',
-                'stopping': 'Stopping transfer…'}.get(phase, model.get('status', 'Copying files…'))
+        status = {'scan': model.get('status') or 'Finding and comparing files…',
+                  'verify': model.get('status') or 'Verifying the destination…',
+                  'stopping': 'Stopping transfer…'}.get(phase, model.get('status', 'Copying files…'))
+        if (phase == 'transfer' and model.get('operation') in ('Pull', 'Push')
+                and model.get('percentage') is not None):
+            status += ' Totals reflect work found so far.'
+        return status
     return model.get('message') or model.get('status') or 'No transfer is running.'
 
 

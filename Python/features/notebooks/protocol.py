@@ -28,11 +28,11 @@ class RecoveryIncomplete(OSError):
 MODEL_COMMANDS = frozenset({
     'copy-strokes', 'cut-strokes', 'paste-strokes', 'paste-image', 'image-transform', 'delete-image', 'arrange-image', 'unlock-pdf',
     'page', 'stroke', 'add-layer', 'move-layer', 'delete-layer', 'layer-visible', 'transform', 'erase',
-    'add-page', 'duplicate-page', 'delete-page', 'move-page', 'rename', 'undo', 'redo', 'template',
+    'add-page', 'duplicate-page', 'delete-page', 'move-page', 'rename', 'undo', 'redo', 'template', 'update-template',
 })
 HOST_COMMANDS = frozenset({
     'save', 'save-as', 'export', 'transfer', 'library', 'show-in-folder', 'document-location', 'delete-file', 'page-previews',
-    'brush-color', 'brush-intensity', 'eraser-kind', 'paper-preview', 'paper-appearance',
+    'brush-color', 'brush-intensity', 'eraser-kind', 'paper-preview', 'paper-appearance', 'insert-photo',
 })
 
 
@@ -46,10 +46,12 @@ def validate_action(action):
     required = {
         'copy-strokes': {'ids': list}, 'cut-strokes': {'ids': list},
         'paste-image': {'src': str, 'corners': list},
+        'insert-photo': {'source': str, 'layer': str, 'page_id': str, 'bounds': list},
         'image-transform': {'id': str, 'corners': list}, 'delete-image': {'id': str},
         'arrange-image': {'id': str, 'direction': str},
         'unlock-pdf': {'password': str},
         'template': {'name': str, 'format': str, 'visible': bool},
+        'update-template': {'page_id': str},
         'page': {'index': int}, 'move-page': {'index': int},
         'page-previews': {'start': int},
         'brush-color': {'tool': int, 'color': int},
@@ -67,6 +69,12 @@ def validate_action(action):
         raise ValueError('Invalid single-use paste choice.')
     if op == 'template' and 'fixed_size' in action and type(action['fixed_size']) is not bool:
         raise ValueError('Invalid fixed template size choice.')
+    if op == 'insert-photo':
+        bounds = action['bounds']
+        if (action['source'] not in ('photos', 'camera') or len(bounds) != 4
+                or any(type(value) not in (int, float) or not 0 <= value <= 100_000 for value in bounds)
+                or min(bounds[2:]) < 10):
+            raise ValueError('Choose a photo source and a valid notebook page.')
     if op == 'unlock-pdf' and len(action['password']) > 1024:
         raise ValueError('Password is too long.')
     if op == 'eraser-kind' and action['kind'] not in ('partial', 'whole'):
@@ -108,7 +116,7 @@ def validate_action(action):
 
 def save_status(document):
     if document is None:
-        return 'Saved on this device. Export a copy to share.'
+        return 'Saved on this device.'
     if document.deletion_started:
         return 'Deleted; retry Delete to close or use Save As'
     if document.dirty:

@@ -43,7 +43,9 @@ def paint_accent_control(impl):
         if isinstance(impl.interface, toga.Switch):
             impl.native_switch.onTintColor = apple_color('accent')
     elif backend.startswith('toga_android.'):
-        if isinstance(impl.interface, toga.Switch) and not eink_enabled():
+        if isinstance(impl.interface, toga.ProgressBar):
+            paint_eink_progress(impl)
+        elif isinstance(impl.interface, toga.Switch) and not eink_enabled():
             from android import R
             from android.content.res import ColorStateList
             colors = android_palette(impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20)
@@ -57,7 +59,12 @@ def _prepare_surface_button(impl):
     paint_eink_button(impl, outlined=False)
 
 
-def _refresh_surface_icon(impl):
+def _finish_android_surface(impl):
+    if eink_enabled() and getattr(impl, '_list_row', False):
+        from android.content.res import ColorStateList
+        # A visible native focus and press highlight for flat rows.
+        ripple = 0x66ffffff if getattr(impl, '_surface_eink_selected', False) else 0x66000000
+        impl.native.getBackground().setColor(ColorStateList.valueOf(ripple))
     size = getattr(impl, '_android_surface_size', None)
     if size is not None:
         from android.graphics.drawable import LayerDrawable
@@ -75,7 +82,7 @@ def _refresh_surface_icon(impl):
 
 _surface_painter = SurfacePainter(palette=lambda dark: android_palette(dark),
     apple_color=lambda role: apple_color(role), high_contrast=lambda: eink_enabled(),
-    prepare_button=_prepare_surface_button, after_paint=_refresh_surface_icon)
+    prepare_button=_prepare_surface_button, after_paint=_finish_android_surface)
 
 
 def batch_surfaces():
@@ -85,6 +92,9 @@ def batch_surfaces():
 def paint_surface(impl, radius):
     background, foreground, outlined = getattr(impl, '_surface_roles', ('surface', None, True))
     button = hasattr(impl.interface, 'on_press')
+    eink_outlined = getattr(impl, '_surface_eink_outlined', None)
+    if eink_outlined is None:
+        eink_outlined = outlined or (button and not getattr(impl, '_list_row', False))
     border = 'control_border' if button and outlined else 'border'
     glass = False
     if type(impl).__module__.startswith('toga_iOS.'):
@@ -99,7 +109,7 @@ def paint_surface(impl, radius):
     style = SurfaceStyle(radius=radius, background=background, foreground=foreground,
         outlined=outlined, border=border, glass=glass, content_inset=inset,
         trailing_inset=getattr(impl, '_content_trailing_inset', inset),
-        high_contrast_outlined=getattr(impl, '_surface_eink_outlined', True),
+        high_contrast_outlined=eink_outlined,
         high_contrast_selected=getattr(impl, '_surface_eink_selected', False),
         accessory=getattr(impl, '_settings_accessory', None))
     _surface_painter.paint(impl, style)
@@ -272,10 +282,13 @@ def reserve_navigation(app, *, view=None):
 
 
 def surface(widget, *, radius=12, background='surface', foreground=None, outlined=False,
-            eink_outlined=True, eink_selected=False):
+            eink_outlined=None, eink_selected=False):
+    """Paint a native surface, with automatic E Ink outlines for commands."""
     # Overflow is a neutral command even inside accent-coloured browser bars.
     if getattr(widget, 'control_icon', None) in {'more', 'overflow'}:
         foreground = 'text'
+    if eink_outlined is None and outlined:
+        eink_outlined = True
     widget._impl._surface_roles = (background, foreground, outlined)
     widget._impl._surface_eink_outlined = eink_outlined
     widget._impl._surface_eink_selected = eink_selected
@@ -498,6 +511,7 @@ def _install_android_appearance(app):
     from android import R
     from android.content.res import ColorStateList
     from toga_android.widgets.label import TextViewWidget
+    from toga_android.widgets.progressbar import ProgressBar
     from toga_android.widgets.selection import Selection
     from toga_android.widgets import button as android_button
     from toga_android.widgets.label import Label
@@ -553,6 +567,12 @@ def _install_android_appearance(app):
             impl.interface.intrinsic.width = at_least(44 if impl.interface.style.flex else min(natural, 256))
     Button.create = create_button
     Button.rehint = rehint_button
+    original_progress_create = ProgressBar.create
+    def create_progress(impl):
+        original_progress_create(impl)
+        _accent_controls.add(impl)
+        paint_eink_progress(impl)
+    ProgressBar.create = create_progress
     original = TextViewWidget.set_color
     def set_color(impl, value):
         _widgets.add(impl)
@@ -577,13 +597,10 @@ def _install_android_appearance(app):
         if isinstance(impl, Button):
             attribute = MaterialR.attr.colorSurface if getattr(impl, '_list_row', False) else R.attr.colorButtonNormal
             impl.native.setBackgroundTintList(ColorStateList.valueOf(impl.get_theme_color(attribute)))
-            role = getattr(impl, '_action_role', None)
-            if role is not None:
-                action_button(impl.interface, destructive=role == 'destructive')
-            if eink_enabled():
-                paint_eink_button(impl)
             if impl in _surfaces:
                 paint_surface(impl, _surfaces[impl])
+            elif eink_enabled():
+                paint_eink_button(impl)
     TextViewWidget.set_color = set_color
     def selection_color(impl, value):
         _widgets.add(impl)
@@ -845,3 +862,25 @@ def paint_eink_switch(impl):
         impl.native.setThumbTintList(thumb_tint)
         impl.native.setTrackTintList(track_tint)
         del impl._eink_switch_style
+
+
+def paint_eink_progress(impl):
+    """Tint the native indicator in place, preserving its geometry and state."""
+    native = impl.native
+    if eink_enabled():
+        if hasattr(impl, '_eink_progress_tints'):
+            return
+        from android.content.res import ColorStateList
+        impl._eink_progress_tints = (native.getProgressTintList(), native.getProgressBackgroundTintList(),
+                                     native.getIndeterminateTintList())
+        fill = ColorStateList.valueOf(argb('#000000'))
+        track = ColorStateList.valueOf(argb('#767676'))
+        native.setProgressTintList(fill)
+        native.setProgressBackgroundTintList(track)
+        native.setIndeterminateTintList(fill)
+    elif hasattr(impl, '_eink_progress_tints'):
+        fill, track, indeterminate = impl._eink_progress_tints
+        native.setProgressTintList(fill)
+        native.setProgressBackgroundTintList(track)
+        native.setIndeterminateTintList(indeterminate)
+        del impl._eink_progress_tints

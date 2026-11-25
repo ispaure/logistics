@@ -23,9 +23,9 @@ Document font size is separate under **Markdown**, **Text** or **EPUB**.
 ### Contrast
 
 On Android, enable **Appearance → High contrast / E Ink** for black-on-white
-controls, stronger outlines and reduced animation. It also applies to open
-HTML views. Images and comic pages keep their colors. Turn it off to return to
-the system appearance.
+text, distinct selection and control boundaries, and reduced animation. It also
+applies to open HTML views. Images and comic pages keep their colors. Turn it
+off to return to the system appearance.
 
 ## Comic and PDF magnifier
 

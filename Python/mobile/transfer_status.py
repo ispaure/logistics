@@ -13,6 +13,7 @@ import toga
 from toga.style import Pack
 from commonUtils.ui.native.icons import IconRenderer, IconSpec
 from .control_icons import ICONS, tint_android
+from .palette import eink_enabled
 
 
 class SyncButton(toga.Button):
@@ -25,7 +26,8 @@ class SyncButton(toga.Button):
 
     def update(self, busy, percentage, complete, *, notified=False):
         progress = None if percentage is None else max(0, min(100, round(percentage)))
-        state = busy, progress, complete, notified
+        eink = eink_enabled()
+        state = busy, progress, complete, notified, eink
         if state == self.snapshot:
             return
         initial = self.snapshot is None
@@ -37,10 +39,15 @@ class SyncButton(toga.Button):
         sweep = max(3, 360 * progress / 100) if busy and progress is not None else 100 if busy else 360
         lines = (((8, 8), (15, 8), (13, 6)), ((15, 8), (13, 10)),
                  ((16, 16), (9, 16), (11, 14)), ((9, 16), (11, 18)))
+        glyph = '↻'
+        if eink and not busy:
+            _, glyph, lines = ICONS['done' if complete else 'close']
+            # Leave clear space between the result mark and the surrounding ring.
+            lines = tuple(tuple((6 + x / 2, 6 + y / 2) for x, y in path) for path in lines)
         label = (f'Syncing: {progress}% of known work. Open transfers' if progress is not None else
                  'Syncing. Open transfers') if busy else 'Sync finished. Open transfers' if complete else 'Sync stopped. Open transfers'
-        self.renderer.icons['sync-progress'] = IconSpec('', '↻', lines,
-            arcs=((2, 2, 22, 22, -90, sweep),), stroke_width=1.6, apple_vector=True)
+        self.renderer.icons['sync-progress'] = IconSpec('', glyph, lines,
+            arcs=((2, 2, 22, 22, -90, sweep),), stroke_width=2.4 if eink else 1.6, apple_vector=True)
         self.renderer.apply(self, 'sync-progress', label, preserve_layout=not initial)
         self.refresh_native_item()
 

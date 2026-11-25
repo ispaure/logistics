@@ -16,12 +16,16 @@ from .assets import asset
 from .bridge import MAX_COMMAND
 from .icons import ICON_SCRIPT
 from .protocol import canvas_state_json
-from .templates import CATALOG, FORM_TEMPLATES, background
+from .templates import CATALOG, FORM_TEMPLATES, TemplatePDF, background, catalog_artwork
 
 
 @cache
 def _template_artwork_json():
-    return json.dumps({name: (background(name), background(name, 'move') if name in FORM_TEMPLATES else None)
+    def preview(name, paper_format):
+        artwork = catalog_artwork(name, paper_format)
+        return dict(source=background(name, paper_format), bounds=artwork.bounds if isinstance(artwork, TemplatePDF) else None)
+
+    return json.dumps({name: (preview(name, 'pro'), preview(name, 'move') if name in FORM_TEMPLATES else None)
                        for name in CATALOG})
 
 

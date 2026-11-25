@@ -22,14 +22,56 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 from commonUtils.testing.stages import TestStage
-from build_manager import Phase
+from build_manager import Phase, Plan
 from build_manager.executor import Executor
 from logistics_build.build_project import LogisticsProject
-from logistics_build import android_backend
+from logistics_build import android_backend, test_apk_storage
 from build_manager.workflows import verify_artifacts
 
 TEST_STAGE=TestStage.REGRESSION
 ROOT=Path(__file__).resolve().parents[3]
+
+
+class AndroidApkStorageTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'darwin', 'macOS copy-on-write')
+    def test_completed_run_keeps_both_paths_and_protects_reviewable_runs(self):
+        from build_manager.retention import durable_hold
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for folder in test_apk_storage.APK_ROOTS:
+                (root / folder).mkdir(parents=True, exist_ok=True)
+            source = root / 'tmp/test-results' / ('emulator-' + 'a' * 32) / 'validated-test.apk'
+            run = root / 'tmp/test-results/build-manager/finished'
+            target = run / 'artifacts/android-build-0.apk'
+            for path in (source, target):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'original test package')
+            digest = sha256(source.read_bytes()).hexdigest()
+            phase = Phase('android-build', ('python',), str(root), artifacts=(str(source),))
+            plan = Plan('Logistics', 'Test', {}, (phase,), str(root))
+            plan.save(run / 'plan.json')
+            report = dict(schema=1, status='awaiting_review', plan_identity=plan.identity,
+                          phases=[dict(id=phase.id, status='passed', artifacts=[
+                              dict(path=str(target), original_path=str(source), sha256=digest)])])
+            receipt = run / 'result.json'
+            receipt.write_text(json.dumps(report))
+            self.assertEqual(test_apk_storage.coalesce_test_apks(root, apply=True), [])
+            report['status'] = 'passed'
+            receipt.write_text(json.dumps(report))
+            durable_hold(run, 'review')
+            self.assertEqual(test_apk_storage.coalesce_test_apks(root, apply=True), [])
+            durable_hold(run, 'review', release=True)
+            expected = [dict(path=str(target), bytes=target.stat().st_size)]
+            self.assertEqual(test_apk_storage.coalesce_test_apks(root), expected)
+            target.write_bytes(b'changed')
+            self.assertEqual(test_apk_storage.coalesce_test_apks(root, apply=True), [])
+            target.write_bytes(source.read_bytes())
+            self.assertEqual(test_apk_storage.coalesce_test_apks(root, apply=True), expected)
+            self.assertEqual(test_apk_storage.coalesce_test_apks(root), [])
+            source.write_bytes(b'rebuilt')
+            self.assertEqual(target.read_bytes(), b'original test package')
+            self.assertEqual(json.loads(receipt.read_text()), report)
 
 
 class AndroidApkRetentionTests(unittest.TestCase):

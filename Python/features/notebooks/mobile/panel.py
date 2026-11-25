@@ -302,6 +302,8 @@ class NotebookPanel:
         state['pressure_stylus_only'] = is_boox(self.view)
         state['tablet'] = tablet_viewport(self.web)
         state['iphone_duo'] = self.app.presentation.is_iphone_duo()
+        from .ios_photos import photo_sources
+        state['photo_sources'] = photo_sources(self.web)
         return state
 
     @property
@@ -821,6 +823,8 @@ class NotebookPanel:
                 return True
             self.transfer_panel()
             return True
+        elif op == 'insert-photo':
+            await self._insert_photo(command)
         elif op == 'export':
             if not await canvas.wait(self.confirm_export()):
                 await command.respond(update_script(self.state(), 'Cancelled.'), acknowledges=True)
@@ -833,6 +837,35 @@ class NotebookPanel:
             if not saved:
                 command.error = 'Export cancelled. Your notebook remains open.'
         return False
+
+    async def _insert_photo(self, command):
+        from commonUtils.formats.image_headers import image_header
+        from ..images import image_source
+        from .ios_photos import choose_photo
+
+        action, editor = command.action, command.editor
+        page = editor.notebook.pages[editor.index]
+        ink = editor.notebook.page(editor.index)
+        if (page.id != action['page_id'] or (self.document is not None and not self.document.writable)
+                or ink.warning or not any(layer == action['layer'] and visible for layer, _, visible in ink.layers)):
+            raise ValueError('Choose an editable page and a visible layer before inserting a photo.')
+        if editor.notebook.content.get('fileType') == 'pdf' and editor.pdf_data() is None:
+            raise ValueError('Unlock the PDF before inserting a photo.')
+        data = await command.canvas.wait(choose_photo(command.web, action['source']))
+        if (data is None or self.closed or not self.app.active_host or self.web is not command.web
+                or self.editor is not editor or command.canvas is not self.bridge
+                or editor.notebook.pages[editor.index] is not page):
+            return
+        header = image_header(data, max_bytes=1280 * 1024)
+        if header.format != 'png':
+            raise ValueError('The photo picker did not return a notebook PNG.')
+        left, top, width, height = action['bounds']
+        ratio = min(width * .72 / header.width, height * .65 / header.height)
+        w, h = header.width * ratio, header.height * ratio
+        x, y = left + (width - w) / 2, top + (height - h) / 2
+        corners = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
+        photo = dict(op='paste-image', src=image_source(data), corners=corners, layer=action['layer'])
+        await command.canvas.wait(asyncio.to_thread(editor.apply, photo))
 
     async def _perform_editor_update(self, command: _CanvasCommand, op):
         if op == 'delete-page':

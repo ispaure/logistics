@@ -34,7 +34,7 @@ def folder_scroll(content):
         native = scroll._impl.native
         # Toga sizes its content from the full viewport, independently of
         # Android's scrollbar inset padding. Keep the bar inside the viewport
-        # and reserve its actual width in Pack so row outlines stop before it.
+        # and reserve its actual width in Pack so selected rows stop before it.
         native.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY)
         gutter = max(8, ceil(scroll._impl.scale_out(native.getVerticalScrollbarWidth())) + 4)
         if native.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL:
@@ -164,7 +164,7 @@ def folder_row(row):
     """Shared list surface for workspace locations and browser entries."""
     row.style.margin_bottom = ROW_GAP
     backend = type(row._impl).__module__
-    app_surface(row, radius=8, background='surface', outlined=False, eink_outlined=True)
+    app_surface(row, radius=8, background='surface', outlined=False, eink_outlined=False)
     if backend.startswith('toga_iOS.'):
         row._impl.native.layer.masksToBounds = True
     elif backend.startswith('toga_android.'):

@@ -247,9 +247,10 @@ class PageFooter:
             self.badge.style.margin_top = -4
             self.badge._impl.native.userInteractionEnabled = False
         from .appearance import surface
-        surface(self.spacer, background='transparent', foreground='text' if vertical else 'muted')
+        surface(self.spacer, background='transparent', foreground='text' if vertical else 'muted',
+                eink_outlined=False)
         if vertical:
-            surface(self.badge, radius=14, background='alternate')
+            surface(self.badge, radius=14, background='alternate', eink_outlined=False)
         self.row = toga.Box(style=Pack(direction=ROW, align_items='center')) if not vertical else None
         self.widget = toga.Box(style=Pack(direction=COLUMN, width=56 if vertical else toga.style.pack.NONE,
             **(dict(align_items='center') if vertical else {}),

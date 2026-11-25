@@ -140,6 +140,7 @@ class Notebook:
         self.content, self.metadata, self.pages = content, metadata, pages
         self.structure_dirty = False
         self.metadata_dirty = False
+        self._pdf_template_cache = {}
         self._pdf_workspace = None
 
     @property
@@ -166,8 +167,12 @@ class Notebook:
         return result
 
     @classmethod
-    def read(cls, data, *, max_bytes=MAX_ARCHIVE):
-        return cls._from_members(read_archive(data, max_bytes=max_bytes), max_bytes=max_bytes)
+    def read(cls, data, *, max_bytes=MAX_ARCHIVE, restore_templates=True):
+        book = cls._from_members(read_archive(data, max_bytes=max_bytes), max_bytes=max_bytes)
+        if restore_templates and book.content.get('fileType') == 'pdf':
+            from .remarkable_export import restore_working_templates
+            restore_working_templates(book)
+        return book
 
     @classmethod
     def read_large_pdf(cls, stream, directory):

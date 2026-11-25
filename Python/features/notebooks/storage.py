@@ -13,6 +13,7 @@ from uuid import uuid4
 from commonUtils.persistence.publication import serialize_mutation
 from .notebook import Notebook
 from .protocol import RecoveryIncomplete
+from .remarkable_export import save_rmdoc
 
 
 class NotebookDocument:
@@ -86,7 +87,7 @@ class NotebookDocument:
             if self.book.large_pdf_view:
                 self._save_large_archive(cancelled)
             else:
-                data = self.book.to_bytes()
+                data = save_rmdoc(self.book, cancelled=cancelled)
                 self.resource.save(data, validate=lambda value: Notebook.read(value, max_bytes=self.book.max_bytes),
                                    cancelled=cancelled)
         elif self.recovery is not None:

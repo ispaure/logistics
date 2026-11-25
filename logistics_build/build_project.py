@@ -565,8 +565,9 @@ class LogisticsProject:
                                 dependencies=('android-build','android-runtime-tools'),artifacts=(str(run/'ready.json'),))]
             for action in ('native','runtime'):
                 report = run/(action+'.json')
+                phase_env = dict(env, LOGISTICS_STORAGE_OWNER_ROOT=str(self.root)) if action == 'runtime' else env
                 phases.append(Phase('android-'+action,(*base,action,*common,'--runtime-cache',str(cache),'--result',str(report)),
-                    str(snapshot),timeout=2500 if action=='native' else 1900,environment=env,dependencies=('android-ready',),
+                    str(snapshot),timeout=2500 if action=='native' else 1900,environment=phase_env,dependencies=('android-ready',),
                     artifacts=(str(report),),artifact_types={str(report): 'json'}))
             phases.append(Phase('android-cleanup',(*base,'cleanup',*common),str(snapshot),timeout=180,environment=env,always=True,kind='cleanup'))
         return Plan('Logistics','Complete Android native and runtime validation' if operation=='Test' else 'Build native Android test APK; no install',

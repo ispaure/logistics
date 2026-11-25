@@ -11,7 +11,7 @@ __status__ = "Production"
 
 from commonUtils.ui import pyside as qt
 from ..notebook import DESKTOP_MAX_ARCHIVE, Notebook
-from ..templates import CATALOG, FORMATS, TEMPLATE_NOTICE, description, preview_svg
+from ..templates import CATALOG, FORMATS, TEMPLATE_NOTICE, TemplatePDF, catalog_artwork, description, preview_svg
 
 
 class NotebookSetup(qt.QDialog):
@@ -59,8 +59,20 @@ class NotebookSetup(qt.QDialog):
 
     def update_preview(self):
         name = self.template.currentData()
+        paper_format = self.paper_format.currentData()
         self.description.setText(description(name))
-        artwork = preview_svg(name, self.paper_format.currentData())
+        artwork = catalog_artwork(name, paper_format)
+        if isinstance(artwork, TemplatePDF):
+            image = qt.QPixmap()
+            image.loadFromData(artwork.preview)
+            self.preview.setPixmap(image.scaled(self.preview.size(), qt.Qt.AspectRatioMode.KeepAspectRatio,
+                                                qt.Qt.TransformationMode.SmoothTransformation))
+        else:
+            self._set_svg_preview(preview_svg(name, paper_format))
+        self.layout().activate()
+        self.adjustSize()
+
+    def _set_svg_preview(self, artwork):
         from PySide6.QtSvg import QSvgRenderer
         renderer = QSvgRenderer(artwork.encode())
         size = renderer.defaultSize().scaled(self.preview.size(), qt.Qt.AspectRatioMode.KeepAspectRatio)
@@ -70,8 +82,6 @@ class NotebookSetup(qt.QDialog):
         renderer.render(painter)
         painter.end()
         self.preview.setPixmap(image)
-        self.layout().activate()
-        self.adjustSize()
 
     def notebook(self):
         return Notebook.new(self.name.text().strip(), template=self.template.currentData(),

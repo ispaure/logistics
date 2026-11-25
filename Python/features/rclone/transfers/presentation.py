@@ -84,12 +84,12 @@ def progress_model(state):
             file_delete_attempts=None, folder_removal_attempts=None,
             active=0, active_files=(), attempt=0, max_attempts=0, retrying=False, elapsed=0)
     values = state.metrics
-    phase = values.get('phase', '')
-    removing = phase == 'Removing destination entries'
+    activity = values.get('phase', '')
+    removing = activity == 'Removing destination entries'
     result = state.result
     if state.busy:
-        phase = ('verify' if phase in ('Sync complete; verifying local copy', 'Checking / finishing sync', 'Verifying the local copy…')
-                 else 'transfer' if removing or phase == 'Transferring' or values.get('done', 0) > 0 else 'scan')
+        phase = ('verify' if activity in ('Sync complete; verifying local copy', 'Verifying the local copy…')
+                 else 'transfer' if removing or activity == 'Transferring' or values.get('done', 0) > 0 else 'scan')
         if state.cancel is not None and state.cancel.is_set():
             phase = 'stopping'
     else:
@@ -102,13 +102,17 @@ def progress_model(state):
     verification_total = values.get('verification_total')
     if phase == 'verify' and verification_total and verified_bytes is not None:
         percentage = max(0, min(100, 100 * verified_bytes / verification_total))
+    transfer_status = 'Copying files…'
+    if removing:
+        transfer_status = 'Removing destination entries…'
+    elif activity in ('Discovering / checking files', 'Checking / finishing sync'):
+        transfer_status = 'Finding and comparing more files…'
     return dict(mode='progress', operation=operation, source=source, destination=destination,
         workspace=workspace_name(source, destination, operation), phase=phase, busy=state.busy,
         message=state.message, status={'stopping': 'Stopping transfer…',
             'scan': ('Checking local storage for links…' if values.get('phase') == 'Inspecting local transfer storage'
                      else 'Finding and comparing files…' if values.get('phase') else 'Preparing transfer…'),
-            'verify': values.get('verification_status', 'Verifying the destination…')}.get(phase,
-            'Removing destination entries…' if removing else 'Copying files…'),
+            'verify': values.get('verification_status', 'Verifying the destination…')}.get(phase, transfer_status),
         percentage=percentage, done=values.get('done', 0), total=values.get('total', 0),
         verified_bytes=verified_bytes if phase == 'verify' else None,
         verification_total=verification_total if phase == 'verify' else None,
@@ -117,6 +121,6 @@ def progress_model(state):
         file_delete_attempts=values.get('file_delete_attempts'),
         folder_removal_attempts=values.get('folder_removal_attempts'),
         checks=values.get('checks', 0), listed=values.get('listed', 0), active=values.get('active', 0),
-        active_files=tuple(dict(row) for row in values.get('active_files', ())[:3]) if phase == 'transfer' else (),
+        active_files=tuple(dict(row) for row in values.get('active_files', ())) if phase == 'transfer' else (),
         attempt=values.get('attempt', 0), max_attempts=values.get('max_attempts', 0),
         retrying=values.get('retrying', False), elapsed=elapsed)

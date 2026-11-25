@@ -1050,7 +1050,7 @@ class VaultBrowser(LibraryFileForms, LibraryPanels):
             selected = name == key
             self.host.tab_style(button, selected)
             self.host.presentation.surface(button, radius=0, background='transparent',
-                foreground='accent' if selected else 'muted', outlined=False)
+                foreground='accent' if selected else 'muted', outlined=False, eink_outlined=False)
             label = 'Outgoing links' if name == 'outgoing' else 'Backlinks'
             accessible_name(button, label + (' selected' if selected else ''))
 

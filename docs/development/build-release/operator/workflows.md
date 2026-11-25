@@ -86,7 +86,7 @@ Use a fresh run identifier for `RUN_ID`.
   --run-value devices.android_variant=debug --output tmp/test-results/RUN_ID/boox-plan.json
 .venv/bin/python -m build_manager.cli show-plan tmp/test-results/RUN_ID/boox-plan.json
 .venv/bin/python -m build_manager.cli run tmp/test-results/RUN_ID/boox-plan.json \
-  --output tmp/test-results/RUN_ID/boox-run --expect-identity PLAN_SHA256 --events
+  --output tmp/test-results/RUN_ID/boox-run --expect-identity PLAN_SHA256 --events --event-format compact
 .venv/bin/python -m build_manager.cli review tmp/test-results/RUN_ID/boox-run
 .venv/bin/python -m build_manager.cli resume tmp/test-results/RUN_ID/boox-run \
   --confirm --expect-identity PLAN_SHA256 --approval-identity STEP=REVIEW_SHA256

@@ -457,7 +457,8 @@ class LocalFileBrowser(FileBrowser):
             if selecting:
                 circle = card._tile_selection = icon_button('select_item', '',
                     on_press=partial(self._select_pressed, entry))
-                surface(circle, background='transparent', foreground='accent', outlined=False)
+                surface(circle, background='transparent', foreground='accent',
+                        outlined=False, eink_outlined=False)
                 card._selection_display = None
                 controls.append(circle)
             button.style.flex = 1

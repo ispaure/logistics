@@ -10,6 +10,7 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import argparse
+from contextlib import ExitStack
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -28,6 +29,7 @@ from build_manager.guest_tools import WINDOWS_PREPARE
 from build_manager.profiles import save_json
 from logistics_build.build_snapshots import source_members
 from logistics_build.guest_results import vm_attempt, waiting_progress
+from logistics_build.windows_tool_retention import TOOL_PATHS, WindowsToolRetention
 
 
 PREPARE = WINDOWS_PREPARE
@@ -66,14 +68,15 @@ def _run_attempt(args):
     cancelled = Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: cancelled.set())
-    with vm_attempt(args, client, cancelled, backend='Parallels Windows',
-                    workspace_key='test_workspace') as (result, lifecycle):
+    with ExitStack() as leases, vm_attempt(args, client, cancelled, backend='Parallels Windows',
+                                          workspace_key='test_workspace') as (result, lifecycle):
         if result['status'] == 'running':
-            _run_guest(args, client, cancelled, result, lifecycle)
+            retention = leases.enter_context(WindowsToolRetention(client, result['vm']).lease())
+            _run_guest(args, client, cancelled, result, lifecycle, retention)
     return int(result['status'] != 'passed')
 
 
-def _run_guest(args, client, cancelled, result, lifecycle):
+def _run_guest(args, client, cancelled, result, lifecycle, retention):
     from logistics_build.test_environments import load, windows_python
     architecture = getattr(args, 'python_architecture', 'x86_64')
     version = windows_python(load(args.snapshot), architecture, getattr(args, 'python_version', ''))
@@ -88,8 +91,11 @@ def _run_guest(args, client, cancelled, result, lifecycle):
         if (prepared.get('python_architecture', 'x86_64') != architecture
                 or runtime.get('version', '').split(maxsplit=1)[:1] != [version]):
             reuse_prepared = False
+    retention.prune(preserve=prepared['token'] if reuse_prepared else None)
+    disposable_receipt = None
     if not reuse_prepared:
-        prepared = prepare(args.vm, args.results / 'prepared.json', architecture=architecture, version=version)
+        with retention.preparation(args.results / 'prepared.json') as disposable_receipt:
+            prepared = prepare(args.vm, disposable_receipt, architecture=architecture, version=version)
     operation = uuid4().hex
     guest = WindowsGuest(client, prepared['vm'], prepared['workspace'], prepared['token'], operation)
     source = 'source-' + operation
@@ -191,7 +197,7 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
                      'plan-' + operation + '.json', 'operation-' + operation, 'cancel-' + operation,
                      'evidence-' + operation + '.zip']
             if not reuse_prepared:
-                paths.extend(['environment', 'cache', 'python', 'tools', 'downloads'])
+                paths.extend(TOOL_PATHS)
             guest.remove_paths(paths)
             result['public_tool_cache_retained'] = reuse_prepared
 
@@ -200,6 +206,11 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
                                   args.results / 'guest'),
             args.results / 'guest' / reports / 'manager/result.json',
             cleanup)
+        if disposable_receipt and result.get('test_workspace_removed'):
+            try:
+                retention.discard(disposable_receipt)
+            except OSError as error:
+                print(f'Windows tool receipt cleanup will retry: {error}', flush=True)
 
 
 def main():
@@ -229,6 +240,11 @@ def main():
     if not args.prepare_output:
         parser.error('Select source validation or an explicit preparation output.')
     record = prepare(args.vm, args.prepare_output, architecture=args.python_architecture, version=args.python_version)
+    try:
+        with WindowsToolRetention(Parallels(), record['vm']).lease() as retention:
+            retention.prune(preserve=record['token'])
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f'Windows tool retention incomplete: {error}', flush=True)
     print(json.dumps(dict(status='tools prepared; tests not run', guest_architecture=record['guestArchitecture'],
                           runtime=record['runtime'], interactive_session=record['session'])))
 

@@ -68,9 +68,15 @@ def prepare(cache, result):
         raise ValueError('Pinned Android runtime installation is missing headers or extension modules.')
 
 
-def test(root, cache, serial, output):
+def test(root, cache, serial, output, *, storage_root=None):
+    from logistics_build.build_retention import scratch
+
+    with scratch(storage_root or root) as workspace:
+        _run_testbed(root, cache, serial, output, workspace / 'runtime-payload')
+
+
+def _run_testbed(root, cache, serial, output, payload):
     from mobile_build import tools
-    payload=output.parent/'runtime-payload'
     output.parent.mkdir(parents=True,exist_ok=True)
     manifest=tools.stage(root,payload,testbed=True,allow_dirty=True)
     # These two pure-Python packages are the exact dependencies declared by the

@@ -22,6 +22,7 @@ from unittest import TestCase, skipUnless
 
 from features.lm.domain import message
 from features.lm.mobile.presentation import transcript_document, transcript_entries, transcript_update
+from mobile.palette import css_variables, eink_script, set_eink_enabled
 
 NODE = os.environ.get('LOGISTICS_NODE') or shutil.which('node')
 
@@ -35,8 +36,14 @@ class TranscriptDOMTests(TestCase):
         entries = [transcript_entries([message('assistant', text,
                    status='complete' if index == 2 else 'streaming')])
                    for index, text in enumerate(texts)]
-        fixture = dict(html=transcript_document(), expected=entries[-1][0]['html'],
-                       scripts=[transcript_update('synthetic', value, 16, configured=True) for value in entries])
+        try:
+            set_eink_enabled(True)
+            contrast_on = eink_script()
+        finally:
+            set_eink_enabled(False)
+        fixture = dict(html=transcript_document(theme_css=css_variables()), expected=entries[-1][0]['html'],
+                       scripts=[transcript_update('synthetic', value, 16, configured=True) for value in entries],
+                       contrast_on=contrast_on, contrast_off=eink_script())
         with TemporaryDirectory() as directory:
             path = Path(directory) / 'fixture.json'
             path.write_text(json.dumps(fixture))
