@@ -63,6 +63,41 @@ function chosenInk() {
   }
 }
 
+function saveWorkingBrush() {
+  const {tool, color, width} = chosenInk();
+  const brush = [tool, color, width];
+  const pending = [...queue].reverse().find(action => action.op === 'working-brush');
+  if ((pending?.brush ?? state.working_brush)?.join(',') !== brush.join(',')) send({op:'working-brush', brush});
+}
+
+function restoreWorkingBrush() {
+  if (!state.working_brush) return;
+  const [tool, color, width] = state.working_brush;
+  $('tool').value = tool;
+  brushOptions();
+  $('color').value = color;
+  $('width').value = width;
+  if (!brushFor(tool).fixed_width) normalWidth = String(width);
+}
+
+function snapToTextControl() {
+  const label = document.createElement('label'), input = document.createElement('input');
+  input.type = 'checkbox';
+  label.append(input, document.createTextNode('Snap to text'));
+  input.onchange = () => {
+    state.snap_to_text = input.checked;
+    send({op: 'snap-to-text', enabled: input.checked});
+  };
+  return {
+    label,
+    update() {
+      label.hidden = !state.can_snap_to_text || brushFor(Number($('tool').value)).family !== 'highlighter';
+      input.checked = state.snap_to_text;
+      input.disabled = !!(state.warning || state.read_only);
+    }
+  };
+}
+
 function fixedBrushPressure(tool) {
   const intensity = intensityByBrush.get(tool) ?? brushFor(tool).default_intensity;
   return intensity === undefined ? fallbackPressure : intensity / 100;
@@ -128,6 +163,8 @@ function inkColor(s, dark = false) {
     rgb = rgba ? rgba.slice(0, 3) : s.tool === 18 && state.native_highlights[s.color] ? state.native_highlights[s.color].slice(0, 3) : [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
   if (dark && (rgb.every(value => value === 0) || rgb.every(value => value === 255)))
     rgb = rgb.map(value => 255 - value);
+  else if (dark && brushFor(s.tool).family !== 'highlighter')
+    rgb = state.dark_ink_colors?.[rgb.join(',')] || rgb;
   if ($('grayscale').checked) {
     let gray = Math.round(.2126 * rgb[0] + .7152 * rgb[1] + .0722 * rgb[2]);
     rgb = [gray, gray, gray]
@@ -543,10 +580,22 @@ function strokeBounds(points, padding) {
   return bounds;
 }
 
+function paintTextHighlight(item, target, dark) {
+  const rgb = dark && item.rgb.every(value => value === 0) ? [255, 255, 255] : item.rgb;
+  target.save();
+  target.globalAlpha = item.opacity;
+  target.globalCompositeOperation = dark ? 'screen' : 'multiply';
+  target.fillStyle = colorCss(rgb);
+  target.beginPath();
+  for (const rect of item.rectangles) target.rect(...rect);
+  target.fill();
+  target.restore();
+}
+
 function paintOrderedInk(items, target = ctx, showSelection = true, region = null, pictures = null, dark = false) {
   const colors = new Map(), runs = [];
   for (const item of items) {
-    if (item.corners || !item.points.length || brushFor(item.tool).family !== 'highlighter') {
+    if (item.corners || item.rectangles || !item.points.length || brushFor(item.tool).family !== 'highlighter') {
       runs.push({item});
       continue;
     }
@@ -569,7 +618,8 @@ function paintOrderedInk(items, target = ctx, showSelection = true, region = nul
     if (run.item) {
       if (run.item.corners) {
         if (!pictures || pictures.has(run.item)) paintPicture(run.item, target, showSelection, pictures?.get(run.item));
-      } else line(run.item, target, showSelection, dark);
+      } else if (run.item.rectangles) paintTextHighlight(run.item, target, dark);
+      else line(run.item, target, showSelection, dark);
       continue;
     }
     const [left, top, right, bottom] = run.bounds;

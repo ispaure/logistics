@@ -46,6 +46,35 @@ def pdf_bytes(texts=None):
 
 
 class PDFReaderTests(QtTestCase):
+    def test_notebook_text_highlight_round_trips_with_native_geometry_and_undo(self):
+        from features.notebooks.editor import Editor
+        from features.notebooks.ink import ss
+        from features.notebooks.notebook import Notebook
+        from features.pdf.annotation import notebook_from_pdf
+
+        book = notebook_from_pdf(pdf_bytes(), 'Selectable').to_bytes()
+        editor = Editor(Notebook.read(book))
+        ink = editor.notebook.page(0)
+        layer = ink.layers[0][0]
+        action = dict(op='highlight-text', start=[.067, .155], end=[.21, .16], color=13, layer=layer)
+        editor.apply(action)
+        self.assertTrue(editor.state()['can_snap_to_text'])
+        self.assertFalse(editor.state()['snap_to_text'])
+        self.assertEqual(len(editor.state()['text_highlights']), 1)
+        frame, = [block for block in ink._blocks if isinstance(block, ss.SceneGlyphItemBlock)]
+        self.assertEqual(frame.item.value.text, 'Alpha')
+        original, = ink.text_highlights
+        editor.apply(dict(op='stroke', points=[[100, 100, .5]], layer=layer))
+        reopened = Notebook.read(editor.notebook.to_bytes())
+        self.assertEqual(reopened.page(0).text_highlights, (original,))
+        self.assertEqual(len(reopened.page(0).strokes), 1)
+        x, y, w, h = original.rectangles[0]
+        editor = Editor(reopened)
+        editor.apply(dict(op='erase', points=[[x + w / 2, y + h / 2, .5]], radius=16, kind='whole'))
+        self.assertFalse(Notebook.read(reopened.to_bytes()).page(0).text_highlights)
+        editor.apply(dict(op='undo'))
+        self.assertEqual(reopened.page(0).text_highlights, (original,))
+
     def test_desktop_page_turn_animates_only_the_pdf_viewport(self):
         from features.pdf.ui.reader import PDFWindow
         from services.documents.ui.page_transition import page_slide

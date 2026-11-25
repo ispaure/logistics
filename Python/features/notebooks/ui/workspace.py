@@ -27,6 +27,7 @@ from ..protocol import (
     brush_color_script, canvas_state_json, document_state, save_status, stroke_script, update_script, validate_action,
 )
 from ..canvas import editor_html
+from ..images import capture_clipboard, decode_picture
 
 # Register Quick wrapper types before WebEngine creates internal objects.
 # PySide6 6.12 can otherwise crash while application event filters wrap them.
@@ -206,10 +207,17 @@ class NotebookWorkspace(qt.QWidget):
 
     def state(self):
         value = document_state(self.editor, self.document)
+        value['cutout_clipboard'] = self.cutout_state()
         menus = getattr(self.document_window, 'notebook_menus', None)
         if menus is not None:
             menus.update(value)
         return value
+
+    def cutout_state(self):
+        from services.documents.ui.clipboard import clipboard_blocked
+        if not clipboard_blocked():
+            return self.editor.capture_clipboard.state(self.editor.notebook)
+        return None
 
     def save_status(self):
         return save_status(self.document)
@@ -240,7 +248,8 @@ class NotebookWorkspace(qt.QWidget):
         self.key = key
         if self.document_window is not None:
             self.document_window.setWindowTitle(book.name)
-        self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book))
+        self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book),
+                             capture_clipboard=capture_clipboard(qt.QApplication.instance()))
         self.clear()
         self.progress, saved = self.load_progress(book, key)
         restore_notebook_progress(self.editor, saved)
@@ -289,6 +298,9 @@ class NotebookWorkspace(qt.QWidget):
             self.web.focusProxy().installEventFilter(self)
 
     def eventFilter(self, receiver, event):
+        if (event.type() == qt.QEvent.Type.FocusIn and self.web is not None
+                and receiver in (self.web, self.web.focusProxy())):
+            self.web.page().runJavaScript('window.notebookRefreshCutout?.(' + json.dumps(self.cutout_state()) + ')')
         if (event.type() == qt.QEvent.Type.NativeGesture and self.web is not None
                 and isinstance(receiver, qt.QWidget)
                 and (receiver is self.web or self.web.isAncestorOf(receiver))):
@@ -327,12 +339,21 @@ class NotebookWorkspace(qt.QWidget):
         error = ''
         previous_page = page_location(self.editor)
         try:
-            if op == 'brush-color':
-                self.editor.brush_colors[action['tool']] = action['color']
+            if op in ('brush-color', 'snap-to-text', 'working-brush', 'eraser-kind'):
+                if op == 'brush-color':
+                    self.editor.brush_colors[action['tool']] = action['color']
+                elif op == 'snap-to-text':
+                    self.editor.snap_to_text = action['enabled']
+                elif op == 'eraser-kind':
+                    self.editor.eraser_kind = action['kind']
+                else:
+                    self.editor.working_brush = action['brush']
                 page = self.web.page()
                 self._position_sequence = page.bridge.sequence
                 status = self.progress.save(notebook_progress_state(self.editor)) if self.progress is not None else None
-                page.runJavaScript(brush_color_script(status))
+                setting = {'brush-color': 'brush color', 'snap-to-text': 'snap-to-text setting',
+                           'working-brush': 'working brush', 'eraser-kind': 'eraser type'}[op]
+                page.runJavaScript(brush_color_script(status, setting))
                 return
             if op == 'page-previews':
                 rows = self.editor.page_previews(action['start'])
@@ -362,7 +383,16 @@ class NotebookWorkspace(qt.QWidget):
                         target.copy_page(self.editor.notebook, self.editor.index)
                         self.repository.save(key, target)
                         error = 'Page copied. The source page is unchanged.'
+            elif op == 'copy-cutout':
+                from services.documents.ui.clipboard import clipboard_blocked
+                if clipboard_blocked():
+                    raise ValueError('Clipboard access is restricted.')
+                self.editor.capture_clipboard.copy(decode_picture(action['src']), action, self.editor.notebook.id)
+            elif op == 'clear-cutout':
+                self.editor.capture_clipboard.clear()
             else:
+                if op == 'paste-cutout' and self.cutout_state() is None:
+                    raise ValueError('Clipboard is empty or restricted.')
                 self.editor.apply(action)
         except Exception as failure:
             error = str(failure)

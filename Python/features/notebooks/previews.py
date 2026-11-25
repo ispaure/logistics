@@ -21,7 +21,8 @@ STROKES = 256
 THUMBNAIL_EDGE = 288
 
 
-def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None, count=BATCH, include_images=True, include_background=True):
+def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None, count=BATCH, include_image_sources=True,
+                  include_background=True):
     if type(start) is not int or not 0 <= start < len(book.pages):
         raise ValueError('Invalid page overview range.')
     previews, remaining, image_budget = [], BATCH_POINTS, BATCH_IMAGE_BYTES
@@ -37,8 +38,9 @@ def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None, count=BATCH
         if len(strokes) > STROKES:
             strokes = [strokes[i * (len(strokes) - 1) // (STROKES - 1)] for i in range(STROKES)]
         total = sum(len(s.points) for s in strokes)
-        pictures = list(image_data(book, index, layers=visible)) if include_images else []
-        image_bytes = sum(len(data) for _, data in pictures)
+        pictures = list(image_data(book, index, layers=visible)) if include_image_sources else [
+            (picture, None) for picture in ink.images if picture.layer in visible]
+        image_bytes = sum(len(data) for _, data in pictures if data is not None)
         if min(total, POINTS) > remaining or (previews and image_bytes > image_budget):
             break
         remaining -= min(total, POINTS)
@@ -53,15 +55,22 @@ def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None, count=BATCH
         for stroke in strokes:
             points = stroke.points
             if total > POINTS and len(points) > 2:
-                count = 2 + (len(points) - 2) * (POINTS - minimum) // (total - minimum)
-                points = [points[i * (len(points) - 1) // (count - 1)] for i in range(count)]
+                sample_count = 2 + (len(points) - 2) * (POINTS - minimum) // (total - minimum)
+                points = [points[i * (len(points) - 1) // (sample_count - 1)] for i in range(sample_count)]
             # Use the stored widths for geometry and pressure for graphite density.
             items.append((scene_order(stroke), dict(tool=stroke.tool, color=stroke.color, color_rgba=stroke.color_rgba,
                           points=[[round(x - left, 2), round(y, 2), pressure, width]
                                   for x, y, pressure, width in points])))
+        for item in ink.text_highlights:
+            if item.layer in visible:
+                items.append((scene_order(item), item.payload(left)))
         for picture, data in pictures:
-            items.append((scene_order(picture), dict(src=image_source(data),
-                          corners=[[x - left, y] for x, y in picture.corners])))
+            item = dict(corners=[[x - left, y] for x, y in picture.corners])
+            if data is None:
+                item['id'] = picture.id
+            else:
+                item['src'] = image_source(data)
+            items.append((scene_order(picture), item))
         items.sort(key=lambda item: item[0])
         redirect = page.record.get('redir', {}).get('value', -1) if book.content.get('fileType') == 'pdf' else -1
         template_bounds = None

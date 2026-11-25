@@ -8,6 +8,10 @@ header{max-height:50dvh;overflow:auto;background:#fafaf7;border-bottom:1px solid
 /* Blend live ink with the page canvas, which already includes template artwork.
    Keep the fallback paper behind the group out of the blend. */
 #inkLayers{position:relative;isolation:isolate;background:transparent!important}
+#eraserTrace{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#eraserTrace path{fill:none;stroke:#606060;stroke-linecap:round;stroke-linejoin:round;animation:eraserTraceFade 500ms ease-out both}
+.dark-notebook-paper #eraserTrace path{stroke:#cdcdcd}
+@keyframes eraserTraceFade{from{opacity:.52}to{opacity:0}}
 #linkFeedback {
   position:absolute;
   z-index:1;

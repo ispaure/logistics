@@ -470,6 +470,9 @@ class FolderNavigation:
         if entry.view in screens[-1][1].children:
             mount_live_header()
             self.restore_viewport(destination)
+            if routes.host.state.destination == destination:
+                from .browser_ui import schedule_visible_file_browser_refresh
+                schedule_visible_file_browser_refresh(routes.app)
             return
         if self.task is not None and not self.task.done():
             self.task.cancel()

@@ -60,7 +60,18 @@ def _pdf_source(data):
 
 
 class AndroidPDF:
-    def __init__(self, data):
+    @staticmethod
+    def text_renderer():
+        from java import jclass
+
+        if jclass("android.os.Build$VERSION").SDK_INT >= 35:
+            return "android.graphics.pdf.PdfRenderer"
+        if (jclass("android.os.Build$VERSION").SDK_INT >= 30
+                and jclass("android.os.ext.SdkExtensions").getExtensionVersion(31) >= 13):
+            return "android.graphics.pdf.PdfRendererPreV"
+        return None
+
+    def __init__(self, data, *, text=False):
         from java import jclass
 
         self.document = None
@@ -70,7 +81,14 @@ class AndroidPDF:
                 descriptor = jclass("android.os.ParcelFileDescriptor").fromFd(
                     stream.fileno()
                 )
-                self.document = jclass("android.graphics.pdf.PdfRenderer")(descriptor)
+                renderer = self.text_renderer() if text else "android.graphics.pdf.PdfRenderer"
+                if renderer is None:
+                    raise ValueError("PDF text selection is unavailable on this Android version.")
+                if renderer.endswith("PreV"):
+                    params = jclass("android.graphics.pdf.LoadParams$Builder")().build()
+                    self.document = jclass(renderer)(descriptor, params)
+                else:
+                    self.document = jclass(renderer)(descriptor)
                 descriptor = None  # transferred to renderer
             self.count = self.document.getPageCount()
         except BaseException:
@@ -92,6 +110,31 @@ class AndroidPDF:
         page = self.document.openPage(index)
         try:
             return page.getWidth(), page.getHeight()
+        finally:
+            page.close()
+
+    def select_text(self, index, start, end):
+        from java import jclass
+
+        page = self.document.openPage(index)
+        try:
+            w, h = page.getWidth(), page.getHeight()
+            point = jclass("android.graphics.Point")
+            boundary = jclass("android.graphics.pdf.models.selection.SelectionBoundary")
+            selection = page.selectContent(boundary(point(round(start[0] * w), round(start[1] * h))),
+                                           boundary(point(round(end[0] * w), round(end[1] * h))))
+            if selection is None:
+                return '', []
+            text, rectangles = [], []
+            contents = selection.getSelectedTextContents()
+            for i in range(contents.size()):
+                content = contents.get(i)
+                text.append(str(content.getText()))
+                bounds = content.getBounds()
+                for j in range(bounds.size()):
+                    rect = bounds.get(j)
+                    rectangles.append((rect.left / w, rect.top / h, rect.width() / w, rect.height() / h))
+            return '\n'.join(text), rectangles
         finally:
             page.close()
 

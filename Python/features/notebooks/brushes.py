@@ -28,6 +28,7 @@ PALETTE = {0: '#000000', 1: '#909090', 2: '#ffffff', 3: '#fbf719',
            8: '#7d7d7d', 9: '#ffeb3b', 10: '#91da71', 11: '#74d2e8',
            12: '#c07fd2', 13: '#fae719', 14: '#beeafe', 15: '#ffc38c',
            16: '#c7c7c6', -1: '#ff963c'}
+DARK_INK_COLORS = {'48,74,224': (125, 155, 255), '194,49,50': (245, 122, 126)}
 # Writing RGB values above are from the native color PDF, OS 3.29.0.153.
 HIGHLIGHTS = {13: (255, 237, 117, 255), 10: (172, 255, 133, 255),
               5: (242, 158, 255, 255), 6: (190, 234, 254, 255),
@@ -110,6 +111,15 @@ def native_color(tool, color):
     if tool == 23:
         return 9, SHADERS[color]
     return color, None
+
+
+def validate_brush_settings(values):
+    if not isinstance(values, list) or len(values) != 3 or any(type(value) is not int for value in values):
+        raise ValueError('Invalid brush settings.')
+    tool, color, width = values
+    native_color(tool, color)
+    if width not in WIDTHS.values() or (BRUSHES[tool].get('fixed_width') and width != 1):
+        raise ValueError('Invalid brush width.')
 
 
 def native_scale(tool, width, *, expanded=False):

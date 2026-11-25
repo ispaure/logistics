@@ -12,21 +12,12 @@ __status__ = "Production"
 import json
 from uuid import uuid4
 
-from ..brushes import BRUSHES, WIDTHS, native_color
+from ..brushes import validate_brush_settings as validate_preset
 
 
 PREFERENCE = 'notebook_brush_presets'
 MAX_PRESETS = 32
 TOOLBAR_PRESET_LIMIT = 2
-
-
-def validate_preset(preset):
-    if not isinstance(preset, list) or len(preset) != 3 or any(type(value) is not int for value in preset):
-        raise ValueError('Invalid brush preset.')
-    tool, color, width = preset
-    native_color(tool, color)
-    if width not in WIDTHS.values() or (BRUSHES[tool].get('fixed_width') and width != 1):
-        raise ValueError('Invalid brush preset width.')
 
 
 def read_presets(value):

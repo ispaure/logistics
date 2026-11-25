@@ -10,6 +10,7 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 from dataclasses import replace
+from bisect import bisect_left, bisect_right
 import math
 from uuid import uuid4
 
@@ -32,6 +33,23 @@ def _sweeps(path):
             corners.pop()
         corners.append(point)
     return list(zip(corners, corners[1:])) or [(path[0], path[0])]
+
+
+def hit_text_highlights(highlights, layers, path, radius):
+    """Text marks erase as units when the eraser touches a rectangle."""
+    if not highlights:
+        return set()
+    visible = {key for key, _, shown in layers if shown}
+    ordered = sorted((x, y) for x, y, _ in path)
+    xs = [p[0] for p in ordered]
+
+    def hit(rect):
+        x, y, w, h = rect
+        start, end = bisect_left(xs, x - radius), bisect_right(xs, x + w + radius)
+        return any(math.hypot(max(x - px, 0, px - x - w), max(y - py, 0, py - y - h)) <= radius
+                   for px, py in ordered[start:end])
+
+    return {item.id for item in highlights if item.layer in visible and any(map(hit, item.rectangles))}
 
 
 def _intervals(a, b, c, d, radius):

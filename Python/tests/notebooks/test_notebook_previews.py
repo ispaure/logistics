@@ -19,6 +19,55 @@ from features.notebooks.previews import BATCH, BATCH_POINTS, POINTS, page_previe
 
 
 class PagePreviewTests(unittest.TestCase):
+    def test_file_thumbnail_draws_jpeg_and_transparent_png_in_scene_order(self):
+        from PySide6.QtCore import QBuffer, QIODevice
+        from PySide6.QtGui import QColor, QImage
+        from features.notebooks.images import add_picture
+        from features.notebooks.thumbnail import notebook_thumbnail
+
+        def encoded(image, format):
+            output = QBuffer()
+            output.open(QIODevice.OpenModeFlag.WriteOnly)
+            self.assertTrue(image.save(output, format))
+            return bytes(output.data())
+
+        book = Notebook.new()
+        layer = book.page(0).layers[0][0]
+        jpeg = QImage(8, 8, QImage.Format.Format_RGB32)
+        jpeg.fill(QColor('red'))
+        png = QImage(8, 8, QImage.Format.Format_RGBA8888)
+        png.fill(QColor(0, 0, 0, 0))
+        for y in range(4):
+            for x in range(8):
+                png.setPixelColor(x, y, QColor('blue'))
+        corners = [[350, 350], [1050, 390], [1020, 1050], [320, 1010]]
+        add_picture(book, 0, encoded(jpeg, 'JPEG'), layer, corners)
+        add_picture(book, 0, encoded(png, 'PNG'), layer, corners)
+        data = book.to_bytes()
+        for dark in (False, True):
+            thumbnail = QImage.fromData(notebook_thumbnail(data, 320, cancelled=lambda: False, dark=dark))
+            top, bottom = thumbnail.pixelColor(120, 90), thumbnail.pixelColor(120, 150)
+            self.assertGreater(top.blue(), 240)
+            self.assertLess(top.red(), 15)
+            self.assertGreater(bottom.red(), 240)
+            self.assertLess(bottom.blue(), 15)
+
+    def test_dark_thumbnail_lifts_blue_and_red_preview_pixels_only(self):
+        from PySide6.QtGui import QImage
+        from features.notebooks.thumbnail import notebook_thumbnail
+
+        book = Notebook.new()
+        for y, color in ((468, 6), (936, 7)):
+            stroke = book.page(0).add([[300, y, .8], [1100, y, .8]], tool=17, color=color, width=3)
+            stroke.points = [[x, y, pressure, 30] for x, y, pressure, _ in stroke.points]
+        data = book.to_bytes()
+        light, dark = [QImage.fromData(notebook_thumbnail(data, 320, cancelled=lambda: False, dark=mode))
+                       for mode in (False, True)]
+        for row in (80, 160):
+            x = dark.width() // 2
+            self.assertGreater(dark.pixelColor(x, row).green(), light.pixelColor(x, row).green())
+        self.assertEqual([s.color for s in Notebook.read(data).page(0).strokes], [6, 7])
+
     def test_graphite_pressure_survives_in_page_and_file_thumbnails(self):
         from PySide6.QtGui import QImage
         from features.notebooks.thumbnail import notebook_thumbnail

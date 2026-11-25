@@ -71,7 +71,7 @@ class FileDrawer(FileSelectionUI):
             self.browser.scroll_container(), self.workspaces_button],
             style=Pack(direction=COLUMN, flex=1))
         self.browser_widget = self.widget
-        self.browser_widget._refresh_file_listing = self.refresh
+        self.browser_widget._refresh_file_listing = lambda: self.refresh(preserve_listing=True)
         if destination == 'documents':
             self.menu_content = toga.Box(style=Pack(direction=COLUMN, margin=12))
             self.widget = toga.ScrollContainer(horizontal=False, content=self.menu_content, style=Pack(flex=1))
@@ -372,7 +372,7 @@ class FileDrawer(FileSelectionUI):
             return {device_files_label(self.app): roots['Shared files']}
         return {'Local files': None}
 
-    async def refresh(self):
+    async def refresh(self, *, preserve_listing=False):
         with self.browser.population_paused():
             self.generation += 1
             generation = self.generation
@@ -422,6 +422,8 @@ class FileDrawer(FileSelectionUI):
                 rows = await self.listing.read(request)
                 if rows is None:
                     return False
+                preserve = (preserve_listing and self.provider is provider and self.browser.location == (selected, folder)
+                            and self.browser.folder_tree is not None)
                 self.provider = provider
                 self.provider_client = getattr(self.app, 'cloud_client', None)
                 self.provider_generation = getattr(self.provider_client, 'generation', None)
@@ -435,7 +437,10 @@ class FileDrawer(FileSelectionUI):
                     from .browser_preview import LocalThumbnails, dark_notebook_thumbnails
                     self.browser.configure_previews(LocalThumbnails(
                         provider, self.provider_client, '', dark_notebooks=dark_notebook_thumbnails(self.app)))
-                self.browser.set_entries(model, folder, rows, location=(selected, folder))
+                if preserve:
+                    self.browser.refresh_entries(rows)
+                else:
+                    self.browser.set_entries(model, folder, rows, location=(selected, folder))
                 self.browser.location_bar.update_provider(folder, provider, name=(
                     self.library_title if folder == self.library_root else selected if not folder else None))
                 main_browser = self.main_browser_visible()

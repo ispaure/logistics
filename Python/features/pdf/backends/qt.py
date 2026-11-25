@@ -41,6 +41,15 @@ class QtPDF:
         size = self.document.pagePointSize(index)
         return size.width(), size.height()
 
+    def select_text(self, index, start, end):
+        from PySide6.QtCore import QPointF
+
+        w, h = self.page_size(index)
+        selection = self.document.getSelection(index, QPointF(start[0] * w, start[1] * h),
+                                               QPointF(end[0] * w, end[1] * h))
+        boxes = [polygon.boundingRect() for polygon in selection.bounds()]
+        return selection.text(), [(r.x() / w, r.y() / h, r.width() / w, r.height() / h) for r in boxes]
+
     def render(self, index, *, edge=PAGE_EDGE):
         from PySide6.QtCore import QBuffer, QIODevice, QSize
 

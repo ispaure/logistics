@@ -6,6 +6,7 @@ const minZoom = .1, maxZoom = 4;
 let documentPaperView = null;
 let appliedZoom = $('zoom').value;
 let defaultViewportZoom = true, viewportZoomMemory = null, resetViewportPosition = true;
+let historyCamera = null;
 function mobileViewport() {
   return document.body.classList.contains('notebook-mobile')
 }
@@ -18,6 +19,30 @@ function viewportLayoutKey() {
   const style = getComputedStyle(viewport);
   return [viewport.clientWidth, viewport.clientHeight, style.paddingLeft, style.paddingRight, innerWidth, innerHeight,
     document.body.classList.contains('notebook-laptop')].join(':')
+}
+function historyLayout() {
+  return [innerWidth, innerHeight, document.body.classList.contains('notebook-laptop')].join(':');
+}
+function rememberHistoryCamera() {
+  const viewport = $('viewport'), box = viewport.getBoundingClientRect(), rect = canvas.getBoundingClientRect();
+  if (!displayedPaperBounds || !rect.width) return;
+  historyCamera = {page: state.page_id, layout: historyLayout(), paper: displayedPaperBounds,
+    scale: rect.width / state.width, anchor: [rect.left - box.left, rect.top - box.top]};
+}
+function currentHistoryCamera() {
+  if (historyCamera && (historyCamera.page !== state.page_id || historyCamera.layout !== historyLayout()))
+    historyCamera = null;
+  return historyCamera;
+}
+function restoreHistoryCamera(camera) {
+  if (camera.anchor) {
+    const viewport = $('viewport'), box = viewport.getBoundingClientRect(), rect = canvas.getBoundingClientRect();
+    viewport.scrollLeft += rect.left - box.left - camera.anchor[0];
+    viewport.scrollTop += rect.top - box.top - camera.anchor[1];
+    camera.anchor = null;
+  }
+  resetViewportPosition = false;
+  rememberViewportZoom();
 }
 function compactPaper() {
   return state.compact_paper || state.move_paper || {width: 821, height: 1460}
@@ -114,6 +139,7 @@ function resetViewportZoom(resizeNow = true) {
   if (active !== null) return;
   defaultViewportZoom = true;
   viewportZoomMemory = null;
+  historyCamera = null;
   resetViewportPosition = true;
   if (resizeNow) resize()
 }
@@ -151,6 +177,7 @@ function setPageFraming(mode) {
     if ($('paperView')) $('paperView').value = paperView
   }
   defaultViewportZoom = false;
+  historyCamera = null;
   resetViewportPosition = true;
   viewportZoomMemory = null;
   assignZoomValue(mode);
@@ -168,6 +195,7 @@ function setZoom(value, anchor = null, paperPoint = null, touch = null) {
     value = String(Math.round(Math.min(maxZoom, Math.max(minZoom, numeric)) * 10000) / 10000);
   }
   const viewport = $('viewport'), box = viewport.getBoundingClientRect(), before = canvas.getBoundingClientRect();
+  historyCamera = null;
   const x = anchor?.x ?? viewportCenterX(viewport, box),
     y = anchor?.y ?? box.top + viewport.clientHeight / 2;
   const px = paperPoint?.[0] ?? Math.max(0, Math.min(1, (x - before.left) / before.width)),

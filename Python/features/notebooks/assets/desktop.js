@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 renderEraserChoices();
+restoreWorkingBrush();
+onEraserKindChanged = kind => send({op:'eraser-kind', kind});
 // Keep eraser settings beside the toolbar without blocking the document.
 function positionEraserSettings() {
   const anchor = $('erase').getBoundingClientRect();
@@ -62,6 +64,8 @@ for (let [name, value] of Object.entries(state.tools)) {
   b.title = name + ' (' + ($('brushes').children.length) + ')';
 }
 let swatchKey = '';
+const snapToText = snapToTextControl();
+$('swatches').after(snapToText.label);
 
 function syncSwatches() {
   let key = $('tool').value + ':' + $('grayscale').checked;
@@ -85,12 +89,14 @@ function syncSwatches() {
 for (let [label, value] of Object.entries(state.widths)) {
   let b = choice('widths', label, value, '<i style="--weight:' + value + 'px"></i>', () => {
     $('width').value = value;
+    saveWorkingBrush();
     syncChrome()
   });
   b.setAttribute('aria-label', label + ' stroke width');
 }
 
 function syncChrome() {
+  snapToText.update();
   if (mode !== 'erase' && eraserDialog.open) closeEraserSettings();
   syncSwatches();
   for (let b of $('widths').children) {
@@ -123,11 +129,12 @@ for (let id of ['erase', 'select', 'tool']) {
   let handler = $(id)[id === 'tool' ? 'onchange' : 'onclick'];
   $(id)[id === 'tool' ? 'onchange' : 'onclick'] = () => {
     handler();
+    if (id === 'tool') saveWorkingBrush();
     syncChrome()
   }
 }
-$('color').onchange = syncChrome;
-$('width').onchange = syncChrome;
+$('color').onchange = () => { saveWorkingBrush(); syncChrome() };
+$('width').onchange = () => { saveWorkingBrush(); syncChrome() };
 const grayChange = $('grayscale').onchange;
 $('grayscale').onchange = () => {
   grayChange();
@@ -188,6 +195,7 @@ window.notebookPagePreviews = rows => {
 createZoomControls($('zoomControls'));
 window.notebookViewState = () => ({
   toolbar: !document.body.classList.contains('hide-toolbar'),
+  'dark-paper': darkNotebookPaper(),
   grayscale: $('grayscale').checked,
   finger: $('finger').checked
 });
@@ -200,6 +208,11 @@ window.notebookUI = (name, value) => {
   if (name === 'toolbar') {
     $('focus').click();
     return
+  }
+  if (name === 'dark-paper') {
+    document.body.classList.toggle('dark-notebook-paper');
+    draw();
+    return;
   }
   if (name === 'zoom') {
     setZoom(value);

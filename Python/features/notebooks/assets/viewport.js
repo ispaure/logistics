@@ -78,6 +78,7 @@ function templateControls() {
   $('paperView').onchange = () => {
     if (active !== null) { $('paperView').value = paperView; return }
     defaultViewportZoom = false;
+    historyCamera = null;
     resetViewportPosition = true;
     documentPaperView = paperView = $('paperView').value;
     if ($('zoom').value === 'compact-height') assignZoomValue('fit');
@@ -340,6 +341,7 @@ function render() {
     index: state.index + 1
   });
   if (render.pageIndex !== state.index) {
+    clearEraserTrace();
     if (explicitPageFraming()) resetViewportPosition = true;
     else resetViewportZoom(false);
     render.pageIndex = state.index
@@ -359,8 +361,15 @@ function pageViewportSpace() {
 }
 
 function resize() {
-  const previousZoom = prepareViewportZoom();
+  const camera = currentHistoryCamera();
+  const previousZoom = camera ? null : prepareViewportZoom();
   const bounds = paperBounds();
+  if (camera) {
+    const left = Math.min(bounds.x, camera.paper.x);
+    bounds.width = Math.max(bounds.x + bounds.width, camera.paper.x + camera.paper.width) - left;
+    bounds.height = Math.max(bounds.height, camera.paper.height);
+    bounds.x = left;
+  }
   displayedPaperBounds = bounds;
   const zoom = $('zoom').value;
   const {width: availableWidth, height: availableHeight} = pageViewportSpace();
@@ -371,7 +380,8 @@ function resize() {
     else if (fitLandscapePdf()) fitWidth = backgroundContentBounds()?.width ?? bounds.width;
   }
   let scale;
-  if (zoom === 'page' || zoom === 'fill') scale = pageZoomScale(zoom, availableWidth / bounds.width, heightFit);
+  if (camera) scale = camera.scale;
+  else if (zoom === 'page' || zoom === 'fill') scale = pageZoomScale(zoom, availableWidth / bounds.width, heightFit);
   else if (zoom === 'compact-height') scale = Math.min(availableHeight / compactPaper().height, maxZoom);
   else if (zoom === 'fit') scale = Math.min(availableWidth / fitWidth, mobileViewport() ? maxZoom : 1);
   else scale = Number(zoom);
@@ -382,7 +392,7 @@ function resize() {
     wrap.style.height = (bounds.height * scale) + 'px';
   }
   sizePaper();
-  if (explicitPageFraming()) {
+  if (!camera && explicitPageFraming()) {
     // Desktop scrollbars can appear for Fill and disappear for Fit. Measure
     // the resulting viewport before sizing or repainting the backing canvases.
     const space = pageViewportSpace();
@@ -417,7 +427,8 @@ function resize() {
     resize.nativeHeight = state.height
   }
   if (typeof updateZoomChrome === 'function') updateZoomChrome(heightFit);
-  finishViewportZoom(previousZoom);
+  if (camera) restoreHistoryCamera(camera);
+  else finishViewportZoom(previousZoom);
   draw()
 }
 
@@ -438,6 +449,41 @@ function previewErase(samples, radius = pageEraserRadius()) {
   ctx.arc(end[0], end[1], radius, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore()
+}
+
+let eraserTrace = null, traceFrame = null, tracePoints = [];
+function clearEraserTrace() {
+  if (traceFrame !== null) cancelAnimationFrame(traceFrame);
+  traceFrame = null;
+  tracePoints = [];
+  eraserTrace?.replaceChildren();
+}
+function showEraserTrace(from, to = from) {
+  if (!tracePoints.length) tracePoints.push(from);
+  if (tracePoints.length < 512) tracePoints.push(to);
+  else tracePoints[511] = to;
+  if (traceFrame !== null) return;
+  traceFrame = requestAnimationFrame(() => {
+    traceFrame = null;
+    const points = tracePoints;
+    tracePoints = [];
+    const ns = 'http://www.w3.org/2000/svg';
+    if (!eraserTrace) {
+      eraserTrace = document.createElementNS(ns, 'svg');
+      eraserTrace.id = 'eraserTrace';
+      eraserTrace.setAttribute('aria-hidden', 'true');
+      eraserTrace.setAttribute('preserveAspectRatio', 'none');
+      $('inkLayers').append(eraserTrace);
+    }
+    eraserTrace.setAttribute('viewBox', `0 0 ${state.width} ${state.height}`);
+    const path = document.createElementNS(ns, 'path');
+    const [x, y] = points[0];
+    path.setAttribute('d', `M ${x} ${y} L ${x + .001} ${y} ` + points.slice(1).map(([x, y]) => `L ${x} ${y}`).join(' '));
+    path.setAttribute('stroke-width', pageEraserRadius() * 2);
+    path.addEventListener('animationend', () => path.remove(), {once: true});
+    eraserTrace.append(path);
+    while (eraserTrace.childElementCount > 72) eraserTrace.firstElementChild.remove();
+  });
 }
 
 function backgroundContentBounds(image = $('pdfBackground')) {

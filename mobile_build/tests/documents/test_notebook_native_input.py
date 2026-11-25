@@ -711,6 +711,7 @@ class NativeNotebookResponseSafetyTests(unittest.IsolatedAsyncioTestCase):
             if "window.notebookNativeAction('save')" in script:
                 self.assertIsNone(js['head'])
                 js['head']='save';js['admitted']=True
+                panel.bridge.sequence += 1
                 workers.append(asyncio.create_task(panel.perform({'op':'save'})))
                 return completed(True)
             if script.startswith('queue.slice'):return completed(False)
@@ -781,8 +782,13 @@ class NativeBooleanInteropTests(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import AsyncMock
         from features.notebooks.mobile import panel as module
         panel = module.NotebookPanel.__new__(module.NotebookPanel)
-        panel.web = NS(evaluate_javascript=AsyncMock(side_effect=[1, 1, 1]))
-        panel.bridge = NS(active=True)
+        panel.bridge = NS(active=True, sequence=0, saved_sequence=None)
+        replies = iter([1, 1, 1])
+        def evaluate(script):
+            if "queue[0]?.op==='save'" in script:
+                panel.bridge.saved_sequence = 1
+            return next(replies)
+        panel.web = NS(evaluate_javascript=AsyncMock(side_effect=evaluate))
         panel.closed = panel.busy = False
         panel.pen_input = NS(owns_native_transport=True, pending=False)
         panel.document = NS(dirty=False)
@@ -791,12 +797,24 @@ class NativeBooleanInteropTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(panel.web.evaluate_javascript.await_count, 3)
         self.assertIn("queue[0]?.op==='save'", panel.web.evaluate_javascript.await_args_list[1].args[0])
 
+    async def test_clean_document_is_not_success_when_save_failed(self):
+        from unittest.mock import AsyncMock
+        from features.notebooks.mobile import panel as module
+        panel = module.NotebookPanel.__new__(module.NotebookPanel)
+        panel.web = NS(evaluate_javascript=AsyncMock(return_value=True))
+        panel.bridge = NS(active=True, sequence=0, saved_sequence=None)
+        panel.closed = panel.busy = False
+        panel.pen_input = NS(owns_native_transport=True, pending=False)
+        panel.document = NS(dirty=False)
+        with patch.object(module, 'native_backend', return_value='toga_iOS.widgets.webview'):
+            self.assertFalse(await panel.save_from_view(timeout=.1))
+
     async def test_truthy_non_boolean_idle_never_authorizes_host_save(self):
         from unittest.mock import AsyncMock
         from features.notebooks.mobile import panel as module
         panel = module.NotebookPanel.__new__(module.NotebookPanel)
         panel.web = NS(evaluate_javascript=AsyncMock(return_value='true'))
-        panel.bridge = NS(active=True)
+        panel.bridge = NS(active=True, sequence=0)
         panel.closed = panel.busy = False
         panel.pen_input = NS(owns_native_transport=True, pending=False)
         panel.document = NS(dirty=False)

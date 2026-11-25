@@ -47,6 +47,38 @@ class ApplePDF:
         size = page.boundsForBox(1).size
         return (size.height, size.width) if page.rotation % 180 else (size.width, size.height)
 
+    def select_text(self, index, start, end):
+        from rubicon.objc import CGPoint
+        from rubicon.objc.runtime import autoreleasepool
+
+        with autoreleasepool():
+            page = self.document.pageAtIndex(index)
+            box = page.boundsForBox(1)
+            left, bottom, w, h = box.origin.x, box.origin.y, box.size.width, box.size.height
+            rotation = int(page.rotation) % 360
+
+            def point(display):
+                x, y = display
+                x, y = {0: (x, y), 90: (y, 1 - x), 180: (1 - x, 1 - y), 270: (1 - y, x)}[rotation]
+                return CGPoint(left + x * w, bottom + (1 - y) * h)
+
+            def display(x, y):
+                x, y = (x - left) / w, 1 - (y - bottom) / h
+                return {0: (x, y), 90: (1 - y, x), 180: (1 - x, 1 - y), 270: (y, 1 - x)}[rotation]
+
+            selection = (page.selectionForWordAtPoint(point(start)) if start == end else
+                         page.selectionFromPoint(point(start), toPoint=point(end)))
+            if selection is None or selection.string is None:
+                return '', []
+            lines = selection.selectionsByLine()
+            rectangles = []
+            for i in range(int(lines.count)):
+                rect = lines.objectAtIndex(i).boundsForPage(page)
+                x, y = rect.origin.x, rect.origin.y
+                a, b = display(x, y), display(x + rect.size.width, y + rect.size.height)
+                rectangles.append((min(a[0], b[0]), min(a[1], b[1]), abs(b[0] - a[0]), abs(b[1] - a[1])))
+            return str(selection.string), rectangles
+
     def render(self, index, *, edge=PAGE_EDGE):
         import ctypes
         from rubicon.objc import CGSize

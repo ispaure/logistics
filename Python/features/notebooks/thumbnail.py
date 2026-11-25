@@ -30,11 +30,54 @@ def graphite_thumbnail_density(pressure, mechanical):
     return density + (1 - density) * flecks
 
 
+def picture_xobject(writer, data, header):
+    from pypdf.filters import FlateDecode
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, EncodedStreamObject, NameObject, NumberObject
+    from .images import validate_png
+
+    def image(stream, gray):
+        stream.update({NameObject('/Type'): NameObject('/XObject'), NameObject('/Subtype'): NameObject('/Image'),
+                       NameObject('/Width'): NumberObject(header.width), NameObject('/Height'): NumberObject(header.height),
+                       NameObject('/BitsPerComponent'): NumberObject(8),
+                       NameObject('/ColorSpace'): NameObject('/DeviceGray' if gray else '/DeviceRGB')})
+        return stream
+
+    stream = EncodedStreamObject()
+    if header.format == 'jpeg':
+        stream._data = data
+        stream[NameObject('/Filter')] = NameObject('/DCTDecode')
+        return writer._add_object(image(stream, False))
+
+    channels, compressed = validate_png(data, collect_idat=True)
+    parameters = DictionaryObject({NameObject('/Predictor'): NumberObject(15),
+        NameObject('/Colors'): NumberObject(channels), NameObject('/Columns'): NumberObject(header.width)})
+    if channels in (1, 3):
+        stream._data = compressed
+        stream[NameObject('/Filter')] = NameObject('/FlateDecode')
+        stream[NameObject('/DecodeParms')] = parameters
+        return writer._add_object(image(stream, channels == 1))
+
+    pixels = FlateDecode.decode(compressed, parameters)
+    alpha, colors = DecodedStreamObject(), DecodedStreamObject()
+    alpha.set_data(pixels[channels - 1::channels])
+    rgb = bytearray(header.width * header.height * (channels - 1))
+    for i in range(channels - 1):
+        rgb[i::channels - 1] = pixels[i::channels]
+    colors.set_data(bytes(rgb))
+    stream = image(colors.flate_encode(), channels == 2)
+    stream[NameObject('/SMask')] = writer._add_object(image(alpha.flate_encode(), True))
+    return writer._add_object(stream)
+
+
 def notebook_thumbnail(data, edge, *, cancelled, dark=False):
     from pypdf import PdfReader, PdfWriter, Transformation
-    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+    from pypdf.errors import PdfReadError
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, FloatObject, NameObject
+    from commonUtils.formats.image_headers import image_header
     from features.pdf.document import MAX_PDF, PDFDocument
-    from .brushes import BRUSHES, NATIVE_HIGHLIGHTS, PALETTE
+    from .brushes import BRUSHES, DARK_INK_COLORS, NATIVE_HIGHLIGHTS, PALETTE
+    from .editor import Editor
+    from .images import picture_assets
     from .notebook import Notebook
     from .previews import page_previews
     from .remarkable_export import BackgroundConversionError, merge_pdf_template, pdf_template_line
@@ -42,13 +85,14 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
 
     book = Notebook.read(data, max_bytes=MAX_PDF)
     check_cancelled(cancelled)
-    scene, = page_previews(book, 0, count=1, include_images=False, include_background=False)
+    editor = Editor(book)
+    scene, = page_previews(book, 0, count=1, pdf_bounds=editor.pdf_bounds,
+                           include_image_sources=False, include_background=False)
     scale = 320 / max(scene['width'], scene['height'])
     width, height = scene['width'] * scale, scene['height'] * scale
     page = book.pages[0]
     writer = PdfWriter()
-    if dark:
-        writer.pdf_header = '%PDF-1.4'
+    writer.pdf_header = '%PDF-1.4'
     cover = writer.add_blank_page(width, height)
     fill = f'0 0 {width:g} {height:g} re f'
     paper_stream = DecodedStreamObject()
@@ -64,10 +108,12 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
             backing = reader.pages[redirect]
             backing.transfer_rotation_to_content()
             box = backing.cropbox
-            ratio = min(width / max(1, float(box.width)), height / max(1, float(box.height)))
+            paper = scene['pdf_paper'] or dict(x=0, y=0, width=scene['width'], height=scene['height'])
+            ratio = scale * min(paper['width'] / max(1, float(box.width)), paper['height'] / max(1, float(box.height)))
             cover.merge_transformed_page(backing, Transformation()
                 .translate(-float(box.left), -float(box.bottom)).scale(ratio)
-                .translate((width - float(box.width) * ratio) / 2, height - float(box.height) * ratio))
+                .translate((paper['x'] + paper['width'] / 2) * scale - float(box.width) * ratio / 2,
+                           height - (paper['y'] + paper['height'] / 2) * scale - float(box.height) * ratio / 2))
     else:
         paper = settings(book, page)
         if paper['visible']:
@@ -82,8 +128,43 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
                 commands.extend(pdf_template_line(item, dark=dark) for item in artwork if isinstance(item, TemplateLine))
 
     highlights = NameObject('/NotebookHighlight')
+    blend_modes, xobjects = DictionaryObject(), DictionaryObject()
+    read_picture = picture_assets(book, 0)
+    pictures = {picture.id: picture for picture in book.page(0).images}
+    image_budget, pixel_budget = 12 * 1024 * 1024, 16 * 1024 * 1024
+    resources = {}
     for line in scene['items']:
         check_cancelled(cancelled)
+        if 'corners' in line:
+            picture = pictures[line['id']]
+            if picture.resource not in resources:
+                try:
+                    asset = read_picture(picture)
+                    header = image_header(asset, max_bytes=image_budget)
+                    pixels = header.width * header.height
+                    if pixels > pixel_budget or header.format not in ('png', 'jpeg'):
+                        continue
+                    name = NameObject(f'/NotebookImage{len(xobjects)}')
+                    xobjects[name] = picture_xobject(writer, asset, header)
+                    resources[picture.resource] = name
+                    image_budget -= len(asset)
+                    pixel_budget -= pixels
+                except (ValueError, PdfReadError):
+                    continue
+            a, b, _, d = line['corners']
+            matrix = (b[0] - a[0], b[1] - a[1], a[0] - d[0], a[1] - d[1], *d)
+            commands.append('q ' + ' '.join(f'{v:.4f}' for v in matrix) + f' cm {resources[picture.resource]} Do Q')
+            continue
+        if 'rectangles' in line:
+            rgb = (255, 255, 255) if dark and tuple(line['rgb']) == (0, 0, 0) else line['rgb']
+            key = NameObject(f'/TextHighlight{round(line["opacity"] * 1000)}')
+            if key not in blend_modes:
+                blend_modes[key] = DictionaryObject({NameObject('/ca'): FloatObject(line['opacity']),
+                    NameObject('/BM'): NameObject('/Screen' if dark else '/Multiply')})
+            color = ' '.join(f'{component / 255:.4f}' for component in rgb)
+            rectangles = ' '.join(' '.join(f'{v:.4f}' for v in rect) + ' re' for rect in line['rectangles'])
+            commands.append(f'q {key} gs {color} rg {rectangles} f Q')
+            continue
         points = line['points']
         if not points:
             continue
@@ -93,6 +174,8 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
         alpha = color[3] / 255 if color else 1
         if dark and rgb in {(0, 0, 0), (255, 255, 255)}:
             rgb = tuple(255 - value for value in rgb)
+        elif dark and tool not in (5, 18):
+            rgb = DARK_INK_COLORS.get(','.join(map(str, rgb)), rgb)
         highlight = dark and tool in (5, 18)
         if highlight:
             alpha *= .36
@@ -138,9 +221,7 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
     commands.append('Q')
     overlay = writer.add_blank_page(width, height)
     if dark:
-        blend_modes = DictionaryObject({
-            highlights: DictionaryObject({NameObject('/BM'): NameObject('/Screen')}),
-        })
+        blend_modes[highlights] = DictionaryObject({NameObject('/BM'): NameObject('/Screen')})
         if pdf_background:
             # Invert only the background, before emitting ink in its display colors.
             invert = NameObject('/NotebookInvert')
@@ -148,7 +229,10 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
             commands.insert(0, f'q {invert} gs 1 g {fill} Q')
         else:
             commands.insert(0, f'q 0 g {fill} Q')
+    if blend_modes:
         overlay[NameObject('/Resources')][NameObject('/ExtGState')] = blend_modes
+    if xobjects:
+        overlay[NameObject('/Resources')][NameObject('/XObject')] = xobjects
     stream = DecodedStreamObject()
     stream.set_data('\n'.join(commands).encode('ascii'))
     overlay[NameObject('/Contents')] = writer._add_object(stream.flate_encode())

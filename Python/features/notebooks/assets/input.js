@@ -94,6 +94,7 @@ function recordPoint(point) {
   let previous = points[points.length - 1];
   if (previous && point.every((v, i) => v === previous[i])) return;
   points.push(point);
+  if (mode === 'erase' && typeof showEraserTrace === 'function') showEraserTrace(previous || point, point);
   if (mode === 'erase' && eraserKind === 'whole')
     previewWholeErase(previous || point, point)
 }
@@ -180,6 +181,7 @@ canvas.onpointerdown = e => {
   previewCount = 0;
   erasePreviewCount = 0;
   if (mode === 'erase') {
+    if (typeof showEraserTrace === 'function') showEraserTrace(start);
     if (eraserKind === 'whole') {
       const visible = new Set(state.layers.filter(layer => layer[2]).map(layer => layer[0]));
       wholeEraseCandidates = state.strokes.filter(stroke => visible.has(stroke.layer) && stroke.points.length)
@@ -249,6 +251,7 @@ function finish(e, cancelled = false) {
   active = null;
   if (cancelled) {
     cancelPreview();
+    if (mode === 'erase' && typeof clearEraserTrace === 'function') clearEraserTrace();
     wholeErasePreview.clear();
     wholeEraseCandidates = [];
     points = [];
@@ -285,6 +288,17 @@ function finish(e, cancelled = false) {
       dy: last[1] - start[1]
     })
   } else if (mode === 'ink' && captured.length) {
+    const textBounds = state.can_snap_to_text && state.snap_to_text && inkSettings.tool === 18 && backgroundContentBounds();
+    const first = captured[0], lastPoint = captured.at(-1);
+    const inside = p => p[0] >= textBounds.x && p[0] <= textBounds.x + textBounds.width
+      && p[1] >= textBounds.y && p[1] <= textBounds.y + textBounds.height;
+    if (textBounds && inside(first) && inside(lastPoint)) {
+      const normalized = ([x, y]) => [(x - textBounds.x) / textBounds.width, (y - textBounds.y) / textBounds.height];
+      send({op: 'highlight-text', start: normalized(first), end: normalized(lastPoint),
+        color: inkSettings.color, layer: inkSettings.layer});
+      flushUpdate();
+      return;
+    }
     if (continuousInk) {
       if (!liveGraphitePressure && !['fineliner', 'ballpoint', 'highlighter'].includes(brushFor(inkSettings.tool).family)) {
         commitDraft(inkSettings.tool);

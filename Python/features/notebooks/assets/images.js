@@ -1,14 +1,14 @@
 // Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
 // SPDX-License-Identifier: MIT
 
-// Capture uses a private editor clipboard, retained across page changes. PNGs
-// and native image quads travel through the same durable command queue as ink.
-let imageClipboard = null, imageSelection = null, imageGesture = null, forceImageLasso = false;
+// The host keeps one cutout for the app. Geometry for same-document paste
+// stays in the canvas, while receiving documents get only the cutout size.
+let imageClipboard = null, imageSelection = null, imageGesture = null, forceImageLasso = false, cutoutArmed = false;
 const imageCache = new Map();
 let cutoutPending = false;
 const captureTools = document.createElement('div');
 captureTools.className = 'capture-tools';
-captureTools.innerHTML = '<button id="newCutout" type="button">New cutout</button><button id="pasteImage" type="button">Paste</button><label class="image-import">Add image<input id="imageFile" type="file" accept="image/png,image/jpeg" hidden></label><span id="imageActions" hidden><button id="copyImage" type="button">Copy</button><button id="cutImage" type="button">Cut</button><button id="imageSmaller" type="button" aria-label="Scale image down">− Size</button><button id="imageLarger" type="button" aria-label="Scale image up">+ Size</button><button id="imageRotate" type="button">Rotate 15°</button><select id="imageArrange" aria-label="Arrange selected image"><option value="">Arrange…</option><option value="forward">Bring forward</option><option value="backward">Send backward</option><option value="front">Bring to front</option><option value="back">Send to back</option></select><button id="deleteImage" type="button">Delete image</button></span>';
+captureTools.innerHTML = '<button id="newCutout" type="button">New cutout</button><button id="pasteImage" type="button">Paste</button><button id="clearCutout" type="button" hidden>Clear clipboard</button><label class="image-import">Add image<input id="imageFile" type="file" accept="image/png,image/jpeg" hidden></label><span id="imageActions" hidden><button id="copyImage" type="button">Copy</button><button id="cutImage" type="button">Cut</button><button id="imageSmaller" type="button" aria-label="Scale image down">− Size</button><button id="imageLarger" type="button" aria-label="Scale image up">+ Size</button><button id="imageRotate" type="button">Rotate 15°</button><select id="imageArrange" aria-label="Arrange selected image"><option value="">Arrange…</option><option value="forward">Bring forward</option><option value="backward">Send backward</option><option value="front">Bring to front</option><option value="back">Send to back</option></select><button id="deleteImage" type="button">Delete image</button></span>';
 const captureToggle = document.createElement('button');
 captureToggle.id = 'capture'; captureToggle.type = 'button'; captureToggle.textContent = 'Capture';
 captureToggle.setAttribute('aria-label', 'Capture cutouts and arrange images');
@@ -67,7 +67,8 @@ function imageRender() {
   }
   $('capture').classList.toggle('active', mode === 'capture');
   $('capture').setAttribute('aria-pressed', String(mode === 'capture'));
-  $('pasteImage').disabled = !imageClipboard || cutoutPending || busy || state.read_only || !!state.warning || state.password_required;
+  $('pasteImage').disabled = !state.cutout_clipboard || cutoutPending || busy || state.read_only || !!state.warning || state.password_required;
+  $('clearCutout').hidden = !state.cutout_clipboard;
   $('imageActions').hidden = !selectedPicture() || mode !== 'capture';
 }
 function paintPicture(p, target = ctx, outline = true, img = imageCache.get(p.src)) {
@@ -91,7 +92,7 @@ function imageHandles(p) {
   return [c, [mid[0] - (d[0]-a[0])/length*offset, mid[1] - (d[1]-a[1])/length*offset]]
 }
 function sceneItems(strokes = state.strokes, pictures = state.images || []) {
-  const rows = [...strokes, ...pictures];
+  const rows = [...strokes, ...pictures, ...(state.text_highlights || [])];
   const remaining = new Map(rows.map(item => [item.id, item]));
   const layers = new Map(state.layers.map(([id]) => [id, []]));
   for (const id of state.scene_order || []) {
@@ -127,18 +128,54 @@ $('capture').onclick = () => {
   $('status').textContent = mode === 'capture' ? 'Lasso to copy a cutout. Tap an image to move it; drag its corner to scale or upper handle to rotate.' : state.save_status
 };
 $('newCutout').onclick = () => { if(active!==null || cutoutPending || busy) return; forceImageLasso=true; imageSelection=null; draw(); $('status').textContent='Lasso any area, including inside an image, to copy a new cutout.' };
-$('pasteImage').onclick = () => {
-  if (!imageClipboard || cutoutPending || busy || state.read_only || state.warning || state.password_required) return;
-  mode='capture'; imageSelection=null;
-  const {src, width, height} = imageClipboard, x=(state.width-width)/2, y=Math.max(0,(Math.min(state.height,1872)-height)/2);
-  const crossPage = imageClipboard.sourcePageId && imageClipboard.sourcePageId !== imagePageIdentity();
-  const corners = crossPage && imageClipboard.sourceCorners ? imageClipboard.sourceCorners.map(p => [...p]) : imageClipboard.offsets ? imageClipboard.offsets.map(p => [state.width/2+p[0],Math.min(state.height,1872)/2+p[1]]) : [[x,y],[x+width,y],[x+width,y+height],[x,y+height]];
-  send({op:'paste-image', src, corners, layer:$('layer').value})
+function centeredCorners(width, height, point, offsets = null) {
+  offsets ||= [[-width/2,-height/2],[width/2,-height/2],[width/2,height/2],[-width/2,height/2]];
+  if (!point) return offsets.map(([x, y]) => [x + state.width/2, y + Math.min(state.height,1872)/2]);
+  const xs = offsets.map(p => p[0]), ys = offsets.map(p => p[1]);
+  const ratio = Math.min(1, state.width / (Math.max(...xs) - Math.min(...xs)),
+    state.height / (Math.max(...ys) - Math.min(...ys)));
+  const x = Math.max(-Math.min(...xs) * ratio, Math.min(point[0], state.width - Math.max(...xs) * ratio));
+  const y = Math.max(-Math.min(...ys) * ratio, Math.min(point[1], state.height - Math.max(...ys) * ratio));
+  return offsets.map(([left, top]) => [x + left * ratio, y + top * ratio]);
+}
+function pasteCutout(point = null) {
+  if ($('pasteImage').disabled) return false;
+  imageSelection = null;
+  const [width, height] = state.cutout_clipboard.size;
+  const local = state.cutout_clipboard.incoming ? null : imageClipboard;
+  const samePosition = !point && local?.sourceCorners && local.sourcePageId !== imagePageIdentity();
+  const corners = samePosition ? local.sourceCorners : centeredCorners(width, height, point, local?.offsets);
+  send({op:'paste-cutout', corners, layer:$('layer').value, clipboard_id:state.cutout_clipboard.id});
+  cutoutArmed = false;
+  return true;
+}
+$('pasteImage').onclick = () => pasteCutout();
+$('clearCutout').onclick = () => {
+  if (!busy) send({op:'clear-cutout'})
+};
+function copyCutout(image) {
+  imageClipboard = image;
+  const {src, width, height} = image;
+  send({op:'copy-cutout', src, width, height});
+}
+window.notebookRefreshCutout = (clipboard, initial = false) => {
+  if (active !== null || busy) return false;
+  if (!initial && clipboard?.id === state.cutout_clipboard?.id) return true;
+  if (!initial) imageClipboard = null;
+  state.cutout_clipboard = clipboard;
+  cutoutArmed = !!clipboard?.incoming && !state.read_only && !state.warning && !state.password_required;
+  if (cutoutArmed) {
+    mode = 'capture';
+    $('status').textContent = 'Tap the page to paste the copied image.';
+  }
+  imageRender();
+  if (typeof syncChrome === 'function') syncChrome();
+  return true;
 };
 $('copyImage').onclick = () => {
-  const p=selectedPicture(); if (!p) return;
+  const p=selectedPicture(); if (!p || busy) return;
   const center=p.corners.reduce((a,q)=>[a[0]+q[0]/4,a[1]+q[1]/4],[0,0]);
-  imageClipboard={src:p.src,sourcePageId:imagePageIdentity(),sourceCorners:p.corners.map(q=>[...q]),offsets:p.corners.map(q=>[q[0]-center[0],q[1]-center[1]]),width:Math.hypot(p.corners[1][0]-p.corners[0][0],p.corners[1][1]-p.corners[0][1]),height:Math.hypot(p.corners[3][0]-p.corners[0][0],p.corners[3][1]-p.corners[0][1])}; imageRender()
+  copyCutout({src:p.src,sourcePageId:imagePageIdentity(),sourceCorners:p.corners.map(q=>[...q]),offsets:p.corners.map(q=>[q[0]-center[0],q[1]-center[1]]),width:Math.hypot(p.corners[1][0]-p.corners[0][0],p.corners[1][1]-p.corners[0][1]),height:Math.hypot(p.corners[3][0]-p.corners[0][0],p.corners[3][1]-p.corners[0][1])});
 };
 $('cutImage').onclick = () => {
   const p=selectedPicture();
@@ -166,7 +203,7 @@ $('imageFile').onchange = async () => {
     const img=new Image(); img.src=src; await img.decode();
     const ratio=Math.min(1, Math.sqrt(4*1024*1024/(img.width*img.height)),1000/img.width,1400/img.height);
     const surface=document.createElement('canvas'); surface.width=Math.max(1,Math.round(img.width*ratio));surface.height=Math.max(1,Math.round(img.height*ratio));surface.getContext('2d').drawImage(img,0,0,surface.width,surface.height);
-    imageClipboard={src:boundedPNG(surface),width:surface.width,height:surface.height}; $('pasteImage').onclick()
+    send({op:'paste-image', src:boundedPNG(surface), corners:centeredCorners(surface.width, surface.height), layer:$('layer').value})
   } catch(error) { $('status').textContent=error.message || 'Unable to open image.' }
 };
 async function captureCutout(path) {
@@ -201,7 +238,7 @@ async function captureCutout(path) {
   paintBackground(g, bg);
   const selection=imageSelection; imageSelection=null;const previous=selected;selected=new Set();
   try { paintOrderedInk(sceneItems().filter(imageVisible), g, false) } finally { imageSelection=selection;selected=previous }
-  imageClipboard={src:boundedPNG(surface),width,height,sourcePageId:imagePageIdentity(),sourceCorners:[[left,top],[left+width,top],[left+width,top+height],[left,top+height]]}; imageRender(); $('status').textContent='Cutout copied. Paste on this page or another page.'
+  copyCutout({src:boundedPNG(surface),width,height,sourcePageId:imagePageIdentity(),sourceCorners:[[left,top],[left+width,top],[left+width,top+height],[left,top+height]]});
 }
 const imageDown=canvas.onpointerdown,imageMove=canvas.onpointermove,imageUp=canvas.onpointerup,imageCancel=canvas.onpointercancel;
 canvas.onpointerdown = e => {
@@ -210,7 +247,7 @@ canvas.onpointerdown = e => {
   const q=coord(e),current=selectedPicture(),radius=16*state.width/canvas.getBoundingClientRect().width;
   let kind='move',hit=null;
   if(current && !forceImageLasso) { const handles=imageHandles(current);const i=handles.findIndex(p=>Math.hypot(p[0]-q[0],p[1]-q[1])<radius);if(i>=0) { hit=current;kind=i===0?'scale':'rotate' } }
-  hit=hit || (!forceImageLasso && topPictureAt(q));
+  hit=hit || (!cutoutArmed && !forceImageLasso && topPictureAt(q));
   imageSelection=hit?.id || null;active=e.pointerId; start=last=q;points=[q];
   if(e.pointerType==='pen')notePenContact(true);
   if(!e.nativePen)canvas.setPointerCapture(active);
@@ -232,7 +269,8 @@ function finishImage(e,cancelled=false) {
   if(mode!=='capture')return cancelled?imageCancel(e):imageUp(e);
   if(e.pointerId!==active)return;
   if(!cancelled)canvas.onpointermove(e);
-  const gesture=imageGesture,path=points,p=selectedPicture();active=null;points=[];imageGesture=null;forceImageLasso=false;
+  const gesture=imageGesture,path=points,p=selectedPicture(),newCutout=forceImageLasso;
+  active=null;points=[];imageGesture=null;forceImageLasso=false;
   if(e.pointerType==='pen')notePenContact(false);
   if(gesture) {
     const corners=p?.corners;state.images=state.images.map(p=>p.id===gesture.original.id?gesture.original:p);
@@ -240,8 +278,8 @@ function finishImage(e,cancelled=false) {
   } else if (!cancelled) {
     const tapRadius = 6 * state.width / canvas.getBoundingClientRect().width;
     if (path.every(point => Math.hypot(point[0] - start[0], point[1] - start[1]) <= tapRadius)) {
-      imageSelection = topPictureAt(last)?.id || null;
-      imageRender();
+      imageSelection = cutoutArmed ? null : topPictureAt(last)?.id || null;
+      if (newCutout || imageSelection || !pasteCutout(last)) imageRender();
     } else captureCutout(path);
   }
   draw();flushUpdate()
@@ -252,7 +290,7 @@ canvas.onlostpointercapture=e=>finishImage(e,true);
 document.addEventListener('keydown',e=>{
   if(mode!=='capture') return;
   if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || active!==null || busy)return;
-  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='v' && imageClipboard) { e.preventDefault();$('pasteImage').onclick() }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='v' && state.cutout_clipboard) { e.preventDefault();$('pasteImage').onclick() }
   if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='c' && selectedPicture()) {e.preventDefault();$('copyImage').onclick()}
 });
 

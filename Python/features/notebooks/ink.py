@@ -21,12 +21,13 @@ from ._vendor.rmscene.crdt_sequence import CrdtSequence, CrdtSequenceItem, END_M
 from ._vendor.rmscene.tagged_block_common import CrdtId, LwwValue, HEADER_V6
 from ._vendor.rmscene.scene_tree import SceneTree
 from .images import ImageResources, ImageItem, ImageQuad, Picture
-from .brushes import BRUSHES, TOOLS, COLORS, WIDTHS, native_color, native_scale, stroke_points
+from .brushes import BRUSHES, TOOLS, COLORS, WIDTHS, NATIVE_HIGHLIGHTS, PALETTE, native_color, native_scale, stroke_points
 
 WIDTH, HEIGHT = 1404, 1872
 MAX_POINTS = 100_000
 MAX_PAGE_POINTS = 1_000_000
 MAX_SCENE_FRAMES = 100_000
+MAX_HIGHLIGHT_RECTS = 8192
 MAX_NOTEBOOK_HEIGHT = HEIGHT * 8
 
 
@@ -168,12 +169,26 @@ class Stroke:
                     points=self.points, scale=self.scale, color_rgba=self.color_rgba)
 
 
+@dataclass(frozen=True)
+class TextHighlight:
+    id: str
+    layer: str
+    rectangles: tuple
+    rgb: tuple
+    opacity: float
+
+    def payload(self, left=0):
+        return dict(id=self.id, layer=self.layer, rgb=self.rgb, opacity=self.opacity,
+                    rectangles=[[x - left, y, w, h] for x, y, w, h in self.rectangles])
+
+
 @dataclass
 class InkPage:
     raw: bytes = b''
     strokes: list = field(default_factory=list)
     layers: list = field(default_factory=list)
     images: list = field(default_factory=list)
+    text_highlights: tuple = ()
     image_resources: list = field(default_factory=list)
     _image_baseline: dict = field(default_factory=dict, repr=False)
     order: list = field(default_factory=list)
@@ -183,6 +198,7 @@ class InkPage:
     _blocks: list = field(default_factory=list, repr=False)
     _baseline: dict = field(default_factory=dict, repr=False)
     _original_layers: list = field(default_factory=list, repr=False)
+    _original_highlights: tuple = field(default_factory=tuple, repr=False)
 
     @classmethod
     def read(cls, data, *, previous=None):
@@ -215,16 +231,18 @@ class InkPage:
             for block in page._blocks:
                 if isinstance(block, ImageItem):
                     tree.add_item(block.item, block.parent_id)
-            if any(isinstance(b, (ss.UnreadableBlock, ss.SceneGlyphItemBlock))
+            if any(isinstance(b, ss.UnreadableBlock)
                    or (isinstance(b, ss.RootTextBlock) and any(isinstance(v, str) and v.strip() for v in b.value.items.values()))
                    for b in page._blocks):
-                raise ValueError('This page has text, highlights or unknown objects. Ink editing is disabled; all bytes are preserved.')
-            mapping = {id(b.item.value): b for b in page._blocks if isinstance(b, (ss.SceneLineItemBlock, ImageItem))}
+                raise ValueError('This page has typed text or unknown objects. Ink editing is disabled; all bytes are preserved.')
+            mapping = {id(b.item.value): b for b in page._blocks
+                       if isinstance(b, (ss.SceneLineItemBlock, ss.SceneGlyphItemBlock, ImageItem))}
             prior_strokes = {s.id: s for s in previous.strokes} if previous else {}
             prior_blocks = {id(block) for block in previous._blocks} if previous else set()
             total = 0
+            highlights, rectangle_count = [], 0
             def visit(group, depth=0):
-                nonlocal total
+                nonlocal total, rectangle_count
                 if depth > 1:
                     raise ValueError('Nested ink groups are preserved but cannot yet be edited.')
                 if group.anchor_id is not None:
@@ -244,6 +262,25 @@ class InkPage:
                             page.images.append(Picture(identity, key, child.resource,
                                 [[p[0] + WIDTH / 2, p[1]] for p in child.vertices]))
                             page.order.append(identity)
+                    elif isinstance(child, si.GlyphRange):
+                        block = mapping[id(child)]
+                        if block.item.deleted_length:
+                            continue
+                        if depth == 0:
+                            raise ValueError('Text highlights outside a layer are preserved but cannot yet be edited.')
+                        rectangle_count += len(child.rectangles)
+                        if rectangle_count > MAX_HIGHLIGHT_RECTS:
+                            raise ValueError('Too many text highlight rectangles on this page.')
+                        rectangles = tuple((r.x + WIDTH / 2, r.y, r.w, r.h) for r in child.rectangles)
+                        if any(not all(math.isfinite(v) and abs(v) <= 1_000_000 for v in rect)
+                               or min(rect[2:]) < 0 for rect in rectangles):
+                            raise ValueError('Invalid text highlight geometry.')
+                        rgba = child.color_rgba or NATIVE_HIGHLIGHTS.get(int(child.color))
+                        rgb = rgba[:3] if rgba else tuple(bytes.fromhex(PALETTE.get(int(child.color), '#fbf719')[1:]))
+                        opacity = rgba[3] / 255 if rgba and rgba[3] < 255 else .30
+                        identity = f'{block.item.item_id.part1}:{block.item.item_id.part2}'
+                        highlights.append(TextHighlight(identity, key, rectangles, rgb, opacity))
+                        page.order.append(identity)
                     elif isinstance(child, si.Line):
                         if depth == 0:
                             raise ValueError('Ink outside a layer is preserved but cannot yet be edited.')
@@ -274,12 +311,15 @@ class InkPage:
                         page.strokes.append(Stroke(f'{block.item.item_id.part1}:{block.item.item_id.part2}', key,
                             int(child.tool), int(child.color), points, child.thickness_scale, child.color_rgba))
             visit(tree.root)
+            page.text_highlights = tuple(highlights)
+            page._original_highlights = page.text_highlights
             page._baseline.update({s.id: deepcopy(s.payload()) for s in page.strokes if s.id not in page._baseline})
             page._original_layers = list(page.layers)
             page._image_baseline = {p.id: deepcopy(p.payload()) for p in page.images}
         except Exception as error:
             page.warning = str(error)
             page.images = []
+            page.text_highlights = ()
             page.order = []
             page.strokes = []
             page.layers = []
@@ -347,6 +387,27 @@ class InkPage:
         updated = InkPage.read(raw + encode(extra)[len(HEADER_V6):])
         self.__dict__.update(updated.__dict__)
 
+    def add_text_highlight(self, text, rectangles, color, layer):
+        if self.warning:
+            raise ValueError(self.warning)
+        if layer not in {key for key, _, shown in self.layers if shown}:
+            raise ValueError('Choose a visible ink layer.')
+        raw = self.to_bytes()
+        page = InkPage.read(raw, previous=self)
+        author, first, additions = allocation(page._blocks)
+        parent = CrdtId(*map(int, layer.split(':')))
+        ids = {item.id for item in (*page.strokes, *page.images, *page.text_highlights) if item.layer == layer}
+        tail = next((CrdtId(*map(int, key.split(':'))) for key in reversed(page.order) if key in ids), END_MARKER)
+        native, rgba = native_color(18, color)
+        glyph = si.GlyphRange(None, len(text), text, si.PenColor(native),
+                              [si.Rectangle(x - WIDTH / 2, y, w, h) for x, y, w, h in rectangles], rgba)
+        additions.append(ss.SceneGlyphItemBlock(parent,
+            CrdtSequenceItem(CrdtId(author, first), tail, END_MARKER, 0, glyph)))
+        updated = InkPage.read(raw + encode(additions)[len(HEADER_V6):], previous=page)
+        if updated.warning:
+            raise ValueError(updated.warning)
+        self.__dict__.update(updated.__dict__)
+
     def move_layer(self, key, target, *, after):
         if self.warning:
             raise ValueError(self.warning)
@@ -364,22 +425,32 @@ class InkPage:
         remaining = [row for row in self.layers if row[0] != key]
         if len(remaining) == len(self.layers) or not remaining:
             raise ValueError('Keep at least one layer on the page.')
-        removed = {item.id for item in (*self.strokes, *self.images) if item.layer == key}
+        removed = {item.id for item in (*self.strokes, *self.images, *self.text_highlights) if item.layer == key}
         self.layers = remaining
         self.strokes = [stroke for stroke in self.strokes if stroke.layer != key]
         self.images = [image for image in self.images if image.layer != key]
+        self.text_highlights = tuple(item for item in self.text_highlights if item.layer != key)
         self.order = [identity for identity in self.order if identity not in removed]
 
     def to_bytes(self):
         if self.warning:
             return self.raw
         current = {s.id: s for s in self.strokes}
-        if {s.id: s.payload() for s in self.strokes} == self._baseline and self.layers == self._original_layers and not self.ordering_dirty and not self.image_resources and {p.id: p.payload() for p in self.images} == self._image_baseline:
+        if ({s.id: s.payload() for s in self.strokes} == self._baseline and self.layers == self._original_layers
+                and self.text_highlights == self._original_highlights and not self.ordering_dirty
+                and not self.image_resources and {p.id: p.payload() for p in self.images} == self._image_baseline):
             return self.raw
         author, first, additions = allocation(self._blocks)
         chunks = []
         pictures = {p.id: p for p in self.images}
+        removed_highlights = {item.id for item in self._original_highlights} - {item.id for item in self.text_highlights}
         for raw, block in zip(self._frames, self._blocks):
+            if isinstance(block, ss.SceneGlyphItemBlock):
+                key = f'{block.item.item_id.part1}:{block.item.item_id.part2}'
+                if key in removed_highlights:
+                    block = deepcopy(block)
+                    block.item = replace(block.item, value=None, deleted_length=1)
+                    raw = encode([block])[len(HEADER_V6):]
             if isinstance(block, ImageItem):
                 key = f'{block.item.item_id.part1}:{block.item.item_id.part2}'
                 if key in self._image_baseline:
@@ -477,10 +548,11 @@ class InkPage:
                 ImageQuad(stamp, picture.resource, geometry_id, vertices, [0, 1, 2, 2, 3, 0]))))
             tails[parent] = identity
         result = HEADER_V6 + b''.join(chunks) + encode(additions)[len(HEADER_V6):]
-        if self.ordering_dirty or (self.images and any(s.id not in self._baseline for s in self.strokes)):
+        if self.ordering_dirty or ((self.images or self.text_highlights) and any(s.id not in self._baseline for s in self.strokes)):
             from .images import reorder_native
             ids = {**identities, **image_identities}
             ids.update({p.id: CrdtId(*map(int, p.id.split(':'))) for p in self.images if p.id in self._image_baseline})
+            ids.update({item.id: CrdtId(*map(int, item.id.split(':'))) for item in self.text_highlights})
             result = reorder_native(result, [ids[key] for key in self.order if key in ids])
         layer_ids = [key for key, _, _ in self.layers]
         if layer_ids != [key for key, _, _ in self._original_layers]:

@@ -23,6 +23,7 @@ class Bridge:
     def __init__(self):
         self.url = 'logistics-notebook://' + uuid4().hex + '/'
         self.sequence = 0
+        self.saved_sequence = None
         self.active = True
 
     def retire(self):

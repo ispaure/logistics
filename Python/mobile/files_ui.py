@@ -226,7 +226,7 @@ class FilesUI(FileSelectionUI):
         return (self.cloud_busy and local_read_available(self, private=not ordinary)
                 and (label == 'Local files' or label in getattr(self, 'file_roots', {})))
 
-    async def browse_local_during_transfer(self, folder):
+    async def browse_local_during_transfer(self, folder, *, preserve_listing=False):
         listing = FilesUI.folder_listing(self)
         work = listing.begin()
         # Keep the existing cancellation handle available to compatibility callers.
@@ -259,13 +259,19 @@ class FilesUI(FileSelectionUI):
                         or not listing.accepts(work, request)):
                     restore_location()
                     return False
-                if getattr(self, 'file_loaded_location', None) != (label, path):
+                location = label, path
+                same_folder = getattr(self, 'file_loaded_location', None) == location
+                preserve = preserve_listing and same_folder and self.file_provider is provider and browser.folder_tree is not None
+                if not same_folder:
                     self.end_file_selection()
                 self.file_provider, self.file_path = provider, path
                 self.file_rows = FilesUI.file_browser_rows(rows, provider)
                 # set_entries publishes selection reset once with the new snapshot.
-                self.file_loaded_location = label, path
-                self.populate_file_browser(rows, self.file_password.value, location=self.file_loaded_location)
+                self.file_loaded_location = location
+                if preserve:
+                    browser.refresh_entries(rows)
+                else:
+                    self.populate_file_browser(rows, self.file_password.value, location=location)
                 self.refresh_file_source_tabs()
                 self.file_status.value = ''
                 return True
@@ -440,7 +446,7 @@ class FilesUI(FileSelectionUI):
             self.file_select_bar,
             self.file_browser.scroll_container()],
             style=Pack(direction=COLUMN, margin=12, flex=1))
-        self.files_view._refresh_file_listing = self.browse_files
+        self.files_view._refresh_file_listing = lambda: self.browse_files(preserve_listing=True)
         from .scroll_edges import fill_bottom
         fill_bottom(self.files_view, self.file_browser.native_list, self.file_browser._tile_scroll)
         self.files_view._folder_entry_location = location or (self.local_browser_root(), '')
@@ -819,7 +825,7 @@ class FilesUI(FileSelectionUI):
                                       getattr(client, 'generation', None))
         return FileOperationRequest(kind, self.file_provider, path, self.file_target.value, destination)
 
-    async def browse_files(self, widget=None, **kwargs):
+    async def browse_files(self, widget=None, *, preserve_listing=False, **kwargs):
         previous = getattr(self, '_local_browse_cancel', None)
         if previous is not None:
             previous.set()
@@ -827,11 +833,11 @@ class FilesUI(FileSelectionUI):
             return False
         if self.cloud_busy:
             if self.can_browse_local(self.file_storage.value):
-                return await self.browse_local_during_transfer(self.file_location.value)
+                return await self.browse_local_during_transfer(self.file_location.value, preserve_listing=preserve_listing)
             return False
         # Listing is a cancellable read, not a mutation. Keep cloud controls and
         # download discovery out of the navigation path, including idle browsing.
-        return await self.browse_local_during_transfer(self.file_location.value)
+        return await self.browse_local_during_transfer(self.file_location.value, preserve_listing=preserve_listing)
 
     def _update_file_actions_visibility(self):
         available = bool(self.file_actions.actions) and self.file_browser.on_check_entry is None

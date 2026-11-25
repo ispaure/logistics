@@ -207,9 +207,11 @@ class LibraryDocuments:
             if editor.busy:
                 browser.notice.text = 'Wait for the document operation to finish.'
                 return False
+            if save:
+                return await editor.save() and current()
             if not editor.dirty:
                 return True
-            if save or getattr(editor, 'autosave_on_leave', False):
+            if getattr(editor, 'autosave_on_leave', False):
                 return await editor.save() and current()
             confirm = confirm or browser.host.confirm
             if confirm is None:

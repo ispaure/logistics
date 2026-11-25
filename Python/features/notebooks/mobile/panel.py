@@ -276,8 +276,9 @@ class NotebookPanel:
 
     def state(self):
         state = document_state(self.editor, self.document)
+        if self.editor.capture_clipboard is not None and not self.cutout_restricted():
+            state['cutout_clipboard'] = self.editor.capture_clipboard.state(self.editor.notebook)
         state['brush_intensities'] = self.editor.brush_intensities
-        state['eraser_kind'] = self.editor.eraser_kind
         state['brush_preset_limit'] = TOOLBAR_PRESET_LIMIT
         state['brush_presets'] = read_presets(self.app.preferences.values.get(BRUSH_PRESETS, '[]'))
         if self.document is not None and self.document.resource is not None:
@@ -305,6 +306,9 @@ class NotebookPanel:
         from .ios_photos import photo_sources
         state['photo_sources'] = photo_sources(self.web)
         return state
+
+    def cutout_restricted(self):
+        return getattr(getattr(self.app, 'clipboard', None), 'restricted', lambda: False)()
 
     @property
     def native_transport(self):
@@ -348,6 +352,7 @@ class NotebookPanel:
         web, canvas = self.web, self.bridge
         if web is None or self.closed or not canvas.active:
             raise ValueError('The notebook canvas is unavailable; your draft remains open.')
+        sequence = canvas.sequence + 1
         admitted = await _bounded_input_result(web.evaluate_javascript("""(()=>{
             if(typeof window.notebookIdle!=='function' || !window.notebookIdle() ||
                typeof window.notebookNativeAction!=='function')return false;
@@ -363,7 +368,8 @@ class NotebookPanel:
         await self.flush_input(timeout=timeout)
         if self.closed or self.web is not web or self.bridge is not canvas or not canvas.active:
             raise ValueError('The notebook canvas changed during Save; your draft remains open.')
-        return self.document is not None and not self.document.dirty and not self.native_input_pending and not self.busy
+        return (canvas.saved_sequence == sequence and self.document is not None and not self.document.dirty
+                and not self.native_input_pending and not self.busy)
 
     def load_progress(self, book, key, resource=None):
         draft_path = self.repository.root / key / 'base.rmdoc' if resource is None else None
@@ -397,7 +403,9 @@ class NotebookPanel:
                 repository.save(key, book)
             def checkpoint_stroke(book, index):
                 repository.append_stroke(key, book, index)
-        self.editor = Editor(book, checkpoint, checkpoint_stroke=checkpoint_stroke)
+        from ..images import capture_clipboard
+        self.editor = Editor(book, checkpoint, checkpoint_stroke=checkpoint_stroke,
+                             capture_clipboard=capture_clipboard(self.app))
         restore_notebook_progress(self.editor, saved)
         if mount:
             self.mount_canvas()
@@ -520,6 +528,15 @@ class NotebookPanel:
         async def update():
             try:
                 self.refresh_native_canvas_layout()
+                if self.editor.capture_clipboard is not None:
+                    clipboard = (None if self.cutout_restricted() else
+                                 self.editor.capture_clipboard.state(self.editor.notebook))
+                    if clipboard != getattr(self, '_cutout_clipboard_sent', None):
+                        accepted = await web.evaluate_javascript('window.notebookRefreshCutout?.(' + json.dumps(clipboard) + ')')
+                        if self.web is not web or self.bridge is not bridge or self.closed:
+                            return
+                        if _input_true(accepted):
+                            self._cutout_clipboard_sent = clipboard
                 title_layout = getattr(self.view, '_notebook_title_layout', 'auto')
                 if title_layout != getattr(self, '_title_layout_sent', 'auto'):
                     accepted = await web.evaluate_javascript(
@@ -704,6 +721,18 @@ class NotebookPanel:
 
     async def _perform_view_command(self, command: _CanvasCommand, op):
         """Return true only when the view command has sent its final ACK."""
+        if op in ('copy-cutout', 'clear-cutout'):
+            clipboard = command.editor.capture_clipboard
+            if op == 'copy-cutout':
+                if self.cutout_restricted():
+                    raise ValueError('Clipboard access is restricted.')
+                from ..images import decode_picture
+                data = await command.canvas.wait(asyncio.to_thread(decode_picture, command.action['src']))
+                clipboard.copy(data, command.action, command.editor.notebook.id)
+            else:
+                clipboard.clear()
+            await command.respond(update_script(self.state()), acknowledges=True)
+            return True
         action, editor, progress = command.action, command.editor, command.progress
         if op == 'paper-preview':
             try:
@@ -731,13 +760,17 @@ class NotebookPanel:
                                   + json.dumps(command.error) + ')', acknowledges=True)
             self._paper_appearance_sent = appearance
             return True
-        if op in ('brush-color', 'brush-intensity', 'eraser-kind'):
+        if op in ('brush-color', 'brush-intensity', 'eraser-kind', 'snap-to-text', 'working-brush'):
             if op == 'brush-color':
                 editor.brush_colors[action['tool']] = action['color']
             elif op == 'brush-intensity':
                 editor.brush_intensities[action['tool']] = action['intensity']
-            else:
+            elif op == 'eraser-kind':
                 editor.eraser_kind = action['kind']
+            elif op == 'snap-to-text':
+                editor.snap_to_text = action['enabled']
+            else:
+                editor.working_brush = action['brush']
             self._position_sequence = command.position_sequence
             status = None
             if progress is not None:
@@ -745,7 +778,8 @@ class NotebookPanel:
                 status = ('fenced' if observation is None else
                           await command.canvas.wait(asyncio.to_thread(progress.flush, observation)))
             setting = {'brush-color': 'brush color', 'brush-intensity': 'brush intensity',
-                       'eraser-kind': 'eraser type'}[op]
+                       'eraser-kind': 'eraser type', 'snap-to-text': 'snap-to-text setting',
+                       'working-brush': 'working brush'}[op]
             await command.respond(brush_color_script(status, setting), acknowledges=True)
             return True
         if op == 'page-previews':
@@ -805,6 +839,7 @@ class NotebookPanel:
         elif op == 'save':
             if self.document is not None and self.document.resource is not None:
                 await canvas.wait(asyncio.to_thread(self.document.save))
+                canvas.saved_sequence = command.position_sequence
             else:
                 await command.respond(update_script(self.state(), ''), acknowledges=True)
                 picker = self.app.editor_picker()
@@ -868,6 +903,8 @@ class NotebookPanel:
         await command.canvas.wait(asyncio.to_thread(editor.apply, photo))
 
     async def _perform_editor_update(self, command: _CanvasCommand, op):
+        if op == 'paste-cutout' and self.cutout_restricted():
+            raise ValueError('Clipboard access is restricted.')
         if op == 'delete-page':
             if not await command.canvas.wait(self.app.main_window.dialog(toga.ConfirmDialog(
                     'Delete this page?', 'This removes the current page. Undo is available.'))):

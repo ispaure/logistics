@@ -264,7 +264,8 @@ renderEraserChoices();
   const intensityValue = document.createElement('span');
   intensity.setAttribute('aria-label', 'Stroke intensity');
   intensityLabel.append(document.createTextNode('Intensity'), intensity, intensityValue);
-  bp.append(intensityLabel);
+  const snapToText = snapToTextControl();
+  bp.append(intensityLabel, snapToText.label);
   intensity.oninput = () => {
     const {tool, color, width} = chosenInk();
     const pressure = Number(intensity.value) / 100;
@@ -1110,7 +1111,8 @@ renderEraserChoices();
 
   function saveBrushSlot() {
     const brush = currentPreset();
-    if (activePreset !== null && presetFor(activePreset)?.join(',') !== brush.join(',')) {
+    if (activePreset === null) saveWorkingBrush();
+    else if (presetFor(activePreset)?.join(',') !== brush.join(',')) {
       send({op: 'update-brush-preset', id: activePreset, preset: brush});
     }
     sync();
@@ -1292,6 +1294,7 @@ renderEraserChoices();
     for (let b of grid.children) b.setAttribute('aria-pressed', String(b.dataset.tool === t.value));
     for (let b of swatches.children) b.setAttribute('aria-pressed', String(b.dataset.color === c.value));
     const ink = chosenInk();
+    snapToText.update();
     const adjustPressure = brushFor(ink.tool).default_intensity !== undefined
       && !state.pressure_stylus_only && (state.iphone_duo || constantPenPressure || control('finger').checked);
     const pressure = fixedBrushPressure(ink.tool);
@@ -1369,6 +1372,13 @@ renderEraserChoices();
     restoreBrushSlot();
     sync()
   };
+  const refreshCutout = window.notebookRefreshCutout;
+  window.notebookRefreshCutout = clipboard => {
+    const updated = refreshCutout(clipboard);
+    if (updated) sync();
+    return updated;
+  };
+  restoreWorkingBrush();
   sync();
   window.notebookViewportInsets(state.notebook_viewport_insets);
   resize();

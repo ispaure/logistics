@@ -91,6 +91,9 @@ class NotebookPageProgressTests(unittest.TestCase):
         run(panel.perform({'op': 'brush-intensity', 'tool': 14, 'intensity': 64}))
         run(panel.perform({'op': 'brush-intensity', 'tool': 13, 'intensity': 91}))
         run(panel.perform({'op': 'eraser-kind', 'kind': 'whole'}))
+        self.assertFalse(panel.state()['snap_to_text'])
+        run(panel.perform({'op': 'snap-to-text', 'enabled': True}))
+        run(panel.perform({'op': 'working-brush', 'brush': [17, 6, 3]}))
         run(panel.perform({'op': 'page', 'index': 2}))
         run(panel.perform({'op': 'brush-color', 'tool': 18, 'color': -1}))
         selected = panel.state()['page_id']
@@ -108,6 +111,8 @@ class NotebookPageProgressTests(unittest.TestCase):
         self.assertEqual(reopened.state()['brush_colors'], {15: 6, 18: -1})
         self.assertEqual(reopened.state()['brush_intensities'], {14: 64, 13: 91})
         self.assertEqual(reopened.state()['eraser_kind'], 'whole')
+        self.assertTrue(reopened.state()['snap_to_text'])
+        self.assertEqual(reopened.state()['working_brush'], [17, 6, 3])
         self.assertFalse(reopened.document.dirty)
         self.assertTrue(app.close_session(reopened.session.id))
 
@@ -117,6 +122,30 @@ class NotebookPageProgressTests(unittest.TestCase):
         self.assertEqual(app.notebook_panel.state()['brush_colors'], {15: 6, 18: -1})
         self.assertEqual(app.notebook_panel.state()['brush_intensities'], {14: 64, 13: 91})
         self.assertEqual(path.read_bytes(), original)
+
+    def test_cutout_can_be_pasted_repeatedly_after_opening_another_notebook(self):
+        app, _, _ = create_storage_notebook_app(self)
+        run = app.loop.run_until_complete
+        source, target = (app.private_root / name for name in ('Source.rmdoc', 'Target.rmdoc'))
+        for path in (source, target):
+            path.write_bytes(Notebook.new(path.stem).to_bytes())
+        self.assertTrue(run(app.open_local_document(source, destination='home')))
+        panel = app.notebook_panel
+        panel.web.evaluate_javascript = AsyncMock(return_value=True)
+        run(panel.perform({'op': 'copy-cutout', 'src': paste_action()['src'], 'width': 100, 'height': 100}))
+        self.assertFalse(panel.state()['cutout_clipboard']['incoming'])
+        self.assertTrue(app.close_session(panel.session.id))
+        self.assertTrue(run(app.open_local_document(target, destination='home')))
+        panel = app.notebook_panel
+        panel.web.evaluate_javascript = AsyncMock(return_value=True)
+        self.assertTrue(panel.state()['cutout_clipboard']['incoming'])
+        paste = dict(op='paste-cutout', layer=panel.editor.notebook.page(0).layers[0][0],
+                     corners=paste_action()['corners'], clipboard_id=panel.state()['cutout_clipboard']['id'])
+        run(panel.perform(paste))
+        run(panel.perform(paste))
+        self.assertEqual(len(panel.state()['images']), 2)
+        run(panel.perform({'op': 'clear-cutout'}))
+        self.assertIsNone(panel.state()['cutout_clipboard'])
 
 
 if __name__ == '__main__':

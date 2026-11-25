@@ -38,7 +38,7 @@ python3 dev.py test desktop --exact-file Python/tests/notebooks/test_brush_calib
 
 ## Format, templates and export
 
-`notebook.py` validates bounded ZIPs and one document root. Preserve opaque members, legacy page lists and modern `cPages` tombstones. `ink.py` preserves original v6 frames and object order. Unsupported objects, unsafe native highlights and visible typed text require preservation-only. Standard geometry is 1404 × 1872 with native X centered at zero. Imported widths already encode dynamics.
+`notebook.py` validates bounded ZIPs and one document root. It preserves opaque members, legacy page lists and modern `cPages` tombstones. `ink.py` retains native v6 frame data and object order, including PDF text highlights. Unsupported scene objects and visible typed text require preservation-only. Standard geometry is 1404 × 1872 with native X centered at zero. Imported widths already encode dynamics.
 
 The vendored **rmscene 0.8.0** codec is MIT-licensed, Copyright (c) 2023 Rick Lupton. Logistics carries a type namespace fix and measured Highlighter IDs 14–16. Its `packaging` dependency supports Briefcase. [Upstream](https://github.com/ricklupton/rmscene) · [Vendored license](../../../../Python/features/notebooks/_vendor/rmscene/LICENSE.py)
 

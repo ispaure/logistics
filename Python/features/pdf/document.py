@@ -93,6 +93,32 @@ class PDFDocument:
                 raise ValueError('Page does not exist.')
             return document.render(index, edge=edge)
 
+    @staticmethod
+    def can_select_text():
+        return (not (sys.platform == 'android' or hasattr(sys, 'getandroidapilevel'))
+                or AndroidPDF.text_renderer() is not None)
+
+    @classmethod
+    def select_text(cls, data, index, start, end, *, max_bytes=MAX_PDF):
+        """Select a text range in normalized top-left page coordinates."""
+        from math import isfinite
+
+        cls.check_size(data, max_bytes)
+        renderer = (AndroidPDF(data, text=True) if sys.platform == 'android' or hasattr(sys, 'getandroidapilevel')
+                    else cls.backend(data))
+        with renderer as document:
+            if not 0 <= index < document.count <= MAX_PAGES:
+                raise ValueError('Page does not exist.')
+            text, rectangles = document.select_text(index, start, end)
+        clipped = []
+        for x, y, w, h in rectangles:
+            if not all(isfinite(v) for v in (x, y, w, h)):
+                continue
+            left, top, right, bottom = max(0, x), max(0, y), min(1, x + w), min(1, y + h)
+            if left < right and top < bottom:
+                clipped.append((left, top, right - left, bottom - top))
+        return text, clipped
+
     def page(self, index):
         if not 0 <= index < self.count:
             raise ValueError('Page does not exist.')

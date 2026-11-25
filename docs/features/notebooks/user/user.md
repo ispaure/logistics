@@ -15,7 +15,7 @@ Retrieval reads native ink, images and embedded PDF from the tablet without edit
 ### Editing and storage
 
 - Choose a brush with **1–9** or the toolbar. **B** draws, **E** opens eraser settings and **V** selects. Choose the active layer or use the adjacent menu to add or hide layers.
-- **Select and Move** lassos fully enclosed strokes on visible layers. Drag inside the box to move, drag a corner to scale or use the round rotation handle. Use **Copy**, **Cut** or **Delete**. **Paste strokes** uses the original page position. The clipboard lasts until close.
+- **Select and Move** lassos fully enclosed strokes and pictures on visible layers. Drag inside the box to move, drag a corner to scale or use the round rotation handle. Use **Copy**, **Cut** or **Delete**. **Paste selection** uses the original page position.
 - **Pages Overview** shows thumbnails and loads more on demand. **Add Page** inserts after the current page and inherits its template. **Page** also duplicates, deletes, reorders and copies to an open notebook. Keep at least one page.
 - **Fit page** is the default. Choose **Fit width**, pinch, or use **Ctrl/⌘ +**, **Ctrl/⌘ −** and **Ctrl/⌘ 0**. Ctrl/Command while scrolling zooms around the pointer. Manual zoom spans 10%–400%. **View** controls Grayscale Preview, Draw with Finger and toolbar visibility.
 - **File → Save** (**Ctrl/⌘+S**) or **Save As…** (**Ctrl/⌘+Shift+S**) uses Local or unlocked LocalCrypt. **Export Copy…** writes a separate copy. Undo/Redo keeps up to 50 edits in the current session.
@@ -27,6 +27,8 @@ Local existing notebooks support recovery. Private drafts stay in memory until s
 Pens, pencils and paintbrush offer nine opaque colors. Highlighter uses tints and one **Fixed** width. Shader uses pressure and builds translucent color with overlapping strokes. Other brushes use **Thin**, **Medium** or **Thick**. Tilt a supported stylus with Pencil for broader shading. Fineliner and Mechanical Pencil keep an even width. Other writing tools respond to pressure, and Calligraphy responds to direction. Per-brush colors follow saved notebook positions.
 
 Editor rendering approximates tablet brushes. **Grayscale Preview** affects display. Exports keep native geometry and colors.
+
+On a PDF page with selectable text, turn on **Snap to text** beside the highlighter colors and drag across the text. The notebook remembers this setting and your working brush. **View → Dark Paper Preview** adjusts the paper and ink colors on screen.
 
 ## Current compatibility limits
 
@@ -64,7 +66,7 @@ Navigating away from a writable persistent notebook saves it. A failed save keep
 
 ## Image cutouts and protected PDFs
 
-Use **Capture** to lasso visible ink, images and background. **Paste** places the cutout on the active visible layer. **Add image** accepts PNG/JPEG. **New cutout** starts a new lasso over an existing image. Select an image to move, scale, rotate, copy, cut, delete or **Arrange** it within its layer. The editor clipboard lasts until close. Captures are capped at four megapixels and about 3 MiB.
+Use **Capture** to lasso visible ink, images and background. Open the receiving notebook and tap where you want the cutout. **Paste** is also available in Capture, and **Clear clipboard** removes the reusable cutout. **Add image** accepts PNG/JPEG. **New cutout** starts a new lasso over an existing image. Select an image to move, scale, rotate, copy, cut, delete or **Arrange** it within its layer. Captures are capped at four megapixels and about 3 MiB.
 
 Use **Unlock PDF** for an encrypted embedded PDF. Password and decrypted preview stay in memory, and Save/Export keep the embedded PDF encrypted. Reopen and unlock again to view it.
 

@@ -9,7 +9,7 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
-from .brushes import BRUSHES, valid_intensity
+from .brushes import BRUSHES, valid_intensity, validate_brush_settings
 
 
 def open_notebook_progress(book, root, *, resource=None, draft_path=None, app=None):
@@ -29,6 +29,14 @@ def open_notebook_progress(book, root, *, resource=None, draft_path=None, app=No
 def restore_notebook_progress(editor, saved):
     editor.index = page_index(editor.notebook, saved)
     editor.eraser_kind = 'whole' if saved.get('eraser_kind') == 'whole' else 'partial'
+    editor.snap_to_text = saved.get('snap_to_text') is True
+    working_brush = saved.get('working_brush')
+    if working_brush is not None:
+        try:
+            validate_brush_settings(working_brush)
+        except ValueError:
+            working_brush = None
+    editor.working_brush = working_brush
     colors = saved.get('brush_colors')
     editor.brush_colors = {
         tool: color for tool, brush in BRUSHES.items()
@@ -57,4 +65,4 @@ def page_location(editor):
 def notebook_progress_state(editor, location=None):
     return dict(page_location(editor) if location is None else location,
                 brush_colors=editor.brush_colors.copy(), brush_intensities=editor.brush_intensities.copy(),
-                eraser_kind=editor.eraser_kind)
+                eraser_kind=editor.eraser_kind, snap_to_text=editor.snap_to_text, working_brush=editor.working_brush)

@@ -197,9 +197,11 @@ def schedule_visible_file_browser_refresh(app):
     body = getattr(app, 'body', None)
     action = refresh_action(body) if body is not None else None
     if action is not None:
+        generation = app.navigation_generation
         async def refresh():
             privacy = app.screen_privacy
             if (app.active_host and app.body is body and not privacy.disposed
+                    and app.navigation_generation == generation
                     and not privacy.inactive and not privacy.interrupted and not privacy.resume_locked
                     and getattr(app, 'scene_active', True) is not False
                     and not getattr(app, '_storage_changing', False)

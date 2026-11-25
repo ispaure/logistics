@@ -35,21 +35,28 @@ window.notebookUpdate = function(next, error) {
     deferredUpdate = () => window.notebookUpdate(next, error);
     return
   }
-  if (['paste-image', 'insert-photo'].includes(queue[0]?.op) && !error &&
+  const op = queue[0]?.op;
+  if (!error && ['undo', 'redo'].includes(op) && next.page_id === state.page_id &&
+      typeof rememberHistoryCamera === 'function') rememberHistoryCamera();
+  if (['paste-image', 'paste-cutout', 'insert-photo'].includes(op) && !error &&
       next.images?.length > (state.images?.length || 0)) imageSelection = next.images.at(-1).id;
+  if (op === 'clear-cutout' || (op === 'copy-cutout' && error)) imageClipboard = null;
+  if (op === 'clear-cutout' || op === 'copy-cutout') cutoutArmed = op === 'copy-cutout' && !error;
   state = next;
   pendingInk = null;
   pendingErase = null;
   wholeErasePreview.clear();
   busy = false;
   queue.shift();
-  $('status').textContent = error || state.save_status || 'Saved on this device.';
+  $('status').textContent = error || (op === 'copy-cutout' ? 'Image copied. Tap the page to place it.' :
+    state.save_status || 'Saved on this device.');
   if (error) queue = [];
   render();
   if (state.password_required) $('pdfUnlockStatus').textContent = error;
   pump()
 };
 window.notebookBrushColorUpdate = function(error) {
+  if (!error && queue[0]?.op === 'working-brush') state.working_brush = queue[0].brush;
   busy = false;
   queue.shift();
   $('status').textContent = error || (queue.length ? 'Saving…' : state.save_status);
@@ -85,6 +92,7 @@ window.notebookInkUpdate = function(patch) {
   const strokes = new Map(state.strokes.map(s => [s.id, s]));
   for (const stroke of patch.strokes) strokes.set(stroke.id, stroke);
   state.strokes = patch.order.map(id => strokes.get(id));
+  if (patch.text_highlights) state.text_highlights = patch.text_highlights;
   if (patch.scene_order) state.scene_order = patch.scene_order;
   state.undo = patch.undo;
   state.redo = patch.redo;

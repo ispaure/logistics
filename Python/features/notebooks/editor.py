@@ -18,7 +18,7 @@ from pathlib import Path
 from .protocol import validate_action, RecoveryIncomplete
 from .ink import WIDTH, HEIGHT, TOOLS, COLORS, notebook_ink_height
 from .notebook import DESKTOP_MAX_ARCHIVE
-from .brushes import BRUSHES, EXPANDED_BRUSHES, EXPANDED_INK_SCALE, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
+from .brushes import BRUSHES, DARK_INK_COLORS, EXPANDED_BRUSHES, EXPANDED_INK_SCALE, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
 
 
 PDF_BACKGROUND_BYTES = 12 * 1024 * 1024
@@ -34,15 +34,18 @@ def _pdf_reader(data):
 
 
 class Editor:
-    def __init__(self, notebook, checkpoint=lambda book: None, *, checkpoint_stroke=None):
+    def __init__(self, notebook, checkpoint=lambda book: None, *, checkpoint_stroke=None, capture_clipboard=None):
         self.notebook = notebook
         self.checkpoint = checkpoint
         self.checkpoint_stroke = checkpoint_stroke
+        self.capture_clipboard = capture_clipboard
         self.checkpoint_unconfirmed = False
         self.index = 0
         self.brush_colors = {}
         self.brush_intensities = {}
         self.eraser_kind = 'partial'
+        self.snap_to_text = False
+        self.working_brush = None
         self.undo = []
         self.redo = []
         self._selection_clipboard = []
@@ -233,7 +236,7 @@ class Editor:
         op = action['op']
         if op == 'erase' and 'points' in action:
             return dict(action, points=[[x + left, y, pressure] for x, y, pressure in action['points']])
-        if op in ('paste-image', 'image-transform'):
+        if op in ('paste-image', 'paste-cutout', 'image-transform'):
             from .images import validate_corners
             validate_corners(action['corners'])
             return dict(action, corners=[[x + left, y] for x, y in action['corners']])
@@ -392,6 +395,36 @@ class Editor:
         elif op == 'paste-image':
             from .images import paste
             paste(self.notebook, self.index, action)
+        elif op == 'paste-cutout':
+            from .images import paste_picture
+            if self.capture_clipboard is None:
+                raise ValueError('Capture or copy an image first.')
+            paste_picture(self.notebook, self.index, self.capture_clipboard.read(action['clipboard_id']), action)
+        elif op == 'highlight-text':
+            from features.pdf.document import PDFDocument
+            from .ink import MAX_HIGHLIGHT_RECTS
+            key = self.background_key(self.index)
+            if key is None:
+                raise ValueError('Open a page with selectable PDF text.')
+            text, rectangles = PDFDocument.select_text(*key, action['start'], action['end'],
+                                                       max_bytes=self.notebook.max_bytes)
+            if not text.strip() or not rectangles:
+                raise ValueError('Drag across selectable PDF text to highlight it.')
+            if len(text) > 32000 or len(rectangles) > MAX_HIGHLIGHT_RECTS:
+                raise ValueError('Select a shorter range of text.')
+            bounds = self.pdf_bounds()
+            if bounds is None:
+                with _pdf_reader(key[0]) as reader:
+                    page = reader.pages[key[1]]
+                    w, h = float(page.cropbox.width), float(page.cropbox.height)
+                    if page.rotation % 180:
+                        w, h = h, w
+                scale = min(WIDTH / w, HEIGHT / h)
+                bounds = dict(x=(WIDTH - w * scale) / 2, y=(HEIGHT - h * scale) / 2,
+                              width=w * scale, height=h * scale)
+            x, y, w, h = (bounds[k] for k in ('x', 'y', 'width', 'height'))
+            ink.add_text_highlight(text, [(x + l * w, y + t * h, rw * w, rh * h)
+                                         for l, t, rw, rh in rectangles], action['color'], action['layer'])
         elif op == 'image-transform':
             from .images import validate_corners
             validate_corners(action['corners'])
@@ -534,9 +567,12 @@ class Editor:
         if 'points' in action:
             if any(not left <= x <= right or y > height for x, y, _ in action['points']):
                 raise ValueError('Eraser is outside the page.')
-            from .eraser import erase
-            ink.strokes = erase(ink.strokes, ink.layers, action['points'],
-                                action['radius'] * self.eraser_scale(), action.get('kind') == 'whole')
+            from .eraser import erase, hit_text_highlights
+            radius = action['radius'] * self.eraser_scale()
+            removed = hit_text_highlights(ink.text_highlights, ink.layers, action['points'], radius)
+            ink.text_highlights = tuple(item for item in ink.text_highlights if item.id not in removed)
+            ink.order = [key for key in ink.order if key not in removed]
+            ink.strokes = erase(ink.strokes, ink.layers, action['points'], radius, action.get('kind') == 'whole')
         else:
             ids = set(action['ids'])
             shown = {key for key, _, visible in ink.layers if visible}
@@ -630,13 +666,19 @@ class Editor:
             paper_bounds = dict(paper_bounds, x=paper_bounds['x'] - left)
             for image in images:
                 image['corners'] = [[x - left, y] for x, y in image['corners']]
+        from features.pdf.document import PDFDocument
         return dict(stroke_clipboard=bool(self._selection_clipboard), selection_ids=self._selection_ids, links=self.page_links() if pdf and not locked else [], password_required=locked, images=images,
+                    text_highlights=[item.payload(left) for item in ink.text_highlights],
+                    snap_to_text=self.snap_to_text,
+                    working_brush=self.working_brush,
+                    can_snap_to_text=mapped_pdf and not locked and PDFDocument.can_select_text(),
                     scene_order=ink.order, page_id=page.id, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH - 2 * left, height=self.page_height(), pdf_paper=paper_bounds, tools=TOOLS, colors=COLORS,
                     template_bounds=None if pdf else view_bounds([]),
                     template_background_bounds=artwork.bounds if isinstance(artwork, TemplatePDF) else None,
                     fit_pdf_page=paper_bounds is not None and not expanded,
-                    brushes=EXPANDED_BRUSHES if expanded else BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
+                    brushes=EXPANDED_BRUSHES if expanded else BRUSHES, palette=PALETTE,
+                    dark_ink_colors=DARK_INK_COLORS, highlights=HIGHLIGHTS,
                     highlight_ids=HIGHLIGHT_IDS, native_highlights=NATIVE_HIGHLIGHTS,
                     shaders=SHADERS, widths=WIDTHS, eraser_scale=self.eraser_scale(),
                     strokes=[self.canvas_stroke(s) for s in ink.strokes], layers=ink.layers,

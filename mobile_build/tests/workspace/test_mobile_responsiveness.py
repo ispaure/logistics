@@ -105,6 +105,36 @@ class ResponsivenessTests(unittest.TestCase):
         self.assertIn('New', app.folder_all_choices)
         self.assertEqual(set(app.folder_buttons), {'All files', 'Received Files'})
 
+    def test_returning_to_retained_files_tab_refreshes_its_visible_folder(self):
+        from services.documents.locations import collection_path
+        app = self.app
+        root = collection_path(app.private_root)
+        root.mkdir(exist_ok=True)
+        first = root / 'before.txt'
+        first.write_text('before')
+        self.assertTrue(app.loop.run_until_complete(app.show_files(location=('Local files', ''))))
+        browser = app.file_browser
+        location = browser.location
+        self.assertIn('before.txt', {row['name'] for row in app.file_rows.values()})
+        app.show_home()
+        first.unlink()
+        (root / 'after.txt').write_text('after')
+        self.assertTrue(app.select_destination('files'))
+        app.native_host.activate('files')
+
+        async def wait_for_refresh():
+            import asyncio
+            for _ in range(100):
+                if 'after.txt' in {row['name'] for row in app.file_rows.values()}:
+                    return
+                await asyncio.sleep(.01)
+            self.fail('Retained folder did not refresh')
+
+        app.loop.run_until_complete(wait_for_refresh())
+        self.assertIs(app.file_browser, browser)
+        self.assertEqual(browser.location, location)
+        self.assertNotIn('before.txt', {row['name'] for row in app.file_rows.values()})
+
     def test_retained_workspace_refreshes_lock_state_and_hidden_source_cache(self):
         app = self.app
         app.cloud_client = SimpleNamespace(generation=1, package_records=(), cancel=lambda: None)

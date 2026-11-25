@@ -26,13 +26,14 @@ class RecoveryIncomplete(OSError):
 
 
 MODEL_COMMANDS = frozenset({
-    'copy-strokes', 'cut-strokes', 'paste-strokes', 'paste-image', 'image-transform', 'delete-image', 'arrange-image', 'unlock-pdf',
-    'page', 'stroke', 'add-layer', 'move-layer', 'delete-layer', 'layer-visible', 'transform', 'erase',
+    'copy-strokes', 'cut-strokes', 'paste-strokes', 'paste-image', 'paste-cutout', 'image-transform', 'delete-image', 'arrange-image', 'unlock-pdf',
+    'page', 'stroke', 'highlight-text', 'add-layer', 'move-layer', 'delete-layer', 'layer-visible', 'transform', 'erase',
     'add-page', 'duplicate-page', 'delete-page', 'move-page', 'rename', 'undo', 'redo', 'template', 'update-template',
 })
 HOST_COMMANDS = frozenset({
     'save', 'save-as', 'export', 'transfer', 'library', 'show-in-folder', 'document-location', 'delete-file', 'page-previews',
-    'brush-color', 'brush-intensity', 'eraser-kind', 'paper-preview', 'paper-appearance', 'insert-photo',
+    'brush-color', 'brush-intensity', 'eraser-kind', 'snap-to-text', 'paper-preview', 'paper-appearance', 'insert-photo',
+    'copy-cutout', 'clear-cutout', 'working-brush',
 })
 
 
@@ -46,6 +47,8 @@ def validate_action(action):
     required = {
         'copy-strokes': {'ids': list}, 'cut-strokes': {'ids': list},
         'paste-image': {'src': str, 'corners': list},
+        'paste-cutout': {'corners': list, 'layer': str, 'clipboard_id': str},
+        'copy-cutout': {'src': str},
         'insert-photo': {'source': str, 'layer': str, 'page_id': str, 'bounds': list},
         'image-transform': {'id': str, 'corners': list}, 'delete-image': {'id': str},
         'arrange-image': {'id': str, 'direction': str},
@@ -56,6 +59,8 @@ def validate_action(action):
         'page-previews': {'start': int},
         'brush-color': {'tool': int, 'color': int},
         'brush-intensity': {'tool': int, 'intensity': int},
+        'snap-to-text': {'enabled': bool},
+        'highlight-text': {'start': list, 'end': list, 'color': int, 'layer': str},
         'eraser-kind': {'kind': str}, 'paper-preview': {'muted': bool},
         'paper-appearance': {'appearance': str},
         'stroke': {'points': list}, 'add-layer': {'name': str},
@@ -67,6 +72,9 @@ def validate_action(action):
         raise ValueError('Invalid ' + op + ' command fields.')
     if op == 'paste-strokes' and 'single_use' in action and type(action['single_use']) is not bool:
         raise ValueError('Invalid single-use paste choice.')
+    if op == 'copy-cutout' and any(type(action.get(key)) not in (int, float) or not 0 < action[key] <= 1_000_000
+                                   for key in ('width', 'height')):
+        raise ValueError('Invalid cutout dimensions.')
     if op == 'template' and 'fixed_size' in action and type(action['fixed_size']) is not bool:
         raise ValueError('Invalid fixed template size choice.')
     if op == 'insert-photo':
@@ -84,6 +92,15 @@ def validate_action(action):
     if op == 'brush-color':
         from .brushes import native_color
         native_color(action['tool'], action['color'])
+    if op == 'working-brush':
+        from .brushes import validate_brush_settings
+        validate_brush_settings(action.get('brush'))
+    if op == 'highlight-text':
+        from .brushes import native_color
+        native_color(18, action['color'])
+        if any(len(point) != 2 or any(type(v) not in (int, float) or not 0 <= v <= 1 for v in point)
+               for point in (action['start'], action['end'])):
+            raise ValueError('Text selection is outside the PDF page.')
     if op == 'brush-intensity':
         from .brushes import valid_intensity
         if not valid_intensity(action['tool'], action['intensity']):
@@ -133,6 +150,7 @@ def document_state(editor, document):
                  has_source=bool(document and document.resource))
     state['can_delete'] = document is not None and (document.writable or document.deletion_started)
     state['brush_colors'] = editor.brush_colors
+    state['eraser_kind'] = editor.eraser_kind
     return state
 
 
@@ -164,9 +182,11 @@ def stroke_script(editor, document):
 
 def ink_patch_script(editor, document, previous):
     """Send changed ink and ordering after erasing, without resending the page."""
-    strokes = editor.notebook.page(editor.index).strokes
+    ink = editor.notebook.page(editor.index)
+    strokes = ink.strokes
     old = {s.id: s for s in previous}
-    patch = dict(order=[s.id for s in strokes], scene_order=editor.notebook.page(editor.index).order,
+    patch = dict(order=[s.id for s in strokes], scene_order=ink.order,
+                 text_highlights=[item.payload(editor.canvas_left()) for item in ink.text_highlights],
                  strokes=[editor.canvas_stroke(s) for s in strokes if old.get(s.id) is not s],
                  undo=bool(editor.undo), redo=bool(editor.redo), save_status=save_status(document))
     return 'window.notebookInkUpdate(' + json.dumps(patch, allow_nan=False) + ')'

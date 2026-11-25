@@ -489,6 +489,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         sync_comic_chrome(self, self.body, destination=destination)
         # Material selection is reported before the shared destination commits.
         self.routes.sync_back(destination)
+        if destination != origin:
+            from .browser_ui import schedule_visible_file_browser_refresh
+            schedule_visible_file_browser_refresh(self)
         key = self.pending_reader_restore
         if destination == 'documents' and key is not None:
             self.pending_reader_restore = None

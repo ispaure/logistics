@@ -44,7 +44,9 @@ Use **Aa → View and input → Paper appearance** to choose Follow system (the 
 
 ## Image cutouts and protected PDFs
 
-Tap **Select / move** twice and choose **Capture cutouts and arrange images**. Lasso visible content and **Paste** it on a visible layer. Use **New cutout** to start over an image. Tap an image to move, resize, rotate, copy, cut, delete or **Arrange** it. The editor clipboard clears on close. Captures are capped at four megapixels and about 3 MiB.
+Tap **Select / move** twice and choose **Capture cutouts and arrange images**. Lasso visible content, open the receiving notebook and tap where you want the cutout. **Paste** is also available in Capture, and **Clear clipboard** removes the reusable cutout. Use **New cutout** to start over an image. Tap an image to move, resize, rotate, copy, cut, delete or **Arrange** it. Captures are capped at four megapixels and about 3 MiB.
+
+On a PDF page with selectable text, choose the highlighter and enable **Snap to text** in **Writing tools**. Drag across the text to highlight it. The notebook remembers this setting and your working brush. On Android, Snap to Text requires the system PDF text-selection API.
 
 On iPhone and iPad, use **Choose from Photos…** or **Take a photo…** from the same **Select / move** menu. The photo goes on the active layer as a standard-dynamic-range PNG, with a long edge up to 1,600 pixels and a size up to 1.25 MiB. A picture taken here is stored in the notebook when you save.
 

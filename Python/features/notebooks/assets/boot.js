@@ -13,4 +13,5 @@ function scheduleViewportResize() {
 }
 new ResizeObserver(scheduleViewportResize).observe($('viewport'));
 window.addEventListener('resize', scheduleViewportResize);
+if (state.cutout_clipboard?.incoming) window.notebookRefreshCutout(state.cutout_clipboard, true);
 render();

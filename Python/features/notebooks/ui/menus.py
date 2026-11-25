@@ -35,6 +35,7 @@ class NotebookMenus:
             self.add('Edit', key, title, lambda key=key: self.ui(key))
         self.add('View', 'toolbar', 'Drawing Toolbar', lambda: self.ui('toolbar'), checkable=True)
         self.add('View', 'grayscale', 'Grayscale Preview', lambda: self.ui('grayscale'), checkable=True)
+        self.add('View', 'dark-paper', 'Dark Paper Preview', lambda: self.ui('dark-paper'), checkable=True)
         self.add('View', 'finger', 'Draw with Finger', lambda: self.ui('finger'), checkable=True)
         zoom = self.menus['View'].addMenu('Zoom')
         zoom_in = [*qt.QKeySequence.keyBindings(keys.ZoomIn), qt.QKeySequence('Ctrl+='),
@@ -108,8 +109,8 @@ class NotebookMenus:
 
     def view_state(self, state):
         if isinstance(state, dict):
-            for key in ('toolbar', 'grayscale', 'finger'):
-                self.actions[key].setChecked(bool(state[key]))
+            for key in ('toolbar', 'grayscale', 'dark-paper', 'finger'):
+                self.actions[key].setChecked(bool(state.get(key)))
 
     def new(self):
         from services.documents.ui.notebooks import new_notebook_document

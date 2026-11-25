@@ -204,13 +204,29 @@ def image_payloads(book, index):
     return result
 
 
+def decode_picture(src):
+    from commonUtils.formats.image_headers import image_header
+
+    prefix, _, encoded = src.partition(',')
+    if prefix not in ('data:image/png;base64', 'data:image/jpeg;base64') or len(src) > 4 * 1024 * 1024:
+        raise ValueError('Choose a PNG or JPEG image smaller than 3 MiB.')
+    data = base64.b64decode(encoded, validate=True)
+    if prefix == 'data:image/png;base64':
+        validate_png(data)
+    else:
+        header = image_header(data, max_bytes=3 * 1024 * 1024)
+        if header.format != 'jpeg' or header.width * header.height > 16 * 1024 * 1024:
+            raise ValueError('Invalid or oversized JPEG image.')
+    return data
+
+
 def paste(book, index, action):
-    """Bound and decode PNG input before touching page state or archive members."""
-    src = action.get('src')
-    if not isinstance(src, str) or not src.startswith('data:image/png;base64,') or len(src) > 4 * 1024 * 1024:
-        raise ValueError('Choose a PNG image smaller than 3 MiB.')
-    data = base64.b64decode(src.split(',', 1)[1], validate=True)
-    validate_png(data)
+    """Validate an image before touching page state or archive members."""
+    data = decode_picture(action['src'])
+    paste_picture(book, index, data, action)
+
+
+def paste_picture(book, index, data, action):
     corners = action.get('corners')
     validate_corners(corners)
     ink = book.page(index)
@@ -221,6 +237,36 @@ def paste(book, index, action):
     if layer not in visible:
         raise ValueError('Choose a visible layer.')
     add_picture(book, index, data, layer, corners)
+
+
+class CaptureClipboard:
+    """One in-memory image shared by notebook surfaces in this app instance."""
+    def __init__(self):
+        self.clear()
+
+    def clear(self):
+        self.entry = None
+
+    def copy(self, data, action, source):
+        self.entry = (data, (action['width'], action['height']), source, uuid4().hex)
+
+    def read(self, identity):
+        if self.entry is None or self.entry[3] != identity:
+            raise ValueError('The clipboard changed. Try Paste again.')
+        return self.entry[0]
+
+    def state(self, book):
+        if self.entry is None:
+            return None
+        _, size, source, identity = self.entry
+        return dict(size=size, incoming=source != book.id, id=identity)
+
+
+def capture_clipboard(owner):
+    clipboard = getattr(owner, '_notebook_capture_clipboard', None)
+    if clipboard is None:
+        clipboard = owner._notebook_capture_clipboard = CaptureClipboard()
+    return clipboard
 
 
 def add_picture(book, index, data, layer, corners):
@@ -263,9 +309,10 @@ def reorder_native(data, order):
     from ._vendor.rmscene import scene_stream as ss
     from ._vendor.rmscene.tagged_block_common import HEADER_V6
     blocks = list(ss.read_blocks(BytesIO(data)))
+    objects = (ss.SceneLineItemBlock, ss.SceneGlyphItemBlock, ImageItem)
     groups = {}
     for b in blocks:
-        if isinstance(b, (ss.SceneLineItemBlock, ImageItem)) and b.item.value is not None and not b.item.deleted_length:
+        if isinstance(b, objects) and b.item.value is not None and not b.item.deleted_length:
             groups.setdefault(b.parent_id, set()).add(b.item.item_id)
     links = {}
     end = CrdtId(0, 0)
@@ -275,7 +322,7 @@ def reorder_native(data, order):
         links.update(insertion_links(sequence))
     chunks = []
     for raw, b in zip(frames(data), blocks):
-        if isinstance(b, (ss.SceneLineItemBlock, ImageItem)):
+        if isinstance(b, objects):
             left, right = links.get(b.item.item_id, (end, end))
             if (left, right) != (b.item.left_id, b.item.right_id):
                 b = deepcopy(b)
@@ -285,13 +332,14 @@ def reorder_native(data, order):
     return HEADER_V6 + b''.join(chunks)
 
 
-def validate_png(data):
+def validate_png(data, *, collect_idat=False):
     """Validate bounded capture PNG chunks without a desktop image dependency."""
     import struct
     import zlib
     if not data.startswith(b'\x89PNG\r\n\x1a\n'):
         raise ValueError('Invalid PNG image.')
     offset, pixels, saw_data, ended = 8, None, False, False
+    chunks = []
     while offset + 12 <= len(data):
         length = struct.unpack_from('>I', data, offset)[0]
         kind = data[offset+4:offset+8]
@@ -315,6 +363,8 @@ def validate_png(data):
             raise ValueError('Duplicate PNG header.')
         if kind == b'IDAT':
             saw_data = True
+            if collect_idat:
+                chunks.append(chunk)
             try:
                 decoded = decoder.decompress(chunk, remaining+1)
             except zlib.error as error:
@@ -330,3 +380,5 @@ def validate_png(data):
         offset = end
     if not ended:
         raise ValueError('Truncated PNG image.')
+    if collect_idat:
+        return channels, b''.join(chunks)

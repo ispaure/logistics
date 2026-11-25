@@ -829,15 +829,17 @@ class NotesLibraryTests(unittest.TestCase):
             editor = owner.embedded
             editor.panel.web.evaluate_javascript = AsyncMock(return_value=None)
             with patch.object(editor, 'save', new_callable=AsyncMock) as save, patch.object(owner, 'close') as close:
+                save.return_value = True
                 await owner.save_and_close_notebook()
-                save.assert_not_awaited()
+                save.assert_awaited_once()
                 close.assert_called_once()
                 close.reset_mock()
-                editor.panel.editor.apply({'op': 'add-page'})
+                save.reset_mock()
                 save.return_value = False
                 await owner.save_and_close_notebook()
                 save.assert_awaited_once()
                 close.assert_not_called()
+            editor.panel.editor.apply({'op': 'add-page'})
             with patch.object(owner, 'close') as close:
                 await owner.save_and_close_notebook()
                 close.assert_called_once()
