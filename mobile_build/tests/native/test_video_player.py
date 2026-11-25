@@ -850,6 +850,40 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         await owner.flush_progress(object())
         owner.native.status.assert_called_once_with(owner.progress.resume_notice)
 
+    async def test_airplay_tracks_survive_later_progress_writes_and_reopen(self):
+        import json
+        from commonUtils.runtime.resources.local import LocalFiles
+        from features.video.mobile.controls import PlaybackControls
+        from features.video.playback import VideoContent
+        from services.documents.video_progress import VideoProgress
+
+        owner = self.player(restricted=False)
+        root = Path(self.enterContext(TemporaryDirectory()))
+        owner.app.private_root = root
+        path = root / 'Episode.mkv'
+        path.write_bytes(b'Video fixture' * 512)
+        owner.content = VideoContent(LocalFiles(root), path.name)
+        owner.progress = VideoProgress(owner.content, root / 'Video', app=owner.app)
+        owner.controls = PlaybackControls(owner)
+        audio = '[["French","fr",[1633772320]],0]'
+        for updates in (dict(audio_track=0, audio_track_key='local-audio'),
+                        dict(airplay_audio_track_key=audio), dict(airplay_subtitle_track_key='off')):
+            await owner.controls.command('settings', json.dumps(updates))
+        owner.progress.duration = 10000
+        await owner.flush_progress(owner.accept_sample(7800))
+        await owner.close()
+
+        content = VideoContent(LocalFiles(root), path.name)
+        try:
+            reopened = VideoProgress(content, root / 'Video', app=owner.app)
+            self.addCleanup(reopened.retire)
+            self.assertEqual(reopened.load(), 7800)
+            self.assertEqual(reopened.settings.airplay_audio_track_key, audio)
+            self.assertEqual(reopened.settings.airplay_subtitle_track_key, 'off')
+            self.assertEqual(reopened.settings.audio_track, 0)
+            self.assertEqual(reopened.settings.audio_track_key, 'local-audio')
+        finally:
+            content.close()
 
     async def test_protected_controls_save_through_mobile_credential_cipher(self):
         import base64

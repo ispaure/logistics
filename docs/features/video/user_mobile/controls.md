@@ -31,13 +31,14 @@ keeps that session available, including pause/resume. Start a new AirPlay sessio
 while the phone is unlocked. Playback still stops if source access is revoked or
 the file becomes unreadable; session-only protection continues to block AirPlay.
 If AirPlay stalls, Logistics can retry once from the last confirmed position
-when the phone is active. If playback stops, select the TV again in **AirPlay**.
+when the phone is active. If playback stops and the TV is still selected, press
+**Play** to reconnect. Open **AirPlay** to change the output.
 To continue on the phone, choose **iPhone** in the picker if the TV is still
 selected, then press **Play**.
 
-On Apple TV, reveal the playback controls with the remote and open **Subtitles** to choose a track or **Off**, alongside the audio selector. Only compatible subtitle tracks appear. The phone's **Audio tracks** and **Subtitles** menus control the same selection and reflect TV changes when reopened. MP4/MOV files outside the stream-copy profile use native playback, where available embedded Apple-compatible tracks remain selectable but sidecars are unavailable.
+On Apple TV, reveal the playback controls with the remote and open **Subtitles** to choose a track or **Off**, alongside the audio selector. Only compatible subtitle tracks appear. The phone's **Audio tracks** and **Subtitles** menus control the same selection and reflect TV changes when reopened. The player saves the available AirPlay audio and subtitle choices for each video. On-device playback has its own track selections. MP4/MOV files outside the stream-copy profile use native playback, where available embedded Apple-compatible tracks remain selectable but sidecars are unavailable.
 
-Closing the video player stops its AirPlay video, releases the playback item and closes its streaming server. iOS may keep Apple TV selected as the system audio route. To return that route to the phone, choose **iPhone** in the AirPlay picker or Control Center; you do not need to disable AirPlay in Settings. Apple does not provide a reliable app API to disconnect that audio route. See [Apple's explanation](https://developer.apple.com/forums/thread/810035).
+Closing the video player stops its AirPlay video, releases the playback item and closes its streaming server. If iOS keeps the TV selected as the system audio route, press **Play** when you reopen the video to start playback there. To switch the output back to the phone, choose **iPhone** in the AirPlay picker or Control Center. [Apple's explanation](https://developer.apple.com/forums/thread/810035)
 
 iOS controls automatic AirPlay suggestions. To stop those suggestions while
 keeping manual selection available, choose **Settings → General → AirPlay &

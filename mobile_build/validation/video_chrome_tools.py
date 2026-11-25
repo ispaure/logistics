@@ -158,10 +158,12 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                 '-c:a', 'libopus', '-ac', '6', '-c:s', 'copy', '-metadata:s:s:0', 'language=eng',
                 '-metadata:s:s:1', 'language=fra', str(app / 'airplay.mkv')], check=True)
             subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=24000/1001',
-                '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-i', str(captions), '-i', str(ass),
-                '-map', '0:v', '-map', '1:a', '-map', '2:s', '-map', '3:s', '-t', '19',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
+                '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000', '-i', str(captions), '-i', str(ass),
+                '-map', '0:v', '-map', '1:a', '-map', '2:a', '-map', '3:s', '-map', '4:s', '-t', '19',
                 '-c:v', 'libx264', '-preset', 'fast', '-g', '48', '-bf', '2', '-pix_fmt', 'yuv420p',
-                '-c:a', 'libopus', '-ac', '6', '-c:s', 'copy', '-metadata:s:s:0', 'language=eng',
+                '-c:a', 'libopus', '-ac', '6', '-c:s', 'copy',
+                '-metadata:s:a:0', 'language=eng', '-metadata:s:a:1', 'language=fra', '-metadata:s:s:0', 'language=eng',
                 '-metadata:s:s:1', 'language=fra', str(app / 'captions.mkv')], check=True)
             subprocess.run(['ffmpeg', '-v', 'error', '-i', str(app / 'captions.mkv'),
                 '-map', '0:v', '-map', '0:a', '-map', '0:s', '-c:v', 'copy',

@@ -177,8 +177,9 @@ class MobileVideo:
         if routes is not None:
             routes.sync_back()
         if self.app.active_host:
-            from mobile.document_completion import refresh_browsers
+            from mobile.document_completion import refresh_browsers, refresh_cards
             refresh_browsers(self.app)
+            refresh_cards(self.app, 'video')
 
     @property
     def restricted(self):
@@ -325,7 +326,7 @@ class MobileVideo:
             if self.native.start_airplay(path, provisional.stream):
                 self.mkv_stream, provisional.stream = provisional.stream, None
             else:
-                self.native.airplay_preparation_failed('Choose a TV in AirPlay to start streaming.')
+                self.native.airplay_preparation_failed('AirPlay could not start.')
         except (OSError, ValueError, NameError) as error:
             if not self.closed:
                 self.native.airplay_preparation_failed(str(error) or 'AirPlay could not prepare this video.')

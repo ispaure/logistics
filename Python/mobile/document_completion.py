@@ -233,6 +233,11 @@ def refresh_browsers(app):
         browser.refresh_completion()
 
 
+def refresh_cards(app, kind):
+    for media in tuple(getattr(app, '_completion_card_media', ())):
+        media.refresh_completion(kind)
+
+
 def _same_checkpoint(first, second):
     return (first is not None and second is not None and first.identity == second.identity
             and first.kind == second.kind and first.revision == second.revision)

@@ -148,6 +148,8 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, strong) AVPlayerViewController *airPlayController;
 @property(nonatomic, strong) AVRoutePickerView *airPlayPicker;
 @property(nonatomic, strong) AVPlayer *airPlayPlayer;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, AVMediaSelectionGroup *> *airPlayTrackGroups;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *airPlayTrackSelections;
 @property(nonatomic) BOOL airPlayChapterSeek;
 @property(nonatomic, copy) NSDictionary<NSNumber *, NSString *> *airPlayChapters;
 @property(nonatomic, copy) NSDictionary<NSNumber *, NSString *> *localChapters;
@@ -289,7 +291,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)finishAirPlayWithMessage:(NSString *)message;
 - (BOOL)hasAirPlayAudioRoute;
 - (void)updateAirPlayRoute;
-- (BOOL)holdLocalPlayForAirPlay;
+- (BOOL)holdLocalPlayForAirPlayRequestingCast:(BOOL)requestCast;
 - (void)airPlayPreparationFailed:(NSString *)message;
 - (void)showAirPlayTracks:(id)sender subtitles:(BOOL)text;
 - (void)detachAirPlay;
@@ -741,7 +743,7 @@ typedef struct {
         else [self pause];
         return;
     }
-    if (self.playRequested) [self pause]; else [self startByUser];
+    if (self.playRequested) [self pause]; else [self startPlaybackRequestingAirPlay:YES];
 }
 - (void)seekToMilliseconds:(int64_t)target {
     self.resumeVideoWatchStarted = 0;
@@ -985,8 +987,11 @@ typedef struct {
     [self showStatus:message];
 }
 - (void)startByUser {
+    [self startPlaybackRequestingAirPlay:NO];
+}
+- (void)startPlaybackRequestingAirPlay:(BOOL)requestCast {
     if ([self hasAirPlay]) { [self startAirPlayPlayback]; return; }
-    if ([self holdLocalPlayForAirPlay]) return;
+    if ([self holdLocalPlayForAirPlayRequestingCast:requestCast]) return;
     self.airPlayResumeLocal = NO;
     if (self.externalVideoHost && ![self permitsExternalDisplay]) [self revokeExternalVideo];
     if (!self.restricted && self.externalVideoRevoked &&
@@ -996,7 +1001,7 @@ typedef struct {
     AVAudioSession *audio = AVAudioSession.sharedInstance;
     if (![audio setCategory:AVAudioSessionCategoryPlayback error:&error] ||
         ![audio setActive:YES error:&error]) return;
-    if (![self canPlay:NO] || [self holdLocalPlayForAirPlay]) return; // Activation can change the selected output.
+    if (![self canPlay:NO] || [self holdLocalPlayForAirPlayRequestingCast:requestCast]) return; // Activation can change the selected output.
     self.externalVideoRevoked = NO;
     [self revealSurface];
     if (self.externalOutputChanged) self.externalOutputChanged();

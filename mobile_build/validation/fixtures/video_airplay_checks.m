@@ -552,8 +552,103 @@
     if ([item.currentMediaSelection selectedMediaOptionInMediaSelectionGroup:group]) { [self finish:@"AVKit could not turn subtitles off"]; return; }
     [self.samples addObject:@{@"event": @"hls-subtitles", @"container": [[NSURL URLWithString:urls.firstObject] URLByDeletingLastPathComponent].lastPathComponent,
         @"options": @(group.options.count), @"selected": @YES, @"off": @YES, @"seek": @YES, @"caption": self.lastCaption}];
-    [self.hlsPlayer pause]; self.hlsPlayer = nil;
-    [self checkHLS:[urls subarrayWithRange:NSMakeRange(1, urls.count - 1)]];
+    [self.hlsPlayer pause];
+    LGVideoRouteProbe *probe = [LGVideoRouteProbe new];
+    probe.allowed = ^BOOL(BOOL external) { return YES; };
+    probe.airPlayAllowed = ^BOOL { return YES; };
+    LGReceiverPlayer *receiver = [LGReceiverPlayer new];
+    receiver.fixtureItem = (id)item;
+    receiver.fixtureExternal = YES;
+    probe.airPlayPlayer = receiver;
+    probe.airPlayWasExternal = YES;
+    NSMutableArray *writes = [NSMutableArray array];
+    probe.command = ^(NSString *name, NSString *value) {
+        if ([name isEqual:@"settings"])
+            [writes addObject:[NSJSONSerialization JSONObjectWithData:[value dataUsingEncoding:NSUTF8StringEncoding]
+                                                               options:0 error:nil]];
+    };
+    [probe loadAirPlayTrackGroups:item];
+    [self checkTrackGroups:probe writes:writes urls:urls stage:0 attempts:100];
+}
+- (void)checkTrackGroups:(LGVideoRouteProbe *)probe writes:(NSArray *)writes urls:(NSArray *)urls
+                   stage:(NSUInteger)stage attempts:(NSUInteger)attempts {
+    AVPlayerItem *item = probe.airPlayPlayer.currentItem;
+    AVMediaSelectionGroup *audio = probe.airPlayTrackGroups[LGAirPlayTrackField(NO)];
+    AVMediaSelectionGroup *text = probe.airPlayTrackGroups[LGAirPlayTrackField(YES)];
+    if (!attempts || item.status == AVPlayerItemStatusFailed) {
+        [self finish:[NSString stringWithFormat:@"AirPlay track settings stage %lu did not finish", (unsigned long)stage]];
+        return;
+    }
+    if (stage == 0 && audio.options.count >= 2 && text.options.count >= 2) {
+        AVMediaSelectionOption *selected = [item.currentMediaSelection selectedMediaOptionInMediaSelectionGroup:audio];
+        AVMediaSelectionOption *voice = audio.options.lastObject;
+        if ([selected isEqual:voice]) voice = audio.options.firstObject;
+        [probe selectAirPlayTrack:voice group:audio item:item subtitles:NO];
+        if (![writes.lastObject[LGAirPlayTrackField(NO)] isEqual:LGAirPlayTrackKey(voice, audio, NO)]) {
+            [self finish:@"The phone audio menu did not publish the selected AirPlay track"]; return;
+        }
+        // The receiver changes AVKit selection directly, without the phone menu.
+        [item selectMediaOption:text.options.lastObject inMediaSelectionGroup:text];
+        stage = 1;
+    } else if (stage == 1 && [writes.lastObject[LGAirPlayTrackField(YES)]
+                              isEqual:LGAirPlayTrackKey(text.options.lastObject, text, YES)]) {
+        [probe selectAirPlayTrack:nil group:text item:item subtitles:YES];
+        if (![writes.lastObject[LGAirPlayTrackField(YES)] isEqual:@"off"]) {
+            [self finish:@"AirPlay subtitle Off did not publish a choice"]; return;
+        }
+        [probe removeAirPlayItemObservers];
+        NSString *freshURL = [urls.firstObject stringByAppendingString:@"?reopened=1"];
+        AVPlayerItem *fresh = [AVPlayerItem playerItemWithURL:[NSURL URLWithString:freshURL]];
+        self.hlsPlayer = [AVPlayer playerWithPlayerItem:fresh];
+        [(LGReceiverPlayer *)probe.airPlayPlayer setFixtureItem:(id)fresh];
+        probe.airPlayWasExternal = NO;
+        [probe loadAirPlayTrackGroups:fresh];
+        stage = 2;
+    } else if (stage == 2 && audio && text && item.status == AVPlayerItemStatusReadyToPlay) {
+        AVMediaSelectionOption *voice = [item.currentMediaSelection selectedMediaOptionInMediaSelectionGroup:audio];
+        NSString *saved = [probe playbackOptions][LGAirPlayTrackField(NO)];
+        if (![saved isEqual:LGAirPlayTrackKey(voice, audio, NO)] ||
+            [item.currentMediaSelection selectedMediaOptionInMediaSelectionGroup:text] || writes.count != 3) {
+            [self finish:@"A fresh AirPlay item did not restore audio and subtitle Off"]; return;
+        }
+        [probe removeAirPlayItemObservers];
+        [self.samples addObject:@{@"event": @"hls-track-resume", @"audio": @YES,
+            @"receiverChange": @YES, @"subtitleOff": @YES, @"freshItem": @YES}];
+        [self.hlsPlayer pause]; self.hlsPlayer = nil;
+        [self checkHLS:[urls subarrayWithRange:NSMakeRange(1, urls.count - 1)]];
+        return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 10), dispatch_get_main_queue(), ^{
+        [self checkTrackGroups:probe writes:writes urls:urls stage:stage attempts:attempts - 1];
+    });
+}
+- (BOOL)checkSelectedRoutePlay {
+    LGVideoRouteProbe *v = self.video;
+    __block NSUInteger requests = 0;
+    __block BOOL audioAllowed = NO;
+    void (^previousCommand)(NSString *, NSString *) = v.command;
+    BOOL (^previousAllowed)(BOOL) = v.allowed;
+    BOOL (^previousRequestPlay)(void) = v.requestPlay;
+    v.allowed = ^BOOL(BOOL external) { return audioAllowed; };
+    v.requestPlay = ^BOOL { audioAllowed = YES; return YES; };
+    v.command = ^(NSString *name, NSString *value) {
+        if ([name isEqual:@"airplay"]) requests++;
+    };
+    v.fixtureRoute = YES;
+    [v updateAirPlayRoute];
+    [v startByUser];
+    BOOL waiting = !audioAllowed && requests == 0 && !v.playRequested && [v.message.text containsString:@"Press Play"];
+    [v togglePlay:v.playButton];
+    [v togglePlay:v.playButton];
+    BOOL casting = requests == 1 && v.airPlayPreparing && !v.playRequested && !v.airPlayPickerOpen;
+    [v detachAirPlay];
+    v.fixtureRoute = NO;
+    v.command = previousCommand;
+    v.allowed = previousAllowed;
+    v.requestPlay = previousRequestPlay;
+    if (!waiting || !casting) { [self finish:@"Play on a selected TV route did not start exactly one cast"]; return NO; }
+    [self.samples addObject:@{ @"event": @"play-selected-tv", @"explicitPlayOnly": @YES, @"pickerClosed": @YES }];
+    return YES;
 }
 - (void)checkReceiver {
     LGVideoRouteProbe *v = self.video;
@@ -577,18 +672,22 @@
         [self finish:[@"Live VLC audio metadata missing from label: " stringByAppendingString:audioLabel]]; return;
     }
     [self.samples addObject:@{@"event": @"local-chrome", @"cacheHidden": @YES, @"audioLabels": @YES, @"audioLabel": audioLabel}];
-    NSArray *buttons = v.transport.arrangedSubviews;
+    NSArray *buttons = [v.transport.arrangedSubviews filteredArrayUsingPredicate:
+        [NSPredicate predicateWithBlock:^BOOL(UIView *button, NSDictionary *bindings) { return !button.hidden; }]];
+    UIView *forwardButton = buttons.count == 4 ? buttons[2] : nil;
     CGRect route = [v.airPlayPicker convertRect:v.airPlayPicker.bounds toView:v.view];
-    CGRect forward = [buttons[2] convertRect:[buttons[2] bounds] toView:v.view];
+    CGRect forward = [forwardButton convertRect:forwardButton.bounds toView:v.view];
     [self.samples addObject:@{@"event": @"layout", @"route": NSStringFromCGRect(route), @"forward": NSStringFromCGRect(forward), @"bounds": NSStringFromCGRect(v.view.bounds), @"count": @(buttons.count)}];
     CGRect routeAlignment = [v.airPlayPicker alignmentRectForFrame:route];
-    CGRect forwardAlignment = [buttons[2] alignmentRectForFrame:forward];
+    CGRect forwardAlignment = [forwardButton alignmentRectForFrame:forward];
     if (buttons.count != 4 || buttons.lastObject != v.airPlayPicker ||
+        ![forwardButton.accessibilityLabel isEqualToString:@"Forward 10 seconds"] ||
         CGRectGetMinX(route) < CGRectGetMaxX(forward) || fabs(CGRectGetMidY(routeAlignment)-CGRectGetMidY(forwardAlignment)) > 1 ||
         route.size.width < 44 || route.size.height < 44 || !CGRectContainsRect(v.view.bounds, route)) {
         [self finish:@"AirPlay is not reachable beside forward 10 seconds"]; return;
     }
     [v pause];
+    if (![self checkSelectedRoutePlay]) return;
     if (![self checkLockPolicy]) return;
     if (![self checkWatchdogs]) return;
     [self checkLockedItemFailure];

@@ -100,14 +100,16 @@ class DocumentCardMedia:
         self.notebook_artwork = []
         self.dark_notebooks = dark_notebook_thumbnails(app)
         self.notebook_appearance_revision = 0
-        self.pending_progress = []
+        self.progress_badges = {}
+        self.pending_progress = {}
+        self.progress_task = None
         self.cancelled = Event()
 
     def completion_badge(self, target):
         if target is None:
             return None
         badge = make_completion_badge()
-        self.pending_progress.append((target, badge))
+        self.progress_badges[badge] = self.pending_progress[badge] = target
         return badge
 
     def artwork(self, reference, kind, *, width=72, height=72):
@@ -137,14 +139,25 @@ class DocumentCardMedia:
             pending, self.pending_artwork = self.pending_artwork, []
             self.app.loop.create_task(self._load_artwork(pending, self.dark_notebooks, self.notebook_appearance_revision))
         if self.pending_progress:
-            pending_progress, self.pending_progress = self.pending_progress, []
-            self.app.loop.create_task(self._load_progress(pending_progress))
+            if not hasattr(self.app, '_completion_card_media'):
+                self.app._completion_card_media = WeakSet()
+            self.app._completion_card_media.add(self)
+            if self.progress_task is None or self.progress_task.done():
+                self.progress_task = self.app.loop.create_task(self._load_progress())
 
     def cancel(self):
         self.cancelled.set()
         self.pending_artwork.clear()
         self.pending_progress.clear()
+        self.progress_badges.clear()
         self.notebook_artwork.clear()
+
+    def refresh_completion(self, kind):
+        if not self.active():
+            return
+        self.pending_progress.update((badge, target) for badge, target in self.progress_badges.items()
+                                     if target.kind == kind)
+        self.start()
 
     def refresh_notebook_thumbnails(self, dark):
         if not self.active() or dark == self.dark_notebooks:
@@ -164,15 +177,23 @@ class DocumentCardMedia:
     def active(self):
         return self.app.active_host and not self.cancelled.is_set()
 
-    async def _load_progress(self, pending):
+    async def _load_progress(self):
         from .document_completion import load_percentage
-        for target, badge in pending:
-            if not self.active():
-                return
-            percent = await load_percentage(self.app, target, active=self.active)
-            if percent is not None and self.active():
-                paint_completion_badge(badge, percent)
-                badge.style.display = 'pack'
+        while self.pending_progress and self.active():
+            badge = next(iter(self.pending_progress))
+            target = self.pending_progress.pop(badge)
+
+            def current():
+                # A newer refresh queued during this read owns the badge.
+                return self.active() and badge not in self.pending_progress
+
+            percent = await load_percentage(self.app, target, active=current)
+            if current():
+                if percent is not None:
+                    paint_completion_badge(badge, percent)
+                    badge.style.display = 'pack'
+                else:
+                    badge.style.display = 'none'
 
     async def _load_artwork(self, pending, dark, revision):
         import asyncio

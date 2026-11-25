@@ -39,6 +39,64 @@ def open_documents(content):
 
 
 class HubDocumentTests(unittest.TestCase):
+    def test_video_close_updates_retained_recent_and_favourite_percentages(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from features.video.mobile.player import MobileVideo
+        from features.video.playback import VideoContent
+        from mobile.document_completion import file_target, percentage
+        from mobile.favourites import catalog
+        from mobile.workspace import Session
+
+        app = self.app
+        hub = app.hub_controller()
+        path = app.private_root / 'Episode.mp4'
+        path.write_bytes(b'Synthetic video data' * 512)
+        provider = LocalFiles(path.parent)
+        file_progress = file_target(app, provider, provider.entry(path.name))
+        source = dict(type='local', path=str(path))
+        app.recent_documents.remember_file(
+            Session('', 'file-reference', 'episode', 'video', title=path.name), source)
+        catalog(app).remember(source, path.name, dict(kind='video'), favourite=True)
+
+        def badges(section):
+            return list(dict.fromkeys(menu.parent.children[0] for menu in widgets(section)
+                        if getattr(menu, 'accessible_name', None) == 'File actions for Episode.mp4'))
+
+        async def wait_for_percentage(controls, text):
+            async with asyncio.timeout(3):
+                while any(control.text != text for control in controls):
+                    await asyncio.sleep(.01)
+
+        async def play_and_return():
+            with patch('features.video.mobile.player.VideoTransport'):
+                player = MobileVideo(app, VideoContent(provider, path.name))
+            app.video_player = player
+            try:
+                await asyncio.to_thread(player.progress.load)
+                player.progress.duration = 10000
+                await player.flush_progress(player.accept_sample(500))
+                home = app.build_home()
+                app.show_documents_hub(collection='Recent')
+                recent = hub.document_recent_list
+                recent_badge, = badges(recent)
+                await wait_for_percentage([recent_badge], '5%')
+                hub.documents_view = 'Favourites'
+                hub.show_document_collection()
+                favourites = hub.document_favourites_list
+                retained = [*badges(home), recent_badge, *badges(favourites)]
+                self.assertEqual(len(retained), 4)
+                await wait_for_percentage(retained, '5%')
+
+                player.accept_sample(9800)
+                await player.close()
+                self.assertEqual(await asyncio.to_thread(percentage, file_progress), 98)
+                await wait_for_percentage(retained, '98%')
+                self.assertEqual(retained, [*badges(home), *badges(recent), *badges(favourites)])
+            finally:
+                await player.close()
+
+        app.loop.run_until_complete(play_and_return())
+
     def test_recent_and_favourite_percentages_are_centered_over_their_menus(self):
         import toga
         from mobile.favourites import catalog

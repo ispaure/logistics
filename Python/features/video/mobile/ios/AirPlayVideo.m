@@ -3,6 +3,34 @@
 
 #import <os/log.h>
 
+static NSString *LGAirPlayTrackField(BOOL text) {
+    return text ? @"airplay_subtitle_track_key" : @"airplay_audio_track_key";
+}
+
+static NSArray *LGAirPlayTrackMetadata(AVMediaSelectionOption *option) {
+    return @[option.displayName ?: @"", option.extendedLanguageTag ?: option.locale.languageCode ?: @"",
+             option.mediaSubTypes ?: @[]];
+}
+
+static NSString *LGAirPlayTrackKey(AVMediaSelectionOption *option, AVMediaSelectionGroup *group, BOOL text) {
+    if (!option) return text && group.allowsEmptySelection ? @"off" : nil;
+    NSArray *metadata = LGAirPlayTrackMetadata(option);
+    // Identify the rendition without saving AVKit's transient asset URL or
+    // confusing its filtered list with VLC's source track indexes.
+    NSUInteger ordinal = 0;
+    for (AVMediaSelectionOption *candidate in group.options) {
+        if ([candidate isEqual:option]) {
+            NSData *data = [NSJSONSerialization dataWithJSONObject:@[metadata, @(ordinal)] options:0 error:nil];
+            NSString *key = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            return key.length <= 1024 ? key : nil;
+        }
+        if ([LGAirPlayTrackMetadata(candidate) isEqual:metadata]) ordinal++;
+    }
+    return nil;
+}
+
+static NSString * const LGAirPlaySelectedPrompt = @"TV selected. Press Play to watch on TV or choose iPhone in AirPlay.";
+
 // Keep the Logistics deck in front of AVKit so the phone and Siri Remote
 // control the same playback clock during native AirPlay.
 @implementation LGVideoController (AirPlay)
@@ -25,10 +53,23 @@
     return NO;
 }
 
-- (BOOL)holdLocalPlayForAirPlay {
+- (BOOL)requestAirPlayOnSelectedRoute {
+    if (self.airPlayPreparing) return YES;
+    if (self.airPlayPickerOpen || self.controlsLocked || self.pipActive ||
+        ![self allowsAirPlay] || UIApplication.sharedApplication.applicationState != UIApplicationStateActive ||
+        !self.requestPlay || !self.requestPlay() || ![self canPlay:NO] || ![self hasAirPlayAudioRoute]) return NO;
+    self.airPlayRouteDeadline = 0;
+    self.airPlayPreparing = YES;
+    [self showStatus:@"Connecting to TV…"];
+    [self emitCommand:@"airplay" value:@""];
+    return YES;
+}
+
+- (BOOL)holdLocalPlayForAirPlayRequestingCast:(BOOL)requestCast {
     if (!self.airPlayAvailable || self.casting || ![self hasAirPlayAudioRoute]) return NO;
     self.airPlayResumeLocal = YES;
-    [self showStatus:@"Choose this device in AirPlay to continue here."];
+    if (!(requestCast && [self requestAirPlayOnSelectedRoute]) && !self.airPlayPreparing)
+        [self showStatus:[self allowsAirPlay] ? LGAirPlaySelectedPrompt : @"Choose iPhone in AirPlay to play here."];
     return YES;
 }
 
@@ -68,18 +109,13 @@
         self.airPlayRouteDeadline = 0;
         return;
     }
-    if (external && !self.airPlayPreparing && [self allowsAirPlay] && [self canPlay:NO] &&
-        UIApplication.sharedApplication.applicationState == UIApplicationStateActive) {
-        self.airPlayRouteDeadline = 0;
-        self.airPlayPreparing = YES;
-        [self emitCommand:@"airplay" value:@""];
-    }
+    if (external) [self requestAirPlayOnSelectedRoute];
 }
 
 - (void)airPlayPreparationFailed:(NSString *)message {
     self.airPlayPreparing = NO;
     if ([self hasAirPlayAudioRoute])
-        message = [message stringByAppendingString:@" Choose this device in AirPlay to continue here."];
+        message = [NSString stringWithFormat:@"%@ %@", message, LGAirPlaySelectedPrompt];
     [self showStatus:message];
     [self updateAirPlayRoute];
 }
@@ -173,6 +209,7 @@
         name:AVPlayerItemDidPlayToEndTimeNotification object:item];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(airPlayFailed:)
         name:AVPlayerItemFailedToPlayToEndTimeNotification object:item];
+    [self loadAirPlayTrackGroups:item];
     if (!self.airPlayChapters.count && !self.chaptersInvalidated) {
         __weak LGVideoController *owner = self;
         __weak AVPlayerItem *routeItem = item;
@@ -205,6 +242,9 @@
     self.airPlaySeekGeneration++;
     [NSNotificationCenter.defaultCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:item];
     [NSNotificationCenter.defaultCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:item];
+    [NSNotificationCenter.defaultCenter removeObserver:self name:AVPlayerItemMediaSelectionDidChangeNotification object:item];
+    self.airPlayTrackGroups = nil;
+    self.airPlayTrackSelections = nil;
     [item cancelPendingSeeks];
 }
 
@@ -286,6 +326,82 @@
     }];
 }
 
+- (void)restoreAirPlayTrackGroup:(AVMediaSelectionGroup *)group item:(AVPlayerItem *)item subtitles:(BOOL)text {
+    NSString *field = LGAirPlayTrackField(text);
+    NSString *saved = [self playbackOptions][field];
+    if ([saved isKindOfClass:NSString.class] && saved.length) {
+        if (text && group.allowsEmptySelection && [saved isEqualToString:@"off"])
+            [item selectMediaOption:nil inMediaSelectionGroup:group];
+        else {
+            for (AVMediaSelectionOption *option in [AVMediaSelectionGroup playableMediaSelectionOptionsFromArray:group.options]) {
+                if (![saved isEqualToString:LGAirPlayTrackKey(option, group, text)]) continue;
+                [item selectMediaOption:option inMediaSelectionGroup:group];
+                break;
+            }
+        }
+    }
+    self.airPlayTrackGroups[field] = group;
+    AVMediaSelectionOption *selected = [item.currentMediaSelection selectedMediaOptionInMediaSelectionGroup:group];
+    self.airPlayTrackSelections[field] = LGAirPlayTrackKey(selected, group, text) ?: @"";
+}
+
+- (void)loadAirPlayTrackGroups:(AVPlayerItem *)item {
+    self.airPlayTrackGroups = [NSMutableDictionary dictionary];
+    self.airPlayTrackSelections = [NSMutableDictionary dictionary];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(airPlayTrackSelectionChanged:)
+        name:AVPlayerItemMediaSelectionDidChangeNotification object:item];
+    __weak LGVideoController *owner = self;
+    __weak AVPlayerItem *pending = item;
+    for (AVMediaCharacteristic characteristic in @[AVMediaCharacteristicAudible, AVMediaCharacteristicLegible]) {
+        BOOL text = [characteristic isEqualToString:AVMediaCharacteristicLegible];
+        [item.asset loadMediaSelectionGroupForMediaCharacteristic:characteristic
+            completionHandler:^(AVMediaSelectionGroup *group, NSError *error) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    LGVideoController *controller = owner;
+                    AVPlayerItem *current = pending;
+                    if (group && current && current == controller.airPlayPlayer.currentItem &&
+                        [controller allowsAirPlay])
+                        [controller restoreAirPlayTrackGroup:group item:current subtitles:text];
+                });
+            }];
+    }
+}
+
+- (void)sampleAirPlayTrackSelection:(AVPlayerItem *)item publish:(BOOL)publish {
+    for (NSNumber *textValue in @[@NO, @YES]) {
+        BOOL text = textValue.boolValue;
+        NSString *field = LGAirPlayTrackField(text);
+        AVMediaSelectionGroup *group = self.airPlayTrackGroups[field];
+        if (!group) continue;
+        AVMediaSelectionOption *option = [item.currentMediaSelection selectedMediaOptionInMediaSelectionGroup:group];
+        NSString *key = LGAirPlayTrackKey(option, group, text);
+        if (!key || [key isEqualToString:self.airPlayTrackSelections[field]]) continue;
+        self.airPlayTrackSelections[field] = key;
+        if (publish && ![key isEqual:[self playbackOptions][field]]) [self setting:field value:key];
+    }
+}
+
+- (void)airPlayTrackSelectionChanged:(NSNotification *)notification {
+    __weak LGVideoController *owner = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        LGVideoController *controller = owner;
+        AVPlayerItem *item = notification.object;
+        if (item == controller.airPlayPlayer.currentItem && controller.airPlayWasExternal &&
+            controller.airPlayPlayer.externalPlaybackActive && !controller.controlsLocked &&
+            [controller allowsAirPlay] && [controller canPlay:NO])
+            [controller sampleAirPlayTrackSelection:item publish:YES];
+    });
+}
+
+- (void)selectAirPlayTrack:(AVMediaSelectionOption *)option group:(AVMediaSelectionGroup *)group
+                     item:(AVPlayerItem *)item subtitles:(BOOL)text {
+    if (item != self.airPlayPlayer.currentItem || self.controlsLocked ||
+        ![self allowsAirPlay] || ![self canPlay:NO]) return;
+    [item selectMediaOption:option inMediaSelectionGroup:group];
+    NSString *key = LGAirPlayTrackKey(option, group, text);
+    if (key) [self setting:LGAirPlayTrackField(text) value:key];
+}
+
 - (void)showAirPlayTracks:(id)sender subtitles:(BOOL)text {
     if (self.controlsLocked || ![self allowsAirPlay] || ![self canPlay:NO]) return;
     AVPlayerItem *item = self.airPlayPlayer.currentItem;
@@ -308,9 +424,7 @@
                     NSString *label = selected ? @"Subtitles off" : @"✓ Subtitles off";
                     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:label style:UIAlertActionStyleDefault
                         handler:^(UIAlertAction *action) {
-                            if (item == owner.airPlayPlayer.currentItem && !owner.controlsLocked &&
-                                [owner allowsAirPlay] && [owner canPlay:NO])
-                                [item selectMediaOption:nil inMediaSelectionGroup:group];
+                            [owner selectAirPlayTrack:nil group:group item:item subtitles:YES];
                         }]];
                 }
                 NSArray *playable = [AVMediaSelectionGroup playableMediaSelectionOptionsFromArray:group.options ?: @[]];
@@ -332,9 +446,7 @@
                     if ([option isEqual:selected]) label = [@"✓ " stringByAppendingString:label];
                     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:label style:UIAlertActionStyleDefault
                         handler:^(UIAlertAction *action) {
-                            if (item == owner.airPlayPlayer.currentItem && !owner.controlsLocked &&
-                                [owner allowsAirPlay] && [owner canPlay:NO])
-                                [item selectMediaOption:option inMediaSelectionGroup:group];
+                            [owner selectAirPlayTrack:option group:group item:item subtitles:text];
                         }]];
                 }
                 if (!playable.count) menu.message = error ? @"AirPlay couldn’t load the tracks." :
@@ -470,6 +582,7 @@
     BOOL ready = external && itemReady;
     if (ready && !self.airPlayWasExternal) {
         self.airPlayWasExternal = YES;
+        [self sampleAirPlayTrackSelection:player.currentItem publish:NO];
         [self applyAirPlayPlaybackOptions];
         if (self.airPlaySeekTarget < 0 &&
             llabs([self airPlayTime:player.currentTime] - self.airPlayStartPosition) > 250)
@@ -571,7 +684,7 @@
         [self startAirPlayPlayback];
         if (self.playRequested) return;
     }
-    [self finishAirPlayWithMessage:@"AirPlay stopped. Select the TV in AirPlay to retry."];
+    [self finishAirPlayWithMessage:@"AirPlay stopped."];
 }
 
 - (void)finishAirPlayWithMessage:(NSString *)message {
@@ -580,8 +693,7 @@
     self.airPlayResumeLocal = resume;
     [self revealSurface];
     if ([self hasAirPlayAudioRoute]) {
-        NSString *choose = @"Choose this device in AirPlay to play here.";
-        [self showStatus:message.length ? [NSString stringWithFormat:@"%@ %@", message, choose] : choose];
+        [self showStatus:message.length ? [NSString stringWithFormat:@"%@ %@", message, LGAirPlaySelectedPrompt] : LGAirPlaySelectedPrompt];
     } else {
         [self updateAirPlayRoute];
         if (message.length)
