@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -54,6 +56,7 @@ type removablePullFS struct {
 	fs.Fs
 	features  fs.Features
 	mu        sync.Mutex
+	journal   func() (string, error)
 	changed   chan struct{}
 	reserved  int64
 	writers   int
@@ -63,6 +66,7 @@ type removablePullFS struct {
 
 func newRemovablePullFS(local fs.Fs) *removablePullFS {
 	destination := &removablePullFS{Fs: local, features: *local.Features(), changed: make(chan struct{}), stages: make(map[string]func())}
+	destination.journal = sync.OnceValues(func() (string, error) { return sdRecoveryDirectory(sdReplacementRoot(local.Root())) })
 	// Route every ordinary file through Put or PutStream instead of a clone
 	// or an alternate segmented writer.
 	destination.features.Copy = nil
@@ -71,11 +75,14 @@ func newRemovablePullFS(local fs.Fs) *removablePullFS {
 	if move := destination.features.Move; move != nil {
 		destination.features.Move = func(ctx context.Context, src fs.Object, remote string) (fs.Object, error) {
 			if staged, ok := src.(*removableStagedObject); ok {
-				obj, err := move(ctx, staged.Object, remote)
+				obj, err := destination.publish(ctx, staged.Object, remote)
 				if err == nil {
 					staged.release()
 				}
-				return obj, removablePullWriteError(err)
+				if err != nil && !errors.Is(err, context.Canceled) {
+					return obj, fserrors.FatalError(fmt.Errorf("publishing SD replacement %s: %w", remote, destination.writeError(err)))
+				}
+				return obj, err
 			}
 			if direct, ok := src.(*removableDirectObject); ok {
 				src = direct.Object
@@ -209,7 +216,7 @@ func (f *removablePullFS) put(ctx context.Context, put func(context.Context, io.
 		return &removableStagedObject{Object: obj, release: release}, nil
 	}
 	release()
-	return obj, removablePullWriteError(err)
+	return obj, f.writeError(err)
 }
 
 func (f *removablePullFS) stagedName(ctx context.Context, remote string) bool {
@@ -217,7 +224,11 @@ func (f *removablePullFS) stagedName(ctx context.Context, remote string) bool {
 	if config.Inplace || f.features.Move == nil || !f.features.PartialUploads {
 		return false
 	}
-	name, ok := strings.CutSuffix(remote, config.PartialSuffix)
+	return isRemovablePartial(remote, config.PartialSuffix)
+}
+
+func isRemovablePartial(remote, suffix string) bool {
+	name, ok := strings.CutSuffix(remote, suffix)
 	return ok && len(name) >= 9 && name[len(name)-9] == '.' &&
 		strings.Trim(name[len(name)-8:], "0123456789abcdef") == ""
 }
@@ -245,12 +256,28 @@ func (o *removableDirectObject) Update(ctx context.Context, in io.Reader, src fs
 		return err
 	}
 	defer release()
-	return removablePullWriteError(o.Object.Update(ctx, in, src, opts...))
+	return o.destination.writeError(o.Object.Update(ctx, in, src, opts...))
 }
 
-func removablePullWriteError(err error) error {
+func (f *removablePullFS) writeError(err error) error {
 	if diskFull(err) {
 		return fserrors.FatalError(fmt.Errorf("SD card ran out of space: %w", err))
+	}
+	if errors.Is(err, syscall.EIO) || errors.Is(err, syscall.ENODEV) ||
+		errors.Is(err, syscall.EROFS) || errors.Is(err, syscall.ETIMEDOUT) {
+		// Put also returns errors from the source reader. Only stop for a
+		// storage error whose path belongs to this SD destination.
+		var pathErr *os.PathError
+		var linkErr *os.LinkError
+		var path string
+		if errors.As(err, &pathErr) {
+			path = pathErr.Path
+		} else if errors.As(err, &linkErr) {
+			path = linkErr.New
+		}
+		if relative, relErr := filepath.Rel(f.Root(), path); relErr == nil && filepath.IsLocal(relative) {
+			return fserrors.FatalError(fmt.Errorf("SD card I/O failed. Check the card before retrying: %w", err))
+		}
 	}
 	return err
 }

@@ -94,8 +94,12 @@ class StorageUsage:
     reported_used: int
     available: int
     visible_allocation: int
-    skipped: int
     changed: bool
+    access_denied: int = 0
+    disappeared: int = 0
+    io_errors: int = 0
+    other_skipped: int = 0
+    io_examples: tuple[str, ...] = ()
 
 
 def inspect_storage_usage(path):
@@ -108,7 +112,23 @@ def inspect_storage_usage(path):
     before = shutil.disk_usage(root)
     root_size = allocated_size(root, root_info)
     allocated = max(0, root_size)
-    skipped = int(root_size < 0)
+    access_denied = disappeared = io_errors = 0
+    other_skipped = int(root_size < 0)
+    io_examples = []
+
+    def record_error(path, error):
+        nonlocal access_denied, disappeared, io_errors, other_skipped
+        if error.errno in (errno.EACCES, errno.EPERM):
+            access_denied += 1
+        elif error.errno in (errno.ENOENT, errno.ENOTDIR):
+            disappeared += 1
+        elif error.errno in (errno.EIO, errno.ETIMEDOUT, errno.ENODEV, errno.ENXIO, errno.ESTALE):
+            io_errors += 1
+            if len(io_examples) < 3:
+                io_examples.append(str(Path(path).relative_to(root)))
+        else:
+            other_skipped += 1
+
     linked_files = set()
     pending = [root]
     while pending:
@@ -118,8 +138,8 @@ def inspect_storage_usage(path):
                 for entry in entries:
                     try:
                         info = entry.stat(follow_symlinks=False)
-                    except OSError:
-                        skipped += 1
+                    except OSError as error:
+                        record_error(entry.path, error)
                         continue
                     if info.st_dev != root_info.st_dev:
                         continue
@@ -131,15 +151,17 @@ def inspect_storage_usage(path):
                         linked_files.add(info.st_ino)
                     size = allocated_size(entry.path, info)
                     if size < 0:
-                        skipped += 1
+                        other_skipped += 1
                     else:
                         allocated += size
-        except OSError:
-            skipped += 1
+        except OSError as error:
+            record_error(folder, error)
     after = shutil.disk_usage(root)
     if not os.path.samestat(root_info, root.stat()) or before.total != after.total:
         raise OSError('The storage location changed during the scan.')
-    return StorageUsage(after.used, after.free, allocated, skipped, before != after)
+    return StorageUsage(after.used, after.free, allocated, before != after or disappeared > 0,
+                        access_denied=access_denied, disappeared=disappeared, io_errors=io_errors,
+                        other_skipped=other_skipped, io_examples=tuple(io_examples))
 
 
 def collection_path(private_root, crypt=False):
@@ -160,6 +182,42 @@ def collection_path(private_root, crypt=False):
 
 class MobileLocalFiles(LocalFiles):
     """Ordinary mobile files, including Android mounts without rename flags."""
+
+    def entry(self, path):
+        try:
+            return super().entry(path)
+        except FileNotFoundError:
+            if not android_fat_storage(self.root):
+                raise
+            from commonUtils.persistence.publication import mutation_lock
+            from features.rclone.mobile.cloud import CloudClient
+            with mutation_lock:
+                CloudClient().request('sd_publish', local_path=str(self._locate(path)))
+                row = super().entry(path)
+                if row['directory']:
+                    return row
+                # Android FUSE can expose a stale inode until the restored name is opened.
+                with self.open(path):
+                    return super().entry(path)
+
+    def replace_created(self, staged, path, expected_revision):
+        if not android_fat_storage(self.root):
+            return super().replace_created(staged, path, expected_revision)
+        from commonUtils.persistence.publication import mutation_lock
+        from features.rclone.mobile.cloud import CloudClient
+        with mutation_lock:
+            row = self.entry(path)
+            if row['directory'] or row['revision'] != expected_revision:
+                raise ValueError('File changed; original preserved.')
+            target, partial = self._locate(path), self._locate(staged)
+            client = CloudClient()
+            client.request('sd_publish', local_path=str(target))
+            if self.entry(path)['revision'] != row['revision']:
+                raise ValueError('File changed during SD recovery; original preserved.')
+            client.request('sd_publish', local_path=str(target), source_path=str(partial),
+                           expected_size=expected_revision[2], expected_mtime=expected_revision[3])
+            with self.open(path):
+                pass  # Refresh the published name before the editor takes its next revision.
 
     def local_move_path(self, path):
         from commonUtils.runtime.platform import get_os, OS
@@ -222,6 +280,20 @@ class CollectionFiles(MobileLocalFiles):
         return local_folder_snapshot(self, path, cancelled=cancelled, names_only=True)
 
 
+def android_fat_storage(root):
+    from commonUtils.runtime.platform import get_os, OS
+    parts = Path(root).parts
+    return (get_os() is OS.ANDROID and len(parts) >= 3 and parts[:2] == ('/', 'storage')
+            and re.fullmatch(r'[0-9a-fA-F]{4}-[0-9a-fA-F]{4}', parts[2]) is not None)
+
+
+def with_local_save_policy(provider):
+    """Apply the mobile SD policy even to direct paths opened by an editor."""
+    if type(provider) is LocalFiles and android_fat_storage(provider.root):
+        return MobileLocalFiles(provider.root)
+    return provider
+
+
 def ordinary_index_provider(provider):
     """Recognize filesystem adapters whose namespace the shared index can read."""
     return (type(provider) in (LocalFiles, MobileLocalFiles, CollectionFiles)
@@ -233,7 +305,8 @@ _TRANSFER_STAGING = re.compile(r'\.logistics-[0-9a-f]{32}\.00000000\.partial')
 
 
 def _transfer_staging_path(path):
-    return '.logistics-' in path and any(_TRANSFER_STAGING.fullmatch(part) for part in path.split('/'))
+    return '.logistics-' in path and any(part.casefold() == '.logistics-sd-recovery-v1' or
+        _TRANSFER_STAGING.fullmatch(part) for part in path.split('/'))
 
 
 def visible_transfer_rows(provider, rows):

@@ -530,6 +530,46 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         handler.assert_not_awaited()
         self.assertFalse(next(button for button in fallback.buttons.children if button.text.startswith('Start ')).enabled)
 
+    async def test_native_skip_survives_live_review_updates_and_cannot_act_after_retirement(self):
+        surface, handler = self.surface()
+        surface.update(dict(mode='review', can_early=True, complete=False,
+            notice='Comparing files…', rows=(('add', 'before.cbz'),), counts=dict(add=1)))
+        surface.recover_rendering()
+        surface.recover_rendering()
+        footer = surface.native_fallback.buttons
+        skip = next(button for button in footer.children if button.text == 'Skip preview and start')
+        for index in range(3):
+            surface.update(dict(surface.model, rows=(('add', f'chapter-{index}.cbz'),), counts=dict(add=index + 2)))
+            self.assertIn(skip, footer.children)
+        await skip.on_press()
+        handler.assert_awaited_once_with('early', dict(revision=str(surface.delivered_revision)))
+        surface.update(dict(surface.model, complete=True, can_early=False, can_confirm=True))
+        self.assertIsNone(skip.parent)
+        await skip.on_press()
+        self.assertEqual(handler.await_count, 1)
+
+    async def test_android_byte_updates_batch_the_layout_and_skip_full_refitting(self):
+        from unittest.mock import patch
+
+        surface, _ = self.surface()
+        surface.recover_rendering()
+        surface.recover_rendering()
+        fallback = surface.native_fallback
+        fallback.android = True
+        fallback.reflow(720)
+        files = [dict(name=f'Thirty-seven chapters/Comic #{n}.cbz', bytes=0, size=1_000_000) for n in range(10)]
+        surface.update(dict(mode='progress', phase='transfer', busy=True, detail=True, active_files=files))
+        outer_root = fallback._root if fallback._root is not None else fallback
+        scroll_root = fallback.body._root if fallback.body._root is not None else fallback.body
+        with patch.object(outer_root, 'refresh', wraps=outer_root.refresh) as outer, \
+                patch.object(scroll_root, 'refresh', wraps=scroll_root.refresh) as scroll, \
+                patch.object(fallback, 'reflow', wraps=fallback.reflow) as reflow:
+            surface.update(dict(surface.model, active_files=[dict(row, bytes=250_000) for row in files]))
+            reflow.assert_not_called()
+            self.assertLessEqual(outer.call_count, 1)
+            self.assertEqual(scroll.call_count, 1)
+        self.assertTrue(all(bar.value == 25 for _, bar in fallback.file_cells))
+
     async def test_native_recovery_still_revokes_and_clears_private_labels(self):
         surface, handler = self.surface()
         surface.update(dict(mode='progress', busy=True, source='Secret:', active_files=(dict(name='private.txt'),)))

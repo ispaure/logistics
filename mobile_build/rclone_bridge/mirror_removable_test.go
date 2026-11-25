@@ -7,17 +7,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/accounting"
+	"github.com/rclone/rclone/fs/fserrors"
 	"github.com/rclone/rclone/fs/hash"
 	"github.com/rclone/rclone/fs/object"
 	"github.com/rclone/rclone/fs/operations"
@@ -42,6 +45,96 @@ func TestAndroidRemovablePullPath(t *testing.T) {
 	}
 }
 
+func TestRemovablePullTreatsDestinationIOErrorsAsFatal(t *testing.T) {
+	root := canonicalTestDir(t)
+	local, err := fs.NewFs(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	destination := newRemovablePullFS(local)
+	target := filepath.Join(root, "comic.cbz.partial")
+	for _, test := range []struct {
+		failure error
+		fatal   bool
+	}{
+		{&os.PathError{Op: "write", Path: target, Err: syscall.EIO}, true},
+		{&os.PathError{Op: "open", Path: target, Err: syscall.EROFS}, true},
+		{&os.LinkError{Op: "rename", Old: target, New: filepath.Join(root, "comic.cbz"), Err: syscall.ETIMEDOUT}, true},
+		{&os.PathError{Op: "read", Path: root + "-other/comic.cbz", Err: syscall.EIO}, false},
+		{&os.PathError{Op: "open", Path: target, Err: syscall.EACCES}, false},
+		{syscall.ETIMEDOUT, false},
+	} {
+		err := destination.writeError(fmt.Errorf("copy: %w", test.failure))
+		if fserrors.IsFatalError(err) != test.fatal || !errors.Is(err, test.failure) {
+			t.Errorf("%v: expected fatal=%t, got %v", test.failure, test.fatal, err)
+		}
+	}
+}
+
+func TestRemovableReplacementRecoversInterruptedPublication(t *testing.T) {
+	ctx := context.Background()
+	for _, phase := range []string{"prepared", "old-moved", "new-moved", "committed", "racing-target"} {
+		t.Run(phase, func(t *testing.T) {
+			root := canonicalTestDir(t)
+			target, partial := "a.cbz", "a.cbz.1234abcd.partial"
+			previous, next := "old archive", "verified replacement"
+			stamp := time.Unix(1_700_000_000, 0)
+			seedRemovableTestFile(t, root, target, previous, stamp)
+			seedRemovableTestFile(t, root, partial, next, stamp.Add(time.Hour))
+			info, err := os.Stat(filepath.Join(root, partial))
+			if err != nil {
+				t.Fatal(err)
+			}
+			journal, err := sdRecoveryDirectory(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			txn, err := os.MkdirTemp(journal, "replace-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, _ := json.Marshal(sdReplacement{Target: target, Partial: partial, Size: info.Size(), Mtime: info.ModTime().UnixNano()})
+			must := func(err error) {
+				t.Helper()
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			must(sdWriteMarker(filepath.Join(txn, "record.json"), data))
+			if phase != "prepared" {
+				must(sdRenameVacant(filepath.Join(root, target), filepath.Join(txn, "old")))
+			}
+			if phase == "new-moved" || phase == "committed" {
+				must(sdRenameVacant(filepath.Join(root, partial), filepath.Join(root, target)))
+			}
+			if phase == "committed" {
+				must(sdWriteMarker(filepath.Join(txn, "committed"), nil))
+			}
+			if phase == "racing-target" {
+				seedRemovableTestFile(t, root, target, "external file", stamp)
+				if err := recoverSDVolume(ctx, root); err == nil {
+					t.Fatal("recovery accepted a changed destination")
+				}
+				data, err := os.ReadFile(filepath.Join(txn, "old"))
+				if string(data) != previous || err != nil {
+					t.Fatalf("recovery lost the previous file: %q %v", data, err)
+				}
+				return
+			}
+			must(recoverSDVolume(ctx, root))
+			must(recoverSDVolume(ctx, root))
+			want := previous
+			if phase == "committed" {
+				want = next
+			}
+			data, err = os.ReadFile(filepath.Join(root, target))
+			if string(data) != want || err != nil {
+				t.Fatalf("recovery left %q, want %q: %v", data, want, err)
+			}
+		})
+	}
+}
+
 func TestRemovablePullStopsBeforeStagingWhenSpaceIsLow(t *testing.T) {
 	ctx, config := fs.AddConfig(context.Background())
 	config.Transfers = 1
@@ -63,6 +156,9 @@ func TestRemovablePullStopsBeforeStagingWhenSpaceIsLow(t *testing.T) {
 		t.Fatal(err)
 	}
 	dst := newRemovablePullFS(local)
+	if err := dst.recover(ctx); err != nil {
+		t.Fatal(err)
+	}
 	dst.Features().About = func(context.Context) (*fs.Usage, error) {
 		return &fs.Usage{Free: fs.NewUsageValue(removablePullHeadroom + 4)}, nil
 	}

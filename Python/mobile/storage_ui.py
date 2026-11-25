@@ -79,6 +79,15 @@ class StorageUI:
             await self.main_window.dialog(toga.InfoDialog('Developer settings unavailable',
                 'Android could not open developer settings. Developer mode must be enabled first.'))
 
+    async def _open_android_storage_settings(self, widget=None, **kwargs):
+        from java import jclass
+        Intent = jclass('android.content.Intent')
+        try:
+            self._impl.native.startActivity(Intent('android.settings.MEMORY_CARD_SETTINGS'))
+        except Exception:
+            await self.main_window.dialog(toga.InfoDialog('Storage settings unavailable',
+                'Open Android Settings and look for Storage to safely eject the SD card.'))
+
     def _storage_note(self, text):
         from .settings.forms import connection_note
         return connection_note(text)
@@ -240,19 +249,27 @@ class StorageUI:
             try:
                 report('Scanning accessible files and folders…')
                 usage = await asyncio.to_thread(inspect_storage_usage, volume or self.private_root)
-                difference = usage.reported_used - usage.visible_allocation
                 def size(value):
                     return ('−' if value < 0 else '') + format_size(abs(value), binary_units=True)
                 lines = [f'Reported used · {size(usage.reported_used)}',
                          f'Visible allocation · {size(usage.visible_allocation)}',
-                         f'Difference · {size(difference)}',
                          f'Available · {size(usage.available)}']
-                if volume is None or sdk < 30:
-                    lines.append('This scan covers app folders. The difference includes other data on the volume.')
-                if usage.skipped:
-                    lines.append(f'Entries skipped because they were unreadable · {usage.skipped:,}')
                 if usage.changed:
-                    lines.append('Usage changed during the scan. Check again when the drive is idle.')
+                    lines.append('Files or volume usage changed during the scan. Check again when the drive is idle to see the difference.')
+                else:
+                    difference = usage.reported_used - usage.visible_allocation
+                    lines.insert(2, f'Difference · {size(difference)}')
+                if volume is None or sdk < 30:
+                    lines.append('This scan covers app folders. Other data on the volume contributes to reported usage.')
+                if usage.access_denied:
+                    lines.append(f'Entries blocked by storage permissions · {usage.access_denied:,}')
+                if usage.disappeared:
+                    lines.append(f'Entries that moved or disappeared during the scan · {usage.disappeared:,}')
+                if usage.io_errors:
+                    lines.append(f'Storage I/O errors · {usage.io_errors:,}')
+                    lines.extend(usage.io_examples)
+                if usage.other_skipped:
+                    lines.append(f'Other entries without allocation information · {usage.other_skipped:,}')
                 report('\n'.join(lines))
             except (OSError, ValueError) as error:
                 report(f'Could not check storage usage. {error}')
@@ -263,8 +280,14 @@ class StorageUI:
         picker.on_change = lambda widget: report('')
         box.add(self._storage_heading('Choose a location'), picker, self._storage_note(
             'Compare the volume’s reported usage with allocated space in accessible files and folders. '
-            'The difference can include filesystem metadata and data hidden by Android.'),
-            self._storage_button('Check usage', scan, primary=True), result)
+            'Run this when transfers are idle. The difference can include filesystem metadata and data hidden by Android.'),
+            self._storage_button('Check usage', scan, primary=True), result,
+            self._storage_disclosure('SD card repair help', [
+                self._storage_note('If the difference persists across idle scans or you see storage I/O errors, '
+                    'finish or stop transfers and safely eject the SD card in Android storage settings. '
+                    'On a Mac, connect the card, select its volume in Disk Utility and choose First Aid.'),
+                self._storage_button('Open Android storage settings', self._open_android_storage_settings),
+            ]))
         self._show_storage_page(box, 'Storage diagnostics', 'collection-storage-diagnostics')
 
     def _show_storage_target(self, action):

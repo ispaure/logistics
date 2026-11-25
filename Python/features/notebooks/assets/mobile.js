@@ -94,6 +94,14 @@ renderEraserChoices();
   let tools = document.createElement('div');
   tools.className = 'mobile-tools';
   dock.append(tools);
+  function toolGroup(label, ...controls) {
+    const group = document.createElement('div');
+    group.className = 'mobile-tool-group';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', label);
+    group.append(...controls);
+    return group
+  }
   let workingPreset, activePreset = null;
   let brushToggle = makeButton(17, 'Brush, color and width', () => {
     if (active === null) tapBrushSlot(brushToggle, workingPreset);
@@ -105,7 +113,6 @@ renderEraserChoices();
   presetButtons.className = 'preset-buttons';
   presetButtons.setAttribute('role', 'group');
   presetButtons.setAttribute('aria-label', 'Brush presets');
-  tools.append(brushToggle, presetButtons);
   const presetLimit = state.brush_preset_limit ?? 2;
   const presetMenu = document.createElement('dialog');
   presetMenu.id = 'brushPresetMenu';
@@ -119,13 +126,13 @@ renderEraserChoices();
   const addPreset = makeButton('plus', 'Add current brush preset', pinBrush);
   addPreset.id = 'addBrushPreset';
   addPreset.title = 'Add current brush preset';
-  tools.append(addPreset);
-  for (let [id, label] of [
-      ['erase', 'Erase'],
-      ['select', 'Select'],
-      ['undo', 'Undo'],
-      ['redo', 'Redo']
-    ]) tools.append(iconButton(control(id), id, id === 'select' ? 'Select / move' : label, label));
+  tools.append(
+    toolGroup('Brushes', brushToggle, presetButtons, addPreset),
+    toolGroup('Editing tools', iconButton(control('erase'), 'erase', 'Erase', 'Erase'),
+      iconButton(control('select'), 'select', 'Select / move', 'Select')),
+    toolGroup('Edit history', iconButton(control('undo'), 'undo', 'Undo', 'Undo'),
+      iconButton(control('redo'), 'redo', 'Redo', 'Redo'))
+  );
   let hideTools = makeButton('hide', 'Hide tools', () => setToolsHidden(true));
   hideTools.id = 'hideTools';
 

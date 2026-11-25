@@ -18,10 +18,15 @@ read-only comparison before execution.
 Android Pulls to a public FAT-family volume stage up to ten files in parallel
 with preallocation disabled. Writers reserve the reported size of each staged
 file against shared free space with a 16 MiB margin. They can wait for an
-existing stage to finish when space is tight. Out-of-space errors end the
-attempt. Readable SD Pulls accept size matches with a modification-time
-difference of up to one second to account for rounded card timestamps.
+existing stage to finish when space is tight. Out-of-space errors and reported
+I/O failures on destination file writes end the attempt. Readable SD Pulls
+accept size matches with a modification-time difference of up to one second to
+account for rounded card timestamps.
 Comparison otherwise uses rclone's standard equality checks and concurrency.
+Verified replacements move the previous file aside on the card before publishing
+the new file into the empty destination. The volume's replacement journal lets
+the next Pull restore an uncommitted previous file or finish committed cleanup.
+Mobile document saves on those volumes use the same publication helper.
 
 ## Completion notifications
 
@@ -123,7 +128,7 @@ The default fixture is 64 MiB plus 137 bytes. Use `--size` for larger runs.
 
 ## Review and progress presentation
 
-Portable `transfers/{service,review,presentation}.py` own review and bounded display models. Desktop uses Qt. Mobile setup and review in `transfers/mobile/surface.py` use offline `assets/surface.*`, escaped paths, private WebViews, token/command/revision checks and 30 rows per page. Approve only a rendered current snapshot. Retire scans on close and redact private progress on revocation.
+Portable `transfers/{service,review,presentation}.py` own review and bounded display models. Desktop uses Qt. Mobile review and progress use native controls in `transfers/mobile/{surface,native_fallback}.py`. Review prepares comparison snapshots off the UI thread and displays up to 30 rows per page. An incomplete-start control stays attached as snapshots arrive. Full approval still binds the rendered comparison revision. Android batches layout during a native render, and byte updates reuse the same controls. Retire scans on close and redact private progress on revocation.
 
 Replace a stalled setup or review WebView once, then use `native_fallback.py`
 with the same action guards. The progress page uses these native controls from

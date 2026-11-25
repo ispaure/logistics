@@ -45,10 +45,10 @@ class ReviewProjection:
         if self._counted is not snapshot:
             self._counts = snapshot.counts
             self._counted = snapshot
-        key = (snapshot, self.kind, self.query)
-        if key != self._key:
+        filters = self.kind, self.query
+        if self._key is None or snapshot is not self._key[0] or filters != self._key[1]:
             self._rows = snapshot.rows(self.kind, self.query)
-            self._key = key
+            self._key = snapshot, filters
         self.page = min(self.page, max(0, (len(self._rows) - 1) // PAGE_SIZE))
         notices = dict(scanning='Comparing files… Nothing has changed yet.', ready='',
             checking='Checking that this review is still current…', stopping='Stopping comparison…',

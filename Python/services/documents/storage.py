@@ -217,6 +217,8 @@ class DocumentResource:
     Successful saves advance the baseline only after reopening exact bytes.
     """
     def __init__(self, provider, path, *, max_bytes, independent=True):
+        from .locations import with_local_save_policy
+        provider = with_local_save_policy(provider)
         self.provider = provider.reopen() if independent and hasattr(provider, 'reopen') else provider
         self.path = self.provider.relative(path)
         self.max_bytes = max_bytes
@@ -246,15 +248,21 @@ class DocumentResource:
         return self.provider.entry(self.path)
 
     def read(self, *, cancelled=lambda: False, track_local_content=False):
-        before = self.check()['revision']
+        from .locations import MobileLocalFiles, android_fat_storage
         operation = getattr(self.provider, 'operation', None)
-        with operation(cancelled) if operation else nullcontext():
-            with self.provider.open(self.path) as stream:
-                data = read_up_to(stream, self.max_bytes + 1, cancelled=cancelled)
-        check_cancelled(cancelled)
-        if len(data) > self.max_bytes:
-            raise DocumentSizeExceeded('Document is too large; exceeds its format size limit.')
-        if self.check()['revision'] != before:
+        attempts = 2 if isinstance(self.provider, MobileLocalFiles) and android_fat_storage(self.provider.root) else 1
+        for _ in range(attempts):
+            before = self.check()['revision']
+            with operation(cancelled) if operation else nullcontext():
+                with self.provider.open(self.path) as stream:
+                    data = read_up_to(stream, self.max_bytes + 1, cancelled=cancelled)
+            check_cancelled(cancelled)
+            if len(data) > self.max_bytes:
+                raise DocumentSizeExceeded('Document is too large; exceeds its format size limit.')
+            if self.check()['revision'] == before:
+                break
+            # A first read through Android FUSE can refresh a restored file's inode.
+        else:
             raise _ReadRevisionChanged('The document changed while opening; reopen it.')
         self.revision = before
         if track_local_content or self._content_baseline is not None:
@@ -289,6 +297,8 @@ class DocumentResource:
     @staticmethod
     def publish(provider, path, data, *, max_bytes, expected_revision=None,
                 validate=lambda data: None, cancelled=lambda: False, alive=lambda: True, after_publish=None):
+        from .locations import with_local_save_policy
+        provider = with_local_save_policy(provider)
         policy = DocumentPolicy.for_provider(provider)
         if not document_writable(provider):
             raise PermissionError('Cloud files are read-only. Create a local copy before editing.')
@@ -377,14 +387,16 @@ def stage_local_document_export(path, *, expected_revision=None, cancelled=lambd
     """
     import os
     from tempfile import NamedTemporaryFile
+    from uuid import uuid4
     from commonUtils.filesystem.local_access import check_local_path
     from commonUtils.persistence.publication import rename_exclusive
     from commonUtils.runtime.resources.local import LocalFiles
+    from .locations import android_fat_storage, with_local_save_policy
 
     target = Path(path).absolute()
     check_local_path(target)
     check_cancelled(cancelled)
-    provider = LocalFiles(target.parent)
+    provider = with_local_save_policy(LocalFiles(target.parent))
     if expected_revision is None:
         if os.path.lexists(target):
             raise FileExistsError('A file already exists at the chosen destination.')
@@ -394,7 +406,9 @@ def stage_local_document_export(path, *, expected_revision=None, cancelled=lambd
             raise ValueError('File changed; original preserved.')
     stage = None
     try:
-        with NamedTemporaryFile(prefix='.document-export-', dir=target.parent, delete=False) as stream:
+        prefix = ('.save-' + uuid4().hex + '.' if expected_revision is not None and android_fat_storage(target.parent)
+                  else '.document-export-')
+        with NamedTemporaryFile(prefix=prefix, dir=target.parent, delete=False) as stream:
             stage = Path(stream.name)
             yield stream
             stream.flush()

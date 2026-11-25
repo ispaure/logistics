@@ -25,7 +25,7 @@ func localCryptRead(action string) bool {
 }
 
 func scopedOperation(action string) (context.Context, func()) {
-	if action == "protect_package" || action == "unprotect_package" || action == "file_archive" || action == "file_thumbnail" || action == "image_thumbnail" {
+	if action == "protect_package" || action == "unprotect_package" || action == "file_archive" || action == "file_thumbnail" || action == "image_thumbnail" || action == "sd_publish" {
 		return context.WithTimeout(context.Background(), 2*time.Minute)
 	}
 	if localCryptRead(action) {

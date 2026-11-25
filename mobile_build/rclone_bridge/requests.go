@@ -110,6 +110,8 @@ func executeRequest(ctx context.Context, action string, request bridgeRequest) (
 	case "mirror_review":
 		ctx = context.WithValue(ctx, transferOptionsKey{}, transferOptions{TrackRenames: request.TrackRenames, Excludes: request.Excludes, CleanupPaths: request.CleanupPaths})
 		result, err = mirrorReview(ctx, request.Remote, request.Path, request.Identity, request.LocalPath, request.Run, request.Push)
+	case "sd_publish":
+		err = editorSDPublication(ctx, request)
 	case "crypt_remotes":
 		names := []string{}
 		for name := range admitted {

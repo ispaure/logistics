@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 from threading import Event, Thread
+from time import monotonic
 from typing import Callable, Mapping
 from uuid import uuid4
 
@@ -27,14 +28,18 @@ def native_scanner(client, job, local_path, *, push, options=TransferOptions(), 
     def scan(emit, cancelled):
         run, done = uuid4().hex, Event()
         def monitor():
-            while not done.wait(.1):
+            next_preview = 0.
+            while not done.wait(.05):
                 if cancelled():
                     client.cancel()
                     return
+                if monotonic() < next_preview:
+                    continue
                 try:
                     replace_changes(emit, client.request('mirror_review_progress', run=run)['changes'])
                 except (OSError, ValueError, KeyError):
                     pass
+                next_preview = monotonic() + 1.
         watcher = Thread(target=monitor, daemon=True)
         watcher.start()
         try:

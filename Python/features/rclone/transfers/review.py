@@ -10,6 +10,7 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 from dataclasses import dataclass
+from functools import cached_property
 from threading import Event, Lock, Thread
 
 from features.rclone.transfers.transfer_options import TransferOptions
@@ -43,7 +44,7 @@ class ReviewSnapshot:
     fingerprint: str
     error: str = ''
 
-    @property
+    @cached_property
     def counts(self):
         counts = dict.fromkeys(('add', 'replace', 'delete', 'cleanup'), 0)
         for action, _ in self.changes:
@@ -51,12 +52,17 @@ class ReviewSnapshot:
                 counts[action] += 1
         return counts
 
+    @cached_property
+    def _changed_rows(self):
+        return tuple(row for row in self.changes if row[0] != 'match')
+
     def rows(self, kind='all', query=''):
         """Display projection; unchanged files never obscure pending changes."""
         query = query.casefold().strip()
-        return tuple((action, path) for action, path in self.changes
-                     if action != 'match' and (kind == 'all' or action == kind)
-                     and query in path.casefold())
+        if kind == 'all' and not query:
+            return self._changed_rows
+        return tuple((action, path) for action, path in self._changed_rows
+                     if (kind == 'all' or action == kind) and (not query or query in path.casefold()))
 
     def text(self):
         counts = {kind: sum(action == kind for action, _ in self.changes) for kind in ('add', 'replace', 'delete')}
@@ -67,6 +73,12 @@ class ReviewSnapshot:
             summary += f' · {cleanups} local generated files to remove before Push'
         rows = [f'{kind.capitalize()}: {path}' for kind, path in self.changes if kind != 'match']
         return '\n'.join([heading, summary, self.error, *rows])
+
+
+def _projected_snapshot(changes, *, complete=False, fingerprint='', error=''):
+    snapshot = ReviewSnapshot(changes, complete, fingerprint, error)
+    _ = snapshot.counts, snapshot.rows()
+    return snapshot
 
 
 class ReviewScan:
@@ -102,9 +114,14 @@ class ReviewScan:
                 raise ValueError('Invalid comparison result.')
             rows[('cleanup' if kind == 'cleanup' else 'transfer', path)] = (kind, path)
         with self.lock:
-            if self.changes != rows:
-                self.changes = rows
-                self._snapshot = None
+            if self.changes == rows:
+                return
+        # Native comparison publishes on its worker. Prepare the default
+        # display projection before releasing the new snapshot to the UI.
+        preview = _projected_snapshot(tuple(sorted(rows.values())))
+        with self.lock:
+            self.changes = rows
+            self._snapshot = preview if not self.complete and not self.error else None
 
     def _run(self, scanner):
         try:
@@ -112,19 +129,27 @@ class ReviewScan:
                 self.emit(kind, path)
             emit.replace = self.replace
             fingerprint = scanner(emit, self.cancelled.is_set)
-            with self.lock:
-                if not self.cancelled.is_set():
-                    if not fingerprint:
-                        raise ValueError('Comparison did not return a valid revision.')
-                    self.fingerprint, self.complete = fingerprint, True
-                    self._snapshot = None
+            if not self.cancelled.is_set() and not fingerprint:
+                raise ValueError('Comparison did not return a valid revision.')
+            self._finish(fingerprint=fingerprint)
         except Exception as error:
-            with self.lock:
-                if not self.cancelled.is_set():
-                    self.error = str(error)
-                    self._snapshot = None
+            self._finish(error=str(error))
         finally:
             self.retired.set()
+
+    def _finish(self, *, fingerprint='', error=''):
+        if self.cancelled.is_set():
+            return
+        with self.lock:
+            previous = self._snapshot
+            rows = previous.changes if previous is not None else tuple(self.changes.values())
+        if previous is None:
+            rows = tuple(sorted(rows))
+        finished = _projected_snapshot(rows, complete=bool(fingerprint), fingerprint=fingerprint, error=error)
+        with self.lock:
+            if not self.cancelled.is_set():
+                self.complete, self.fingerprint, self.error = finished.complete, finished.fingerprint, finished.error
+                self._snapshot = finished
 
     def snapshot(self):
         with self.lock:

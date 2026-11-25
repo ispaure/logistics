@@ -15,9 +15,10 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 import toga
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from mobile.app import LogisticsMobile
 from services.documents.locations import collection_path, switch_location
@@ -205,16 +206,34 @@ class StorageUITests(unittest.TestCase):
         picker.value = 'SD card'
         async def check():
             await button(page, 'Check usage').on_press()
+            return ' '.join(' '.join(str(getattr(widget, 'text', '')).split()) for widget in widgets(page))
         with patch('mobile.storage_ui.all_files_allowed', return_value=True), \
                 patch('mobile.storage_ui.inspect_storage_usage',
-                      return_value=StorageUsage(4096, 8192, 3072, 2, True)) as scan:
-            self.app.loop.run_until_complete(check())
-        scan.assert_called_once_with(self.card)
-        text = ' '.join(' '.join(str(getattr(widget, 'text', '')).split()) for widget in widgets(page))
-        self.assertIn('Difference · 1.0 KiB', text)
-        self.assertIn('Entries skipped because they were unreadable · 2', text)
-        self.assertIn('Usage changed', text)
+                      side_effect=[StorageUsage(4096, 8192, 3072, False),
+                                   StorageUsage(4096, 8192, 3072, True, access_denied=2, disappeared=1,
+                                                io_errors=1, io_examples=('Comics/Fixture.cbz',))]) as scan:
+            self.assertIn('Difference · 1.0 KiB', self.app.loop.run_until_complete(check()))
+            text = self.app.loop.run_until_complete(check())
+        self.assertEqual([call.args for call in scan.call_args_list], [(self.card,), (self.card,)])
+        self.assertNotIn('Difference ·', text)
+        self.assertIn('Entries blocked by storage permissions · 2', text)
+        self.assertIn('Entries that moved or disappeared during the scan · 1', text)
+        self.assertIn('Storage I/O errors · 1 Comics/Fixture.cbz', text)
+        self.assertIn('volume usage changed', text)
         self.assertFalse((self.card / 'Logistics').exists())
+
+    def test_storage_diagnostics_repair_help_opens_the_android_storage_screen(self):
+        page = self.app.collection_storage_page
+        button(page, 'Other storage options +').on_press()
+        button(page, 'Check storage usage…').on_press()
+        page = self.app.collection_storage_page
+        button(page, 'SD card repair help +').on_press()
+        shortcut = button(page, 'Open Android storage settings')
+        native = Mock()
+        java = SimpleNamespace(jclass={'android.content.Intent': str}.__getitem__)
+        with patch.dict('sys.modules', java=java), patch.object(self.app._impl, 'native', native, create=True):
+            self.app.loop.run_until_complete(shortcut.on_press())
+        native.startActivity.assert_called_once_with('android.settings.MEMORY_CARD_SETTINGS')
 
     def test_delete_location_uses_red_bottom_button_and_never_continue(self):
         from mobile.palette import LIGHT, DARK, EINK

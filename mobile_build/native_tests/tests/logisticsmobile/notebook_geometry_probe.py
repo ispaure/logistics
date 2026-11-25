@@ -64,6 +64,44 @@ TOOLBAR = """JSON.stringify((()=>{
 })())"""
 
 
+HIGH_CONTRAST_TOOLBAR = """JSON.stringify((()=>{
+  const header=document.querySelector('header.mobile-head');
+  const groups=[...header.querySelectorAll('.mobile-tool-group')];
+  const buttons=[...header.querySelectorAll('button.icon')].filter(b=>b.getClientRects().length);
+  const active=buttons.find(b=>b.getAttribute('aria-pressed')==='true');
+  const style=getComputedStyle(active);
+  return {groups:groups.map(group=>group.getAttribute('aria-label')),
+    dividers:groups.slice(1).map(group=>getComputedStyle(group,'::before').borderInlineStartWidth),
+    flat:buttons.every(b=>getComputedStyle(b).borderTopColor==='rgba(0, 0, 0, 0)'),
+    touch:buttons.every(b=>b.getBoundingClientRect().width>=44 && b.getBoundingClientRect().height>=44),
+    active:[style.color,style.backgroundColor]};
+})())"""
+
+
+async def capture_contrast_toolbar(app, panel, captures):
+    from mobile.appearance import configure_android_eink
+
+    previous = app.preferences.values['android_eink']
+    app.preferences.values['android_eink'] = 'true'
+    try:
+        configure_android_eink(app)
+        app.refresh_native_theme()
+        for _ in range(40):
+            if await panel.web.evaluate_javascript("!!document.querySelector('#logistics-eink')"):
+                break
+            await asyncio.sleep(.05)
+        toolbar = json.loads(await panel.web.evaluate_javascript(HIGH_CONTRAST_TOOLBAR))
+        assert toolbar['groups'] == ['Brushes', 'Editing tools', 'Edit history'], toolbar
+        assert toolbar['dividers'] == ['1px', '1px'] and toolbar['flat'] and toolbar['touch'], toolbar
+        assert toolbar['active'] == ['rgb(255, 255, 255)', 'rgb(0, 0, 0)'], toolbar
+        await capture_window(app, captures / 'notebook-toolbar-high-contrast.png')
+        return toolbar
+    finally:
+        app.preferences.values['android_eink'] = previous
+        configure_android_eink(app)
+        app.refresh_native_theme()
+
+
 class NotebookGeometryProbe(NotebookProbe):
     async def check(self, app):
         from features.notebooks.mobile.documents import open_notebook
@@ -124,6 +162,8 @@ class NotebookGeometryProbe(NotebookProbe):
                         assert await open_notebook(app, path=source)
                     panel = app.notebook_panel
                     await wait_for_text(panel.web, book.name)
+                    if 'high_contrast_toolbar' not in result and type(panel.web._impl).__module__.startswith('toga_android.'):
+                        result['high_contrast_toolbar'] = await capture_contrast_toolbar(app, panel, captures)
                     for index, orientation in enumerate(('portrait', 'landscape-left', 'portrait')):
                         await rotate(app, orientation)
                         await wait_for_form(panel.web)

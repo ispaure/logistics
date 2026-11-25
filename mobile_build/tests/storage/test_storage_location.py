@@ -47,7 +47,42 @@ class CollectionStorageTests(unittest.TestCase):
         self.assertEqual(result.visible_allocation, expected)
         self.assertEqual(result.reported_used - result.visible_allocation, 1024)
         self.assertEqual(result.available, 3072)
-        self.assertEqual(result.skipped, 0)
+        self.assertEqual((result.access_denied, result.disappeared, result.io_errors, result.other_skipped), (0, 0, 0, 0))
+        self.assertTrue(result.changed)
+
+    def test_storage_diagnostics_distinguishes_permissions_disappearing_files_and_io_errors(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            children = {name: root / name for name in ('restricted', 'download.partial', 'comic.cbz')}
+            children['restricted'].mkdir()
+            for name in ('download.partial', 'comic.cbz'):
+                children[name].touch()
+            scandir = os.scandir
+
+            class FailingEntry:
+                def __init__(self, name, code):
+                    self.path, self.code = str(children[name]), code
+
+                def stat(self, **kwargs):
+                    raise OSError(self.code, os.strerror(self.code), self.path)
+
+            from contextlib import contextmanager
+
+            @contextmanager
+            def scan(path):
+                if path == str(children['restricted']):
+                    raise PermissionError(errno.EACCES, 'permission denied', path)
+                with scandir(path) as entries:
+                    restricted = next(entry for entry in entries if entry.name == 'restricted')
+                    yield iter((restricted, FailingEntry('download.partial', errno.ENOENT),
+                                FailingEntry('comic.cbz', errno.EIO)))
+
+            usage = SimpleNamespace(total=8192, used=4096, free=4096)
+            with patch('services.documents.locations.os.scandir', side_effect=scan), \
+                    patch('services.documents.locations.shutil.disk_usage', return_value=usage):
+                result = inspect_storage_usage(root)
+        self.assertEqual((result.access_denied, result.disappeared, result.io_errors, result.other_skipped), (1, 1, 1, 0))
+        self.assertEqual(result.io_examples, ('comic.cbz',))
         self.assertTrue(result.changed)
 
     def test_android_sd_card_publication_copies_exclusively_when_rename_flags_are_unsupported(self):

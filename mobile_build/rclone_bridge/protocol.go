@@ -52,6 +52,8 @@ type bridgeRequest struct {
 	SourceRemote        string            `json:"source_remote"`
 	SourcePath          string            `json:"source_path"`
 	SourceIdentity      string            `json:"source_identity"`
+	ExpectedSize        *int64            `json:"expected_size"`
+	ExpectedMtime       *int64            `json:"expected_mtime"`
 	Offset              int64             `json:"offset"`
 	Count               int               `json:"count"`
 	Width               int               `json:"width"`

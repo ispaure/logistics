@@ -66,6 +66,7 @@ ACTIONS = frozenset(
         "remote_range",
         "remote_stat",
         "remote_thumbnail",
+        "sd_publish",
         "unprotect_package",
         "vault_info",
         "vault_open",

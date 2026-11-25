@@ -38,10 +38,12 @@ UNIFIED_PROGRESS_ANDROID_ENTRY = 'tests.logisticsmobile.unified_progress_android
 UNIFIED_PROGRESS_VIDEO_ENTRY = 'tests.logisticsmobile.unified_progress_video_probe'
 WORKSPACE_MOVE_ENTRY = 'tests.logisticsmobile.workspace_move_probe'
 READER_APPEARANCE_ENTRY = 'tests.logisticsmobile.reader_appearance_probe'
+BOOX_SD_WRITE_ENTRY = 'tests.logisticsmobile.boox_sd_write_probe'
+BOOX_SD_WRITE_BUNDLE = 'io.github.ispaure.logisticssdqa'
 RAPID_INK_PROFILE = dict(bundle='io.github.ispaure.logisticsnotebookqa',
     entry_point='tests.logisticsmobile.notebook_rapid_ink_probe', result_name='notebook-rapid-ink-result.json')
 COMIC_SCOPES = ('matrix', 'basic', 'lifecycle', 'library', 'readers', 'windows', 'fold', 'reduced-motion')
-QA_BUNDLES = {UNIFIED_PROGRESS_BUNDLE, BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
+QA_BUNDLES = {UNIFIED_PROGRESS_BUNDLE, BOOX_SD_WRITE_BUNDLE, BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticscomicqa', 'io.github.ispaure.logisticsclipboardqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
               'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
@@ -54,6 +56,8 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point == BOOX_SD_WRITE_ENTRY:
+        return ('boox-sd-progress.json',)
     if entry_point.endswith('.video_chapters_probe'):
         return ('chapter-timeline.png',)
     if entry_point == READER_APPEARANCE_ENTRY:
@@ -1183,6 +1187,49 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
                 (output / 'android-cleanup.json').write_text(json.dumps(dict(removed=not emulator.marker.exists())))
 
 
+def boox_sd_observer(*, recovery=False):
+    """Stop bounded test writes on the first new SD transport or filesystem error."""
+    pattern = re.compile(r'(?:\bmmc\d+\b.*timeout waiting for hardware interrupt|'
+                         r'(?:\bmmcblk\d+\b|\bexfat[-_]fs\b).*\b(?:error|timed out)\b)', re.I)
+    baseline = set()
+    last_poll = 0.0
+    stop_sent = False
+    restarted = False
+
+    def observe(phase, emulator, record, output):
+        nonlocal last_poll, stop_sent, restarted
+        serial = record['serial']
+        if recovery and phase == 'installed':
+            emulator.invoke('-s', serial, 'shell', 'run-as', BOOX_SD_WRITE_BUNDLE, 'mkdir', '-p', 'cache')
+            emulator.invoke('-s', serial, 'shell', 'run-as', BOOX_SD_WRITE_BUNDLE, 'touch', 'cache/boox-sd-recovery')
+        if phase not in ('ready', 'poll', 'result') or (phase == 'poll' and time.monotonic() - last_poll < 2):
+            return
+        last_poll = time.monotonic()
+        raw = emulator.invoke('-s', serial, 'logcat', '-d', '-b', 'kernel', '-v', 'epoch', '-t', '900')
+        events = [line for line in raw.splitlines() if pattern.search(line)]
+        if phase == 'ready':
+            baseline.update(events)
+            return
+        new = [line for line in events if line not in baseline]
+        if new:
+            (output / 'boox-sd-kernel-errors.txt').write_text('\n'.join(new) + '\n')
+            if not stop_sent and phase == 'poll':
+                emulator.invoke('-s', serial, 'shell', 'run-as', BOOX_SD_WRITE_BUNDLE,
+                                'touch', 'cache/boox-sd-stop')
+                stop_sent = True
+        if recovery and phase == 'poll' and not stop_sent and not restarted:
+            marker = subprocess.run([str(emulator.adb), '-s', serial, 'shell', 'run-as', BOOX_SD_WRITE_BUNDLE,
+                'test', '-f', 'cache/boox-sd-restart'], capture_output=True, timeout=15)
+            if marker.returncode == 0:
+                emulator.invoke('-s', serial, 'shell', 'am', 'force-stop', BOOX_SD_WRITE_BUNDLE)
+                emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n',
+                                BOOX_SD_WRITE_BUNDLE + '/org.beeware.android.MainActivity')
+                (output / 'qa-process-restarted.txt').write_text('Stopped after the previous file was moved aside.\n')
+                restarted = True
+
+    return observe
+
+
 def main():
     global SOURCE
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1190,9 +1237,10 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'filename-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'download-recovery', 'file-drag', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'hardware-input', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'video-chapters', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-rapid-ink', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'filename-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'download-recovery', 'file-drag', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'hardware-input', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'video-chapters', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-rapid-ink', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview', 'boox-sd-write'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
+    parser.add_argument('--sd-recovery', action='store_true', help='Verify safe SD replacement and restart recovery.')
     parser.add_argument('--android-gpu', choices=('host', 'swiftshader'), default='swiftshader',
                         help='GPU renderer for a disposable Android emulator')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
@@ -1248,6 +1296,10 @@ def main():
         parser.error('The recent-deletion native probe requires Android.')
     if args.probe in ('boox-raw-ink', 'boox-preview') and (args.platform != 'android' or not args.device):
         parser.error('The raw ink probe requires an explicit physical Android --device.')
+    if args.probe == 'boox-sd-write' and (args.platform != 'android' or not args.device):
+        parser.error('The SD write probe requires an explicit physical Android --device.')
+    if args.sd_recovery and args.probe != 'boox-sd-write':
+        parser.error('--sd-recovery requires the boox-sd-write probe.')
     if args.probe == 'markdown-typography' and args.platform != 'ios':
         parser.error('The Markdown typography probe measures UIKit fonts and requires iOS.')
     if args.probe == 'file-transfer' and args.platform != 'ios':
@@ -1487,6 +1539,10 @@ def main():
             if args.probe == 'boox-preview':
                 profile = dict(bundle='io.github.ispaure.logisticsrawinkqa',
                     entry_point='tests.logisticsmobile.boox_preview_probe', result_name='boox-preview-result.json')
+            if args.probe == 'boox-sd-write':
+                profile = dict(bundle=BOOX_SD_WRITE_BUNDLE, entry_point=BOOX_SD_WRITE_ENTRY,
+                    result_name='boox-sd-write-result.json', observe=boox_sd_observer(recovery=args.sd_recovery),
+                    probe_timeout=420)
             if args.probe == 'file-drag':
                 from .file_drag_android import BUNDLE as drag_bundle, observe_touch
                 run_android(workspace, payload, args.output, env, options, bundle=drag_bundle,

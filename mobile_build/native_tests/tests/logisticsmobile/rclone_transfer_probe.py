@@ -13,7 +13,7 @@ import asyncio
 import json
 from pathlib import Path
 from threading import Event
-from time import monotonic
+from time import monotonic, sleep
 import traceback
 from uuid import uuid4
 from unittest.mock import AsyncMock, patch
@@ -141,6 +141,8 @@ class RcloneTransferProbe(LogisticsMobile):
             assert any(getattr(control, 'text', None) == 'Clear history…' for control in history.children)
             self.routes.return_to('files')
             self.transfer_busy = self.transfer_notification = False
+            if type(self._impl).__module__.startswith('toga_android.'):
+                await self.skip_live_review(owner, report)
 
             def scan(emit, cancelled):
                 for kind, path in [('add', 'Documents/Travel checklist.md'), ('add', 'Photos/Autumn/Maples.jpg'),
@@ -228,6 +230,48 @@ class RcloneTransferProbe(LogisticsMobile):
                 await task
             (Path(self.paths.cache) / 'rclone-transfer-result.json').write_text(json.dumps(report, indent=2))
 
+    async def skip_live_review(self, owner, report):
+        advance = Event()
+
+        def scan(emit, cancelled):
+            changes = [('replace', f'Comics/Series/Chapter {index:05}.cbz') for index in range(12_000)]
+            emit.replace(changes)
+            while not advance.wait(.05) and not cancelled():
+                pass
+            if not cancelled():
+                emit.replace([*changes, ('add', 'Comics/New volume.cbz')])
+            while not cancelled():
+                sleep(.05)
+            return ''
+
+        session = ReviewSession(ReviewRequest('Pull', 'Fixture:', 'Local/Fixture', 'fixture'), scan)
+        dialog = TransferReviewDialog(MobileReviewPresentation(owner))
+        task = asyncio.create_task(dialog.run(session))
+        try:
+            for _ in range(150):
+                surface = dialog.surface
+                if surface is not None and surface.model.get('total') == 12_000:
+                    break
+                await asyncio.sleep(.1)
+            else:
+                raise AssertionError('Live review did not show the first large snapshot')
+            footer = surface.native_fallback.buttons
+            skip = next(button for button in footer.children if button.text == 'Skip preview and start')
+            advance.set()
+            for _ in range(150):
+                if surface.model.get('total') == 12_001:
+                    break
+                await asyncio.sleep(.1)
+            else:
+                raise AssertionError('Live review did not show the growing snapshot')
+            assert skip in footer.children and skip._impl.native.performClick()
+            assert await asyncio.wait_for(asyncio.shield(task), 5)
+            report['android_skip_one_tap_during_large_review'] = True
+        finally:
+            if not task.done():
+                session.cancel()
+                await task
+
     async def sample_android_contrast(self, report, evidence):
         from mobile.appearance import configure_android_eink
         from mobile.palette import argb
@@ -254,6 +298,16 @@ class RcloneTransferProbe(LogisticsMobile):
         await self.sample(surface, 'progress-regular-ten-files', report, evidence)
         set_contrast(True)
         try:
+            update_times = []
+            for tick in range(1, 7):
+                snapshot = [dict(row, bytes=row['bytes'] + tick * 500_000) for row in active_files]
+                start = monotonic()
+                self.publish_mirror_progress(1, dict(values, active_files=snapshot,
+                    done=values['done'] + tick * 5_000_000))
+                update_times.append(monotonic() - start)
+                await asyncio.sleep(.1)
+            report['android_eink_max_progress_update_ms'] = round(max(update_times) * 1000)
+            assert max(update_times) < 4
             await self.sample(surface, 'progress-eink', report, evidence)
             assert len(fallback.file_cells) == 10
             assert len(fallback.rows.children) == 10

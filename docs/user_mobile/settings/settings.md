@@ -140,9 +140,13 @@ restore permission. LocalCrypt still needs its matching credentials.
 
 On Android, open **Other storage options → Check storage usage…** to compare
 the selected volume’s reported usage with allocated space in accessible
-files and folders. Run the scan with transfers idle. Filesystem metadata,
-folders Android hides and app-only storage access can contribute to the
-difference. A growing difference across idle scans can flag a storage issue.
+files and folders. Run the scan with transfers idle. If the scan detects changes,
+it omits the difference. The scan reports entries that disappeared, entries
+blocked by permissions and storage I/O errors individually. Filesystem metadata
+and folders Android hides can contribute to a difference across idle scans.
+Open **SD card repair help** for a shortcut to Android storage settings to
+safely eject the card. On a Mac, select the card’s volume in Disk Utility and
+run First Aid.
 
 ## Erase all app data
 

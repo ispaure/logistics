@@ -109,7 +109,7 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	ctx = filter.ReplaceConfig(ctx, rules)
 	// Preserve interrupted selected downloads on Pull and keep their bytes off Push.
 	partial := ".logistics-" + strings.Repeat("[0-9a-f]", 32) + ".00000000.partial"
-	for _, pattern := range []string{partial, partial + "/**"} {
+	for _, pattern := range []string{partial, partial + "/**", removableRecoveryFolder, removableRecoveryFolder + "/**"} {
 		if err := rules.AddRule("- " + pattern); err != nil {
 			return 0, err
 		}
@@ -179,8 +179,10 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	if readablePull {
 		local = newReadablePullFS(local, missing)
 	}
+	var sd *removablePullFS
 	if guardSD {
-		local = newRemovablePullFS(local)
+		sd = newRemovablePullFS(local)
+		local = sd
 	}
 	source, destination := online, local
 	if push {
@@ -207,7 +209,14 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 			}
 		}
 	}()
-	syncAttempt := func() error { return rclonesync.Sync(ctx, destination, source, true) }
+	syncAttempt := func() error {
+		if sd != nil {
+			if err := sd.recover(ctx); err != nil {
+				return err
+			}
+		}
+		return rclonesync.Sync(ctx, destination, source, true)
+	}
 	if review != nil {
 		syncAttempt = review.attempt(syncAttempt)
 	}

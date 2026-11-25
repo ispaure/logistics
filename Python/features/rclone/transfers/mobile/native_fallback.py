@@ -9,6 +9,7 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
+from contextlib import ExitStack, contextmanager
 from datetime import datetime
 
 import toga
@@ -16,6 +17,24 @@ from toga.style import Pack
 from toga.style.pack import CENTER, COLUMN, ROW
 from commonUtils.ui.native.appearance import accessible_name
 from commonUtils.ui.native.forms import FittedLabel, disclosure, fit_section, fit_text
+
+
+@contextmanager
+def batch_layout(*widgets):
+    """Keep native updates, but measure each affected Toga layout root once."""
+    dirty = set()
+    roots = dict.fromkeys(widget._root if widget._root is not None else widget for widget in widgets)
+    with ExitStack() as restore:
+        for root in roots:
+            if 'refresh' in vars(root):
+                restore.callback(setattr, root, 'refresh', root.refresh)
+            else:
+                restore.callback(delattr, root, 'refresh')
+            root.refresh = lambda root=root: dirty.add(root)
+        yield
+    for root in roots:
+        if root in dirty:
+            root.refresh()
 
 
 class NativeTransferFallback(toga.Box):
@@ -44,6 +63,7 @@ class NativeTransferFallback(toga.Box):
         self.file_group = toga.Box(children=[self.rows], style=Pack(direction=COLUMN, gap=12))
         self.buttons = toga.Box(style=Pack(direction=COLUMN, gap=8, margin=12))
         self.row_signature = self.button_signature = None
+        self._rendered_layout = None
         self.file_cells = []
         self.active_cards = {}
         self.scope = self.remote = None
@@ -80,12 +100,17 @@ class NativeTransferFallback(toga.Box):
         return label
 
     def button(self, title, action, enabled=True, **args):
-        # Keep the revision shown by this particular native control. Replacing
-        # a renderer never turns an old confirmation into fresh authorization.
+        # Full approval remains bound to the displayed comparison. An early
+        # start authorizes this review's transfer independently of its rows.
         revision = self.surface.revision
         async def press(widget=None, **kwargs):
             if self.surface is not None:
-                await self.surface.dispatch(action, dict(args, revision=str(revision)))
+                current_revision = revision
+                if action == 'early':
+                    if control.parent is not self.buttons or not control.enabled or not self.surface.visible():
+                        return
+                    current_revision = self.surface.delivered_revision
+                await self.surface.dispatch(action, dict(args, revision=str(current_revision)))
         control = toga.Button(title, enabled=enabled, on_press=press, style=Pack(height=48))
         if self.presentation:
             if action in ('approve', 'resume-download', 'downloads', 'start-review', 'background', 'open-transfer'):
@@ -140,6 +165,14 @@ class NativeTransferFallback(toga.Box):
             fit_text(self.review_page, content_width)
 
     def render(self, model):
+        if self.android:
+            # The scroll content is a separate layout root from its footer.
+            with batch_layout(self, self.body):
+                self._render(model)
+        else:
+            self._render(model)
+
+    def _render(self, model):
         mode = model.get('mode')
         if mode != 'progress':
             self.show_copying_group(False)
@@ -147,8 +180,9 @@ class NativeTransferFallback(toga.Box):
             self.render_overview(model)
             return
         if mode != 'progress':
-            self.title.text = model.get('workspace') or 'Transfers'
-            self.paths.text = 'Source: ' + model.get('source', '—') + '\nDestination: ' + model.get('destination', '—')
+            paths = 'Source: ' + model.get('source', '—') + '\nDestination: ' + model.get('destination', '—')
+            if getattr(self.paths, '_settings_source_text', self.paths.text) != paths:
+                self.paths.text = paths
         buttons = []
         if mode == 'progress':
             phase = model.get('phase', 'idle')
@@ -184,11 +218,14 @@ class NativeTransferFallback(toga.Box):
                 self.render_history(model)
         elif mode == 'review':
             operation = model.get('operation', 'Transfer')
-            self.title.text = f'Review {operation.lower()} changes'
-            self.status.text = review_status(model)
-            self.metrics.text = 'Destination replacements and deletions have no undo.'
+            title = f'Review {operation.lower()} changes'
+            status = review_status(model)
+            metrics = 'Destination replacements and deletions have no undo.'
             if model.get('can_early') and not model.get('complete'):
-                self.metrics.text += ' Skipping the review can replace or delete additional files.'
+                metrics += ' Skipping the review can replace or delete additional files.'
+            for label, value in ((self.title, title), (self.status, status), (self.metrics, metrics)):
+                if getattr(label, '_settings_source_text', label.text) != value:
+                    label.text = value
             if self.fields.parent is None:
                 self.summary.insert(2, self.fields)
             self.render_fields(review_fields(model))
@@ -200,6 +237,7 @@ class NativeTransferFallback(toga.Box):
                 buttons.append(('Skip preview and start', 'early', True, {}))
             buttons.append(('Cancel review', 'background', True, {}))
         else:
+            self.title.text = model.get('workspace') or 'Transfers'
             self.status.text = 'Review additions, replacements and deletions before anything changes.'
             self.metrics.text = 'The current destination is shown above.'
             rows = ()
@@ -229,9 +267,8 @@ class NativeTransferFallback(toga.Box):
             else:
                 self.rows.clear()
                 self.active_cards.clear()
-                for kind, name in rows:
-                    self.rows.add(self.history_card(self.label(name, size=14, bold=True),
-                                                    self.label(kind.capitalize(), size=12, muted=True)))
+                self.rows.add(*(self.history_card(self.label(name, size=14, bold=True),
+                    self.label(kind.capitalize(), size=12, muted=True)) for kind, name in rows))
         if mode == 'progress':
             count = model.get('active', len(rows))
             files = 'file' if count == 1 else 'files'
@@ -248,16 +285,19 @@ class NativeTransferFallback(toga.Box):
                     progress = max(0, min(100, 100 * done / total))
                     if bar.value != progress:
                         bar.value = progress
-        # Progress redraws do not recreate controls. Review approval controls
-        # are bound to the precise newly displayed revision.
-        signature = (buttons, self.surface.revision if mode != 'progress' else None)
+        # Keep controls stable as progress or partial review results arrive.
+        binds_revision = any(action in ('approve', 'start-review') for _, action, _, _ in buttons)
+        signature = (buttons, self.surface.revision if binds_revision else None)
         if signature != self.button_signature:
             self.button_signature = signature
             self.buttons.clear()
             for title, action, enabled, args in buttons:
                 self.buttons.add(self.button(title, action, enabled, **args))
-        if self._fitted_width is not None:
+        layout = (mode, self.row_signature, self.button_signature, self.fact_names,
+                  tuple(self.summary.children), self.history_signature)
+        if self._fitted_width is not None and (not self.android or self._rendered_layout != layout):
             self.reflow(self._fitted_width)
+        self._rendered_layout = layout
 
     def show_copying_group(self, visible):
         if visible == (self.file_heading.parent is self.file_group):
