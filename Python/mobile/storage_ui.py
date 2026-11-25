@@ -15,7 +15,10 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 
-from services.documents.locations import collection_base, selection, switch_location, recover_location, wipe_destination, start_empty_location, describe_location
+from services.documents.locations import (
+    collection_base, describe_location, inspect_storage_usage, recover_location,
+    selection, start_empty_location, switch_location, wipe_destination,
+)
 
 from .local_sources import device_files_label
 
@@ -202,12 +205,67 @@ class StorageUI:
                    for title, action in (('Use files from another location', 'recover'),
                                          ('Start with empty folders', 'empty'),
                                          ('Delete files from an old location', 'wipe'))]
+        options.append(self._storage_button('Check storage usage…', lambda widget: self._show_storage_diagnostics(selected)))
         box.add(self._storage_disclosure('Other storage options', [group_rows(options)]),
                 self._storage_disclosure('What stays on this device?', [self._storage_note(
                     f'Settings, credentials and app-managed documents stay in the app. Only Rclone Copies, LocalCrypt and {device_files} change location.')]),
                 self.collection_storage_status)
         self.collection_target_changed()
         self._show_storage_page(box, 'File storage', 'collection-storage')
+
+    def _show_storage_diagnostics(self, selected):
+        from commonUtils.filesystem.objects import format_size
+        from .settings.forms import OPTION_FONT_SIZE, fit_section
+
+        drives = dict(self.collection_drives)
+        picker = toga.Selection(items=list(drives), value=selected,
+                               style=Pack(height=48, font_size=OPTION_FONT_SIZE, margin_bottom=12))
+        result = self._storage_note('')
+        box = toga.Box(style=Pack(direction=COLUMN, margin=20))
+
+        def report(text):
+            result.text = text
+            fit_section(box, max(280, self.app.adaptive.content_width('settings')))
+
+        async def scan(button, **kwargs):
+            if getattr(self, '_storage_diagnostic_running', False):
+                return
+            volume = drives[picker.value]
+            sdk = android_sdk()
+            if volume is not None and sdk >= 30 and not all_files_allowed():
+                report('Enable All files access for Logistics in Android Settings, then try again.')
+                return
+            self._storage_diagnostic_running = True
+            button.enabled = picker.enabled = False
+            try:
+                report('Scanning accessible files and folders…')
+                usage = await asyncio.to_thread(inspect_storage_usage, volume or self.private_root)
+                difference = usage.reported_used - usage.visible_allocation
+                def size(value):
+                    return ('−' if value < 0 else '') + format_size(abs(value), binary_units=True)
+                lines = [f'Reported used · {size(usage.reported_used)}',
+                         f'Visible allocation · {size(usage.visible_allocation)}',
+                         f'Difference · {size(difference)}',
+                         f'Available · {size(usage.available)}']
+                if volume is None or sdk < 30:
+                    lines.append('This scan covers app folders. The difference includes other data on the volume.')
+                if usage.skipped:
+                    lines.append(f'Entries skipped because they were unreadable · {usage.skipped:,}')
+                if usage.changed:
+                    lines.append('Usage changed during the scan. Check again when the drive is idle.')
+                report('\n'.join(lines))
+            except (OSError, ValueError) as error:
+                report(f'Could not check storage usage. {error}')
+            finally:
+                button.enabled = picker.enabled = True
+                self._storage_diagnostic_running = False
+
+        picker.on_change = lambda widget: report('')
+        box.add(self._storage_heading('Choose a location'), picker, self._storage_note(
+            'Compare the volume’s reported usage with allocated space in accessible files and folders. '
+            'The difference can include filesystem metadata and data hidden by Android.'),
+            self._storage_button('Check usage', scan, primary=True), result)
+        self._show_storage_page(box, 'Storage diagnostics', 'collection-storage-diagnostics')
 
     def _show_storage_target(self, action):
         if getattr(self, '_storage_changing', False):

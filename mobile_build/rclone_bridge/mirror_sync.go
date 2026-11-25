@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -130,6 +131,14 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	config.DryRun = review != nil
 	config.MaxStatsGroups = 8
 	config.Transfers = mirrorTransferConcurrency
+	guardSD := review == nil && !push && androidRemovablePath(runtime.GOOS, localPath)
+	if guardSD {
+		config.Transfers = 1
+		config.MultiThreadStreams = 0
+		config.Inplace = false
+		config.Checkers = min(config.Checkers, 2)
+		ctx = operations.WithEqualFn(ctx, sameRemovablePullFile)
+	}
 	if review != nil {
 		ctx = operations.WithLogger(ctx, review.logger(cipher))
 	}
@@ -142,12 +151,22 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 		return 0, err
 	}
 	localRoot := localPath
+	var localOptions []string
 	if cipher == nil {
-		localRoot = ":local,copy_links=true:" + localPath
+		localOptions = append(localOptions, "copy_links=true")
+	}
+	if guardSD {
+		localOptions = append(localOptions, "no_preallocate=true")
+	}
+	if len(localOptions) != 0 {
+		localRoot = ":local," + strings.Join(localOptions, ",") + ":" + localPath
 	}
 	local, err := fs.NewFs(ctx, localRoot)
 	if err != nil {
 		return 0, err
+	}
+	if guardSD {
+		local = newRemovablePullFS(local)
 	}
 	source, destination := online, local
 	if push {

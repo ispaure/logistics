@@ -30,7 +30,7 @@ func syncWithRetries(ctx context.Context, run string, stats *accounting.StatsInf
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if !stats.Errored() || stats.HadFatalError() || !stats.HadRetryError() || attempt == maximum {
+		if diskFull(err) || !stats.Errored() || stats.HadFatalError() || !stats.HadRetryError() || attempt == maximum {
 			return err
 		}
 		delay := max(time.Duration(0), time.Until(stats.RetryAfter())) + time.Duration(config.RetriesInterval)

@@ -138,6 +138,12 @@ Finish transfers and close provider readers before switching. Reopen Logistics
 after a successful switch. If a selected card is missing, reinsert it or
 restore permission. LocalCrypt still needs its matching credentials.
 
+On Android, open **Other storage options → Check storage usage…** to compare
+the selected volume’s reported usage with allocated space in accessible
+files and folders. Run the scan with transfers idle. Filesystem metadata,
+folders Android hides and app-only storage access can contribute to the
+difference. A growing difference across idle scans can flag a storage issue.
+
 ## Erase all app data
 
 Use **Clear all saved positions…** or **Clear all recent files…** under **Reset**

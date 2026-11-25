@@ -13,14 +13,16 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import errno
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from services.documents.locations import (
     CONFIG, MARKER, CollectionFiles, collection_path, switch_location,
-    recover_location, wipe_destination, start_empty_location, describe_location,
+    recover_location, wipe_destination, start_empty_location, describe_location, inspect_storage_usage,
 )
 from features.rclone.transfers.mobile.jobs import MirrorJobs
 from mobile_build.tests.support.mirror import MirrorClient
@@ -28,6 +30,26 @@ from mobile.folder_hub import hub_entries
 
 
 class CollectionStorageTests(unittest.TestCase):
+    def test_storage_diagnostics_compares_allocated_blocks_and_counts_hard_links_once(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            folder = root / 'folder'
+            folder.mkdir()
+            file = folder / 'comic.cbz'
+            file.write_bytes(b'archive')
+            (root / 'symbolic').symlink_to(folder)
+            os.link(file, root / 'hard')
+            expected = sum(path.lstat().st_blocks * 512 for path in (root, folder, file, root / 'symbolic'))
+            before = SimpleNamespace(total=expected + 4096, used=expected + 512, free=3584)
+            after = SimpleNamespace(total=before.total, used=expected + 1024, free=3072)
+            with patch('services.documents.locations.shutil.disk_usage', side_effect=[before, after]):
+                result = inspect_storage_usage(root)
+        self.assertEqual(result.visible_allocation, expected)
+        self.assertEqual(result.reported_used - result.visible_allocation, 1024)
+        self.assertEqual(result.available, 3072)
+        self.assertEqual(result.skipped, 0)
+        self.assertTrue(result.changed)
+
     def test_android_sd_card_publication_copies_exclusively_when_rename_flags_are_unsupported(self):
         from commonUtils.runtime.platform import OS
         from commonUtils.runtime.resources.mutations import save_resource_bytes

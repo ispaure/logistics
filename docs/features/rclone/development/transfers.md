@@ -9,6 +9,14 @@ Desktop **Workspaces → Cloud → Pull** follows `ui_contributions.py:_get_acti
 3. `execute` consumes approval once, checks the binding and runs mandatory platform preflight. Programmatic `run` also preflights. Retrying an interactive execution requires fresh review.
 4. Keep review validity (mapping/record state) separate from execution access (credential lifetime). Cancellation keeps committed writes.
 
+Android Pulls to a public FAT-family volume use one staged writer with
+preallocation disabled. Before writing, the native destination checks the
+file's reported size against current free space with a 16 MiB reserve.
+Out-of-space errors end the attempt. During execution, rclone's equality
+callback reads same-size, different-date pairs when the backends have no
+compatible checksum. Verified matches can adopt the source timestamp.
+Review stays metadata-only and can list replacements this check skips.
+
 ## Completion notifications
 
 Logistics opts desktop browser copy, move and export, integrated rclone sync,

@@ -186,11 +186,34 @@ class StorageUITests(unittest.TestCase):
         button(page, 'Other storage options +').on_press()
         self.assertIsNotNone(button(page, 'Use files from another location'))
         self.assertIsNotNone(button(page, 'Delete files from an old location'))
+        self.assertIsNotNone(button(page, 'Check storage usage…'))
         button(page, 'Change location').on_press()
         page = self.app.collection_storage_page
         self.assertIn(self.app.collection_drive, list(widgets(page)))
         self.assertEqual(self.app.collection_drive.style.font_size, OPTION_FONT_SIZE)
         self.assertEqual(self.app.collection_target_status.style.font_size, NOTE_FONT_SIZE)
+        self.assertFalse((self.card / 'Logistics').exists())
+
+    def test_diagnostics_scans_the_selected_volume_and_shows_the_difference(self):
+        from services.documents.locations import StorageUsage
+
+        page = self.app.collection_storage_page
+        button(page, 'Other storage options +').on_press()
+        button(page, 'Check storage usage…').on_press()
+        page = self.app.collection_storage_page
+        picker = next(widget for widget in widgets(page) if isinstance(widget, toga.Selection))
+        picker.value = 'SD card'
+        async def check():
+            await button(page, 'Check usage').on_press()
+        with patch('mobile.storage_ui.all_files_allowed', return_value=True), \
+                patch('mobile.storage_ui.inspect_storage_usage',
+                      return_value=StorageUsage(4096, 8192, 3072, 2, True)) as scan:
+            self.app.loop.run_until_complete(check())
+        scan.assert_called_once_with(self.card)
+        text = ' '.join(' '.join(str(getattr(widget, 'text', '')).split()) for widget in widgets(page))
+        self.assertIn('Difference · 1.0 KiB', text)
+        self.assertIn('Entries skipped because they were unreadable · 2', text)
+        self.assertIn('Usage changed', text)
         self.assertFalse((self.card / 'Logistics').exists())
 
     def test_delete_location_uses_red_bottom_button_and_never_continue(self):

@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"syscall"
 	"testing"
 	"time"
 
@@ -56,6 +58,7 @@ func TestSyncRetriesStopForFatalNonRetryAndExhaustion(t *testing.T) {
 	}{
 		{"fatal", fserrors.FatalError(errors.New("invalid configuration")), 1},
 		{"non-retry", fserrors.NoRetryError(errors.New("permission denied")), 1},
+		{"full disk", fmt.Errorf("writing temporary file: %w", syscall.ENOSPC), 1},
 		{"exhausted", errors.New("network failure"), 3},
 	} {
 		t.Run(test.name, func(t *testing.T) {

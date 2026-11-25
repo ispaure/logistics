@@ -89,6 +89,59 @@ def collection_base(private_root):
     return base
 
 
+@dataclass(frozen=True)
+class StorageUsage:
+    reported_used: int
+    available: int
+    visible_allocation: int
+    skipped: int
+    changed: bool
+
+
+def inspect_storage_usage(path):
+    """Compare volume accounting with the allocation of accessible entries."""
+    from commonUtils.filesystem.index.allocation import allocated_size
+    root = _unlinked(path)
+    root_info = root.stat()
+    if not stat.S_ISDIR(root_info.st_mode):
+        raise ValueError('Choose a storage folder.')
+    before = shutil.disk_usage(root)
+    root_size = allocated_size(root, root_info)
+    allocated = max(0, root_size)
+    skipped = int(root_size < 0)
+    linked_files = set()
+    pending = [root]
+    while pending:
+        folder = pending.pop()
+        try:
+            with os.scandir(folder) as entries:
+                for entry in entries:
+                    try:
+                        info = entry.stat(follow_symlinks=False)
+                    except OSError:
+                        skipped += 1
+                        continue
+                    if info.st_dev != root_info.st_dev:
+                        continue
+                    if stat.S_ISDIR(info.st_mode):
+                        pending.append(entry.path)
+                    elif info.st_nlink > 1:
+                        if info.st_ino in linked_files:
+                            continue
+                        linked_files.add(info.st_ino)
+                    size = allocated_size(entry.path, info)
+                    if size < 0:
+                        skipped += 1
+                    else:
+                        allocated += size
+        except OSError:
+            skipped += 1
+    after = shutil.disk_usage(root)
+    if not os.path.samestat(root_info, root.stat()) or before.total != after.total:
+        raise OSError('The storage location changed during the scan.')
+    return StorageUsage(after.used, after.free, allocated, skipped, before != after)
+
+
 def collection_path(private_root, crypt=False):
     from .mobile_locations import COPIES, ENCRYPTED_COPIES, enabled
     from .migrations.mobile_layout import ensure_android_layout
