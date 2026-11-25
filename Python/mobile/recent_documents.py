@@ -10,7 +10,7 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from time import time_ns
 from commonUtils.persistence import atomic_write_json
 from .workspace import Session, uuid, KINDS, PROVIDERS
@@ -180,7 +180,6 @@ class RecentDocuments:
                 or any(not isinstance(value, str) or not value or len(value) > 4096 for value in source.values())
                 or item['resource'] != RecentDocuments.reference_id(source, item['kind'])):
             raise ValueError('Invalid recent file source.')
-        from pathlib import Path
         if source['type'] == 'local':
             from services.documents.mobile_locations import split_alias
             if not Path(source['path']).is_absolute() and split_alias(source['path']) is None:
@@ -192,7 +191,6 @@ class RecentDocuments:
 
         opener = item.get('opener')
         if opener is not None:
-            from pathlib import Path, PurePosixPath
             if (not isinstance(opener, dict) or set(opener) != {'kind', 'root'}
                     or opener['kind'] != 'notes' or not isinstance(opener['root'], str)
                     or len(opener['root']) > 4096 or '\0' in opener['root']

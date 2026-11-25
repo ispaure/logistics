@@ -43,13 +43,12 @@ class NotebookTemplateChoices(toga.Box):
         self.template = toga.Selection(items=list(CATALOG.values()), style=Pack(height=48))
         self.template_rows = {}
         rows = toga.Box(style=Pack(direction=COLUMN, gap=4))
-        from mobile.appearance import list_button
-        from mobile.browser_ui import wrapped_filename
+        from services.documents.mobile_notebooks import style_notebook_template_row
         for key, label in CATALOG.items():
             def select(widget, label=label, **kwargs):
                 self.template.value = label
-            row = list_button(toga.Button(label, on_press=select, style=Pack(height=48)))
-            wrapped_filename(row)
+            row = toga.Button(label, on_press=select, style=Pack(height=48))
+            style_notebook_template_row(row)
             self.template_rows[key] = row
             rows.add(row)
         self.template_list = toga.ScrollContainer(content=rows, horizontal=False, style=Pack(height=260))
@@ -92,14 +91,11 @@ class NotebookTemplateChoices(toga.Box):
             return
         self.description.text = description(template)
         if template != self._highlighted:
-            from mobile.appearance import accessible_name, surface
+            from services.documents.mobile_notebooks import style_notebook_template_row
             for key in (self._highlighted, template):
                 if key is not None:
                     row = self.template_rows[key]
-                    selected = key == template
-                    surface(row, background='hover' if selected else 'surface', foreground='text',
-                            outlined=selected, eink_outlined=selected, eink_selected=selected)
-                    accessible_name(row, row.text + (', selected' if selected else ''))
+                    style_notebook_template_row(row, selected=key == template)
             self._highlighted = template
         self.changed(template, paper_format)
         self.update_preview(template, paper_format)

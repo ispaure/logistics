@@ -470,7 +470,6 @@ class DocumentsHub:
 
     def publish_document_search(self, hits, failures, *, finished=True, checked_localcrypt_cache=False):
         from .browser_ui import entry_icon, sync_browser_population, wrapped_filename
-        from .control_icons import icon_button
         from .file_items import native_menu, reference_actions
         from .hub_controls import bind_document_card
         from .search_panels import SearchThumbnails, visit_document_folder

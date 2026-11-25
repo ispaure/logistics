@@ -177,9 +177,8 @@ class MobileVideo:
         if routes is not None:
             routes.sync_back()
         if self.app.active_host:
-            from mobile.document_completion import refresh_browsers, refresh_cards
-            refresh_browsers(self.app)
-            refresh_cards(self.app, 'video')
+            from services.documents.mobile_storage import refresh_video_completion
+            refresh_video_completion(self.app)
 
     @property
     def restricted(self):

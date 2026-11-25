@@ -76,6 +76,12 @@ def remember_video(app, content):
         manager.queue_views()
 
 
+def refresh_video_completion(app):
+    from mobile.document_completion import refresh_browsers, refresh_cards
+    refresh_browsers(app)
+    refresh_cards(app, 'video')
+
+
 class TextDocumentCopies(ProviderDocuments):
     """Compatibility name for storage-neutral provider document sessions."""
 

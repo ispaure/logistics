@@ -338,6 +338,12 @@
   },
   "document_storage_exceptions": [
     {
+      "module": "features.notebooks.assets",
+      "scope": "asset_bytes",
+      "operation": "raw-method:read_bytes",
+      "reason": "Reads a named, packaged notebook asset from the feature's assets directory."
+    },
+    {
       "module": "features.books.library.index",
       "scope": "CollectionIndex.__init__",
       "operation": "raw-method:unlink",

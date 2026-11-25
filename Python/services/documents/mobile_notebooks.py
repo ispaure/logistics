@@ -25,6 +25,22 @@ def panels(app):
     return app.__dict__.setdefault('_notebook_views', {})
 
 
+def refresh_notebook_previews(app):
+    from mobile.browser_preview import refresh_notebook_thumbnails
+    refresh_notebook_thumbnails(app)
+
+
+def style_notebook_template_row(row, *, selected=None):
+    from mobile.appearance import accessible_name, list_button, surface
+    from mobile.browser_ui import wrapped_filename
+    if selected is None:
+        wrapped_filename(list_button(row))
+        return
+    surface(row, background='hover' if selected else 'surface', foreground='text',
+            outlined=selected, eink_outlined=selected, eink_selected=selected)
+    accessible_name(row, row.text + (', selected' if selected else ''))
+
+
 def _read_large_local_notebook(resource, cache):
     from features.notebooks.notebook import Notebook
     from features.notebooks.storage import NotebookDocument

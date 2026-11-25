@@ -754,8 +754,8 @@ class NotebookPanel:
                 command.error = str(failure)
             appearance = self.paper_appearance
             if appearance != previous:
-                from mobile.browser_preview import refresh_notebook_thumbnails
-                refresh_notebook_thumbnails(self.app)
+                from services.documents.mobile_notebooks import refresh_notebook_previews
+                refresh_notebook_previews(self.app)
             await command.respond('window.notebookPaperAppearanceUpdate(' + json.dumps(appearance) + ', '
                                   + json.dumps(command.error) + ')', acknowledges=True)
             self._paper_appearance_sent = appearance
