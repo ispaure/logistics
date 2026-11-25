@@ -70,10 +70,9 @@ class ApplePDF:
                          page.selectionFromPoint(point(start), toPoint=point(end)))
             if selection is None or selection.string is None:
                 return '', []
-            lines = selection.selectionsByLine()
             rectangles = []
-            for i in range(int(lines.count)):
-                rect = lines.objectAtIndex(i).boundsForPage(page)
+            for line in selection.selectionsByLine():
+                rect = line.boundsForPage(page)
                 x, y = rect.origin.x, rect.origin.y
                 a, b = display(x, y), display(x + rect.size.width, y + rect.size.height)
                 rectangles.append((min(a[0], b[0]), min(a[1], b[1]), abs(b[0] - a[0]), abs(b[1] - a[1])))
