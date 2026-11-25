@@ -109,6 +109,21 @@ function checkTouchNavigation(sources) {
   check(!snapped(),'cancelled touch clears fit feedback');
   reset();dispatch(event('pointerdown'));dispatch(event('pointercancel'));dispatch(event('pointerup',100));check(!commands.length,'cancelled swipe cannot navigate');
   reset();dispatch(event('pointerdown'));run("notePenHover('native',true);notePenHover('native',false)");now+=2000;dispatch(event('pointerup',100));check(!commands.length,'pen proximity cancels candidate beyond grace');
+  reset();context.state.pressure_stylus_only=true;
+  run("notePenHover('native',true);notePenHover('browser',true);notePenContact(true);notePenContact(false)");
+  context.busy=true;context.queue=[{op:'stroke'}];swipe(-100);
+  check(commands[0]?.op==='page'&&context.queue.map(action=>action.op).join(',')==='stroke,page',
+    'Boox hover or pending ink discarded a page swipe');
+  reset();context.state.pressure_stylus_only=true;
+  pair();run("notePenHover('native',true);notePenHover('browser',true)");
+  finger('pointermove',2,250);endPair();
+  check(width>2000&&!commands.length,'Boox hover interrupted a pinch');
+  reset();context.state.pressure_stylus_only=true;$('finger').checked=true;
+  run("notePenHover('native',true)");swipe(-100);
+  check(!commands.length,'Boox hover allowed an unintended finger stroke');
+  reset();context.state.pressure_stylus_only=true;
+  run('notePenContact(true)');swipe(-100);
+  check(!commands.length,'Boox pen contact allowed a page swipe');
   reset();dispatch(event('pointerdown'));now+=1000;dispatch(event('pointerup',100));check(!commands.length,'long drag cannot page');
   reset();dispatch(event('pointerdown'));context.state.index=1;dispatch(event('pointerup',100));check(!commands.length,'stale page gesture rejected');
   reset();$('finger').checked=true;swipe(-100);check(commands[0]?.op==='stroke','explicit finger drawing retained');

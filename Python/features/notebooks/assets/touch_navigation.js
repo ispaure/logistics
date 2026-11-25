@@ -45,7 +45,9 @@ swipeAddPage.onclick = () => {
 };
 function finishPageSwipe(gesture, event) {
   const dx = event.clientX-gesture.x, dy = event.clientY-gesture.y;
-  if (busy || gesture.index !== state.index || gesture.vertical || performance.now()-gesture.time >= 900 ||
+  // Keep this page change behind a stroke that is already being saved.
+  const savingInk = state.pressure_stylus_only && queue.length && queue.every(action => action.op === 'stroke');
+  if ((busy && !savingInk) || gesture.index !== state.index || gesture.vertical || performance.now()-gesture.time >= 900 ||
       Math.abs(dx) < 48 || Math.abs(dx) <= Math.abs(dy)*1.5) return false;
   const index = state.index+(dx < 0 ? 1 : -1);
   if (index >= 0 && index < state.count) {

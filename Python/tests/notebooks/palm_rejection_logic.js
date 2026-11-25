@@ -10,6 +10,7 @@ function checkPalmRejection(source) {
   const canvas = target('canvas'), viewport = target('viewport');
   let now = 1000, cancelledTouches = 0, cancelledPens = 0;
   const context = {Set, innerWidth: 400, innerHeight: 700, active: null, pan: null,
+    state: {}, mode: 'ink',
     performance: {now: () => now}, canvas, $: () => viewport,
     window: target('window'), document: {...target('document'), hidden: false,
       elementFromPoint: (x, y) => x > 0 && x < 400 && y > 0 && y < 700 ? canvas : null},

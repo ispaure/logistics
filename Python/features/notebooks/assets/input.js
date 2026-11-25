@@ -9,7 +9,7 @@ function stylusUsesPressure(event) {
   return event.pointerType === 'pen' && Number.isFinite(event.pressure) && !state.iphone_duo
     && (state.pressure_stylus_only || !constantPenPressure);
 }
-let firstFallbackMove = false;
+let firstAndroidMove = false;
 // Bounded content-free input diagnostics: no coordinates, labels or stroke data.
 const inputTraceCounts = Object.create(null), inputTraceRing = [];
 const inputTraceViewId = (()=>{
@@ -174,7 +174,7 @@ canvas.onpointerdown = e => {
   if (!e.nativePen) canvas.setPointerCapture(active);
   inkSettings = chosenInk();
   liveGraphitePressure = continuousInk && !!brushFor(inkSettings.tool).texture && stylusUsesPressure(e);
-  firstFallbackMove = e.androidPen && ['pencil', 'mechanical', 'shader'].includes(brushFor(inkSettings.tool).family);
+  firstAndroidMove = !!e.androidPen;
   start = last = coord(e);
   points = [start];
   previewCount = 0;
@@ -213,11 +213,11 @@ canvas.onpointermove = e => {
   const previousEraseHits = wholeErasePreview.size;
   for (let event of events) sample(event, bounds);
   sample(e, bounds);
-  // Android has already frame-batched these samples. Paint the first
-  // graphite/shader packet on arrival; coalesce later packets as before.
+  // Paint the first native movement on arrival. Subsequent packets
+  // share one preview update per frame.
   if (mode === 'ink') {
-    if (e.androidPen && firstFallbackMove && points.length > previewCount) {
-      firstFallbackMove = false;
+    if (firstAndroidMove && points.length > previewCount) {
+      firstAndroidMove = false;
       flushPreview()
     } else if (frameBatchedInk) schedulePreview();
     else flushPreview()

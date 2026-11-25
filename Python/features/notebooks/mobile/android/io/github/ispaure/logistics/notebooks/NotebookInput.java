@@ -16,6 +16,7 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
     private final StringBuilder pendingMoves = new StringBuilder();
     private final Runnable deliverMoves = this::flushMoves;
     private int pointer = -1;
+    private boolean firstMove;
     private float x, y;
     private boolean closed;
     private final BooxInk ink;
@@ -118,6 +119,7 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
             if (tool != MotionEvent.TOOL_TYPE_STYLUS && tool != MotionEvent.TOOL_TYPE_ERASER) return;
             cancel();
             pointer = event.getPointerId(index);
+            firstMove = true;
             view.requestUnbufferedDispatch(event);
             deliver("down", event, index);
         } else if (pointer >= 0) {
@@ -160,7 +162,10 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
         y = event.getY(index);
         point(data, x, y, event.getPressure(index), event.getAxisValue(MotionEvent.AXIS_TILT, index));
         if (moving) {
-            if (data.length() >= 32_768) flushMoves();
+            if (firstMove && data.length() > 0) {
+                firstMove = false;
+                flushMoves();
+            } else if (data.length() >= 32_768) flushMoves();
             else if (schedule && data.length() > 0) view.postOnAnimation(deliverMoves);
         } else {
             String samples = data.toString();

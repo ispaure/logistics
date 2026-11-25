@@ -6,8 +6,14 @@
 const penReleaseGrace = 250;
 const penHoverSources = new Set();
 let penContactActive = false, penBlockedUntil = 0;
+function penHoverBlocksTouch() {
+  // On Boox, the operating system also filters palms. Allow navigation
+  // while the pen is hovering, but keep hover protection for finger edits.
+  return !state.pressure_stylus_only || $('finger').checked || mode === 'select' || mode === 'capture';
+}
 function penTouchBlocked() {
-  return penContactActive || penHoverSources.size > 0 || performance.now() < penBlockedUntil
+  return penContactActive ||
+    (penHoverBlocksTouch() && (penHoverSources.size > 0 || performance.now() < penBlockedUntil))
 }
 function rejectPendingTouch() {
   // Cancel an unfinished finger stroke/pan/pinch, never the pen's own stroke.
@@ -22,7 +28,7 @@ function notePenContact(down) {
 function notePenHover(source, nearby) {
   if (nearby) {
     penHoverSources.add(source);
-    rejectPendingTouch()
+    if (penHoverBlocksTouch()) rejectPendingTouch()
   } else if (penHoverSources.delete(source)) {
     penBlockedUntil = performance.now() + penReleaseGrace
   }

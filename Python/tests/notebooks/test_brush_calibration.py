@@ -40,17 +40,19 @@ class BrushCalibrationTests(unittest.TestCase):
             self.assertEqual([p[3] for p in stroke_points(samples, 23, width)], [low, high, high, high])
 
     def test_pencil_tilt_widens_ink_and_survives_save(self):
-        samples = [[20, 30, 1], [60, 30, 1, .5], [100, 30, 1, .8]]
+        samples = [[20, 30, 1], [40, 30, 1, .25], [60, 30, 1, .5],
+                   [80, 30, 1, 2 / 3], [100, 30, 1, .9]]
+        expected = [5.25, 5.25, 7.5, 12, 22]
         page = InkPage.blank()
         stroke = page.add(samples, tool=14, width=2)
-        self.assertEqual([p[3] for p in stroke.points], [5.25, 20, 31.25])
+        self.assertEqual([p[3] for p in stroke.points], expected)
         self.assertEqual([p[3] for p in InkPage.read(page.to_bytes()).strokes[0].points],
-                         [5.25, 20, 31.25])
+                         expected)
         for sample in ([20, 30, .5, -1], [20, 30, .5, 2], [20, 30, .5, float('nan')]):
             with self.assertRaises(ValueError):
                 page.add([sample], tool=14)
         with self.assertRaises(ValueError):
-            page.add([samples[1]], tool=13)
+            page.add([samples[2]], tool=13)
         with self.assertRaises(ValueError):
             page.add([samples[1]], tool=23, color=1)
 

@@ -57,9 +57,11 @@ def profile(widths, pressure=0, exponent=1, *, colors=PEN_COLORS, **style):
 BRUSHES = {
     17: profile((2, 3.5, 5.25), family='fineliner'),
     15: profile((2.5, 3.75, 5.75), .34, 3.875, family='ballpoint', display_width=.9, default_intensity=50),
+    # Start broadening beyond 25° from upright. Reach the shading width
+    # at 80°, when the pencil is nearly flat.
     14: profile((2.75, 5.25, 8), .34, family='pencil', texture=True, default_intensity=80,
-                tilt_widths=(15.75, 31.25, 47), tilt_full=2 / 3),
-    13: profile((3.5, 5.25, 7.75), family='mechanical', texture=True, default_intensity=95),
+                tilt_widths=(11, 22, 33), tilt_start=25 / 90, tilt_full=80 / 90, display_width=.95),
+    13: profile((3.5, 5.25, 7.75), family='mechanical', texture=True, default_intensity=95, display_width=.92),
     16: profile((5.5, 6.25, 9), .25, family='marker', default_intensity=50),
     12: profile((4.5, 8.5, 12.75), family='paintbrush', default_intensity=50,
                 pressure_widths=((.25, (2, 3.5, 5.25)), (.75, (2, 3.5, 5.25)),
@@ -136,7 +138,8 @@ def stroke_points(points, tool, width, *, expanded=False):
         x, y, pressure = point[0], point[1], point[2]
         value = pressure_width(brush, width, pressure)
         if tilt_widths and len(point) == 4:
-            tilt = min(1, point[3] / brush['tilt_full'])
+            start = brush['tilt_start']
+            tilt = max(0, min(1, (point[3] - start) / (brush['tilt_full'] - start)))
             value += (tilt_widths[width - 1] - value) * tilt * tilt
         if brush.get('directional'):
             before = points[index - 1] if index else points[min(1, len(points) - 1)]

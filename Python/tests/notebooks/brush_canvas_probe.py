@@ -111,8 +111,8 @@ line({tool,...nativeColor(tool,color),points:strokePoints(signatureSamples,tool,
 signatures.push(surface.toDataURL());
 }
 check(new Set(signatures).size===9,'Brush renderings must be distinct');
-const tiltSamples=[[30,60,1],[85,60,1,.5],[140,60,1,.8]];
-check(strokePoints(tiltSamples,14,2).map(point=>point[3]).join(',')==='5.25,20,31.25','Pencil tilt width differs from the saved model');
+const tiltSamples=[[30,60,1],[55,60,1,.25],[85,60,1,.5],[110,60,1,2/3],[140,60,1,.9]];
+check(strokePoints(tiltSamples,14,2).map(point=>point[3]).join(',')==='5.25,5.25,7.5,12,22','Pencil tilt width differs from the saved model');
 check(strokePoints(tiltSamples,23,2).every(point=>point[3]===19.5),'Tilt must not change Shader width');
 const previousInk=inkSettings;inkSettings={tool:14};
 const pen=event(100,100);
@@ -165,8 +165,13 @@ const pw=Math.ceil(280*canvas.width/state.width),ph=Math.ceil(150*canvas.height/
 let previewErrors=[],previewWork=[],committedBrushes=[];
 for(let tool of Object.values(state.tools)){
 let color=tool===18?13:tool===23?1:0;
+liveGraphitePressure=!!brushFor(tool).texture;
+cancelPreview();
 inkSettings={tool,color,width:3,layer:state.layers[0][0]};points=[];clearDraft();ctx.clearRect(0,0,state.width,state.height);
-for(let sample of samples){let before=points.at(-1);points.push(sample);preview(before?[before,sample]:[sample])}
+for(let sample of samples){
+  points.push(sample);
+  if(liveGraphitePressure)flushPreview();else preview(points.slice(-2));
+}
 let composed=document.createElement('canvas');composed.width=pw;composed.height=ph;let actual=composed.getContext('2d',{willReadFrequently:true});actual.drawImage(canvas,0,0);actual.globalCompositeOperation=draft.style.mixBlendMode||'source-over';actual.drawImage(draft,0,0);actual.globalCompositeOperation='destination-over';actual.fillStyle='white';actual.fillRect(0,0,pw,ph);
 let expectedCanvas=document.createElement('canvas');expectedCanvas.width=pw;expectedCanvas.height=ph;let final=expectedCanvas.getContext('2d',{willReadFrequently:true});final.fillStyle='white';final.fillRect(0,0,pw,ph);final.setTransform(canvas.width/state.width,0,0,canvas.height/state.height,0,0);line({tool,...nativeColor(tool,color),points:strokePoints(samples,tool,3)},final);
 let a=actual.getImageData(0,0,pw,ph).data,b=final.getImageData(0,0,pw,ph).data,inkPixels=0,badPixels=0,totalError=0,totalInk=0;
@@ -190,11 +195,18 @@ check(draftCount===0&&draftBounds===null,'Pen-up retained draft geometry '+tool)
 }
 // Instrument geometry work after 2,000 samples. A move must touch only the
 // trailing segment, not replay the entire active stroke or saved scene.
-points=Array.from({length:2000},(_,i)=>[30+i/20,60+Math.sin(i/20)*10,.6]);clearDraft();preview(points);
-let original=geometry,touched=0;geometry=(target,p,family)=>{touched+=p.length;original(target,p,family)};
-try{let previous=points.at(-1);points.push([131,65,.6]);preview([previous,points.at(-1)])}finally{geometry=original}
-check(touched<=2,'Preview work grows with stroke length '+tool);previewWork.push({tool,touched});
+points=Array.from({length:2000},(_,i)=>[30+i/20,60+Math.sin(i/20)*10,.6]);clearDraft();cancelPreview();
+if(liveGraphitePressure)flushPreview();else preview(points);
+let original=geometry,originalTrail=graphiteTrail,touched=0;
+geometry=(target,p,...rest)=>{touched+=p.length;original(target,p,...rest)};
+graphiteTrail=(target,p,...rest)=>{touched+=p.length;originalTrail(target,p,...rest)};
+try{
+  points.push([131,65,.6]);
+  if(liveGraphitePressure)flushPreview();else preview(points.slice(-2));
+}finally{geometry=original;graphiteTrail=originalTrail}
+check(touched<=(liveGraphitePressure?3:2),'Preview work grows with stroke length '+tool);previewWork.push({tool,touched});
 }
+liveGraphitePressure=false;
 // A burst keeps every pressure sample but paints once, including a forced
 // final flush when pen-up precedes the scheduled animation frame.
 points=[];inkSettings={tool:17,color:0,width:2,layer:state.layers[0][0]};cancelPreview();

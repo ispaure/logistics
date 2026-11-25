@@ -102,7 +102,7 @@ function strokePoint(samples, i, tool, width) {
     [x, y, p, tilt = 0] = samples[i];
   let w = pressureWidth(brush, width, p);
   if (brush.tilt_widths) {
-    const side = Math.min(1, tilt / brush.tilt_full);
+    const side = Math.max(0, Math.min(1, (tilt - brush.tilt_start) / (brush.tilt_full - brush.tilt_start)));
     w += (brush.tilt_widths[width - 1] - w) * side * side
   }
   if (brush.directional) {
@@ -177,21 +177,23 @@ function paperRelief(cells, seed) {
 
 function graphiteRelief(mechanical) {
   if (graphiteTooth.has(mechanical)) return graphiteTooth.get(mechanical);
-  // A coarse paper field groups the deposits. Two finer scales leave irregular
-  // bare pores even where the lead is dark. Mechanical lead uses smaller teeth.
+  // Fine paper tooth keeps broad pencil shading even while preserving small
+  // bare pores at firm pressure.
   const side = graphiteTileSize, heights = new Uint8ClampedArray(side * side);
   const fine = new Uint8ClampedArray(side * side);
   const coarse = paperRelief(8, 827);
-  const clumps = paperRelief(mechanical ? 32 : 16, mechanical ? 173 : 419);
+  const clumps = paperRelief(32, mechanical ? 173 : 419);
   const pores = paperRelief(64, mechanical ? 641 : 263);
   for (let y = 0; y < side; y++) {
     for (let x = 0; x < side; x++) {
       const grit = graphiteNoise(x, y, mechanical ? 3407 : 1009);
+      const pore = pores(x, y);
       const relief = mechanical
-        ? .08 * coarse(x, y) + .34 * clumps(x, y) + .36 * pores(x, y) + .22 * grit
-        : .14 * coarse(x, y) + .39 * clumps(x, y) + .29 * pores(x, y) + .18 * grit;
+        ? .08 * coarse(x, y) + .34 * clumps(x, y) + .36 * pore + .22 * grit
+        : .04 * coarse(x, y) + .21 * clumps(x, y) + .43 * pore + .32 * grit;
       // Deep, small pores remain visible inside a firmly drawn stroke.
-      const pit = Math.max(0, .14 - grit) * (mechanical ? 1.25 : 1.9);
+      const pit = mechanical ? Math.max(0, .14 - grit) * 1.25
+        : Math.max(0, .32 - (.55 * grit + .45 * pore)) * 3.1;
       const index = y * side + x;
       heights[index] = (relief - pit) * 255;
       fine[index] = .75 * 255 * graphiteNoise(x, y, mechanical ? 1937 : 2503) + .25 * heights[index];
@@ -208,9 +210,9 @@ function graphiteLevel(pressure) {
   return Math.round(Math.round(pressure * 255) * 32 / 255);
 }
 
-function grain(target, rgb, mechanical, pressure = .5) {
+function grain(target, rgb, mechanical, pressure = .5, edge = false) {
   const level = graphiteLevel(pressure);
-  const key = rgb.join(',') + ':' + Number(mechanical) + ':' + level;
+  const key = rgb.join(',') + ':' + Number(mechanical) + ':' + level + ':' + Number(edge);
   if (grainCache.has(key)) {
     const pattern = grainCache.get(key);
     grainCache.delete(key);
@@ -227,7 +229,8 @@ function grain(target, rgb, mechanical, pressure = .5) {
   // Mid-pressure strokes fill more of the paper tooth. Keep isolated
   // flecks at light pressure and leave firm deposits at full density.
   const midContact = Math.max(0, Math.min((strength - .57) / .23, (.9375 - strength) / .1375));
-  const engagement = strength + (mechanical ? .12 : .085) * midContact;
+  const pencilContact = Math.max(0, Math.min((strength - .5) / .07, (.77 - strength) / .20));
+  const engagement = strength + (mechanical ? .12 * midContact : .085 * midContact + .13 * pencilContact);
   const threshold = mechanical
     ? .91 - .69 * engagement ** 1.65 - .045 * lightContact
     : .85 - .64 * engagement ** 1.55 - .065 * lightContact;
@@ -249,22 +252,46 @@ function grain(target, rgb, mechanical, pressure = .5) {
     image.data[index] = rgb[0];
     image.data[index + 1] = rgb[1];
     image.data[index + 2] = rgb[2];
+    // Leave disconnected flecks along the rim instead of a translucent outline.
+    if (edge) opacity *= Math.max(0, Math.min(1, (fine[i] / 255 - .45) / .35));
     image.data[index + 3] = 255 * opacity;
   }
   g.putImageData(image, 0, 0);
   const pattern = target.createPattern(tile, 'repeat');
-  // Keep tooth fixed to the paper through zoom and between draft and redraw.
-  pattern.setTransform(new DOMMatrix().scale(.75 - .24 * midContact));
+  // Pencil pressure changes which grains fill, at a fixed location and scale.
+  // This keeps the grain continuous along a wide stroke with changing force.
+  pattern.setTransform(new DOMMatrix().scale(mechanical ? .75 - .24 * midContact : .75));
   grainCache.set(key, pattern);
   if (grainCache.size > grainCacheLimit) grainCache.delete(grainCache.keys().next().value);
   return pattern
 }
 
-function graphitePaint(target, rgb, mechanical, pressure) {
-  // Keep isolated flecks sharp at writing size. At thumbnail scale, filtering
+function graphitePaint(target, rgb, mechanical, pressure, edge = false) {
+  // Keep individual grains sharp at writing size. At thumbnail scale, filtering
   // distributes subpixel flecks across the pixels they cover.
-  if (graphiteLevel(pressure) <= 10 && target.getTransform().a >= .5) target.imageSmoothingEnabled = false;
-  return grain(target, rgb, mechanical, pressure);
+  const scale = target.getTransform().a;
+  if ((!mechanical && scale >= .8) || (graphiteLevel(pressure) <= 10 && scale >= .5))
+    target.imageSmoothingEnabled = false;
+  return grain(target, rgb, mechanical, pressure, edge);
+}
+
+function graphiteEnvelope(target, brush, pressure, paint, textured = false) {
+  const {family, display_width: baseWidth = 1} = brush;
+  const strength = Math.max(0, Math.min(1, (pressure - .5) / (family === 'mechanical' ? .25 : .16)));
+  if (!strength) {
+    paint(baseWidth, false);
+    return;
+  }
+  // The core carries most of the graphite. Individual flecks still extend
+  // into the shoulder, where a firm stroke would otherwise have a hard edge.
+  const alpha = target.globalAlpha;
+  const shoulder = family === 'mechanical' ? .30 : .20;
+  const width = family === 'mechanical' ? baseWidth : baseWidth * (1 - .035 * strength);
+  target.globalAlpha = alpha * (1 - (textured ? .50 : .72) * strength);
+  paint(width, textured);
+  target.globalAlpha = alpha * (1 - .08 * strength);
+  paint(width * (1 - shoulder * strength), false);
+  target.globalAlpha = alpha;
 }
 
 function warmSelectedGraphite() {
@@ -286,9 +313,10 @@ document.addEventListener('change', warmSelectedGraphite);
 // each eraser acknowledgement, scroll/layout redraw or selection update.
 const ribbonCache = new WeakMap();
 function ribbon(target, p, widthScale) {
-  const cached = ribbonCache.get(p);
-  if (cached && cached.widthScale === widthScale) {
-    target.fill(cached.path);
+  let widths = ribbonCache.get(p);
+  const cached = widths?.get(widthScale);
+  if (cached) {
+    target.fill(cached);
     return
   }
   const path = new Path2D();
@@ -313,11 +341,16 @@ function ribbon(target, p, widthScale) {
     path.lineTo(b[0] + nx * r, b[1] + ny * r);
     path.closePath();
   }
-  ribbonCache.set(p, {path, widthScale});
+  if (!widths) {
+    widths = new Map();
+    ribbonCache.set(p, widths);
+  }
+  if (widths.size === 2) widths.delete(widths.keys().next().value);
+  widths.set(widthScale, path);
   target.fill(path);
 }
 
-function geometry(target, p, family, beforePoint = null) {
+function geometry(target, p, family, beforePoint = null, widthScale = 1) {
   if (family === 'calligraphy') {
     // A fixed broad nib. Recover its span from each stored perpendicular width;
     // imported pressure/width is never applied a second time.
@@ -352,23 +385,28 @@ function geometry(target, p, family, beforePoint = null) {
     }
     target.fill()
   } else if (['fineliner', 'mechanical', 'highlighter'].includes(family) && p.length > 1 && p[0][3] > 0 && p.every(v => v[3] === p[0][3])) {
-    target.lineWidth = p[0][3];
+    target.lineWidth = p[0][3] * widthScale;
     target.beginPath();
     target.moveTo(p[0][0], p[0][1]);
     for (let i = 1; i < p.length; i++) target.lineTo(p[i][0], p[i][1]);
     target.stroke();
-  } else ribbon(target, p, family === 'ballpoint' ? (brushFor(15).display_width ?? 1) : 1);
+  } else ribbon(target, p, widthScale);
 }
 
-function graphiteTrail(target, points, rgb, family, start = 0, contact = true) {
+function graphiteTrail(target, points, rgb, brush, start = 0, contact = true) {
+  const {family} = brush;
   const mechanical = family === 'mechanical', smoothing = target.imageSmoothingEnabled;
-  const usePressure = pressure => {
+  const usePressure = (pressure, edge) => {
     target.imageSmoothingEnabled = smoothing;
-    target.fillStyle = graphitePaint(target, rgb, mechanical, pressure);
+    target.fillStyle = graphitePaint(target, rgb, mechanical, pressure, edge);
   };
   if (contact) {
-    usePressure(points[0][2]);
-    geometry(target, [points[0]], family);
+    const pressure = graphiteLevel(points[0][2]) / 32;
+    const point = [points[0]];
+    graphiteEnvelope(target, brush, pressure, (width, edge) => {
+      usePressure(pressure, edge);
+      geometry(target, point, family, null, width);
+    }, true);
   }
   let normal = null;
   // Carry the previous edge across frame boundaries. Adjacent segments
@@ -387,15 +425,18 @@ function graphiteTrail(target, points, rgb, family, start = 0, contact = true) {
     if (!length) continue;
     const next = [-dy / length, dx / length];
     const [nx, ny] = normal || next;
-    const ar = a[3] / 2, br = b[3] / 2;
-    usePressure((Math.round(a[2] * 255) + Math.round(b[2] * 255)) / 510);
-    target.beginPath();
-    target.moveTo(a[0] + nx * ar, a[1] + ny * ar);
-    target.lineTo(a[0] - nx * ar, a[1] - ny * ar);
-    target.lineTo(b[0] - next[0] * br, b[1] - next[1] * br);
-    target.lineTo(b[0] + next[0] * br, b[1] + next[1] * br);
-    target.closePath();
-    target.fill();
+    const pressure = graphiteLevel((Math.round(a[2] * 255) + Math.round(b[2] * 255)) / 510) / 32;
+    graphiteEnvelope(target, brush, pressure, (width, edge) => {
+      usePressure(pressure, edge);
+      const ar = a[3] * width / 2, br = b[3] * width / 2;
+      target.beginPath();
+      target.moveTo(a[0] + nx * ar, a[1] + ny * ar);
+      target.lineTo(a[0] - nx * ar, a[1] - ny * ar);
+      target.lineTo(b[0] - next[0] * br, b[1] - next[1] * br);
+      target.lineTo(b[0] + next[0] * br, b[1] + next[1] * br);
+      target.closePath();
+      target.fill();
+    }, true);
     normal = next;
   }
   target.imageSmoothingEnabled = smoothing;
@@ -441,12 +482,15 @@ function line(s, target = ctx, outline = true, dark = target === ctx && darkNote
   if (brush.texture) {
     const level = graphiteLevel(p[0][2]);
     if (p.some(point => graphiteLevel(point[2]) !== level)) {
-      graphiteTrail(target, p, rgb, family);
-      target.restore();
-      if (outline) strokeOutline(s, target);
-      return;
+      graphiteTrail(target, p, rgb, brush);
+    } else {
+      const pressure = level / 32;
+      target.fillStyle = target.strokeStyle = graphitePaint(target, rgb, family === 'mechanical', pressure);
+      graphiteEnvelope(target, brush, pressure, width => geometry(target, p, family, null, width));
     }
-    target.fillStyle = target.strokeStyle = graphitePaint(target, rgb, family === 'mechanical', p[0][2]);
+    target.restore();
+    if (outline) strokeOutline(s, target);
+    return;
   }
   if (family === 'highlighter') {
     target.globalCompositeOperation = dark ? 'screen' : 'multiply';
@@ -466,7 +510,7 @@ function line(s, target = ctx, outline = true, dark = target === ctx && darkNote
     clipPaintbrush(target, p);
     geometry(target, p, family);
     target.restore()
-  } else geometry(target, p, family);
+  } else geometry(target, p, family, null, brush.display_width);
   target.restore();
   if (outline) strokeOutline(s, target);
 }
@@ -715,7 +759,7 @@ function flushPreview() {
       ctx.save();
       ctx.globalAlpha = alpha;
       graphiteTrail(ctx, strokePoints(points.slice(first), tool, width), rgb,
-        brushFor(tool).family, start - first, previewCount === 0);
+        brushFor(tool), start - first, previewCount === 0);
       ctx.restore();
     } else preview(points.slice(Math.max(0, previewCount - 1)));
     previewCount = points.length
@@ -763,7 +807,10 @@ function preview(samples) {
     maskCtx.filter = 'blur(.4px)';
     clipPaintbrush(maskCtx, pending)
   }
-  geometry(maskCtx, pending, family, beforePoint);
+  if (brush.texture) {
+    graphiteEnvelope(maskCtx, brush, graphiteLevel(points[0][2]) / 32,
+      width => geometry(maskCtx, pending, family, beforePoint, width));
+  } else geometry(maskCtx, pending, family, beforePoint, brush.display_width);
   if (family === 'highlighter' && draftCount >= 2) {
     let p = pending[0];
     maskCtx.beginPath();

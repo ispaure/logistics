@@ -21,7 +21,8 @@ def graphite_thumbnail_density(pressure, mechanical):
     light_contact = max(0, 1 - ((pressure - .46) / .34) ** 2) ** 2
     lift = .045 if mechanical else .065
     mid_contact = max(0, min((pressure - .57) / .23, (.9375 - pressure) / .1375))
-    engagement = pressure + (.12 if mechanical else .085) * mid_contact
+    pencil_contact = max(0, min((pressure - .5) / .07, (.77 - pressure) / .20))
+    engagement = pressure + (.12 * mid_contact if mechanical else .085 * mid_contact + .13 * pencil_contact)
     contact = max(0, min(1, (engagement + lift * light_contact - .45) / .55))
     density = .8 * contact ** 2 * (3 - 2 * contact)
     fade = max(0, min(1, (pressure - .39) / .29))
@@ -107,7 +108,8 @@ def notebook_thumbnail(data, edge, *, cancelled, dark=False):
         commands.append(last_color)
         graphite = tool in (1, 7, 13, 14)
         # The overview has already sampled and ordered the visible ink.
-        width_scale = BRUSHES.get(15 if tool == 2 else tool, {}).get('display_width', 1)
+        brush_id = {1: 14, 2: 15, 7: 13}.get(tool, tool)
+        width_scale = BRUSHES.get(brush_id, {}).get('display_width', 1)
         path = []
         for first, last in zip(points, points[1:] or points):
             x, y, start_pressure, start_width = first

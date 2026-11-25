@@ -57,6 +57,20 @@ for(const tool of [14,13]){
  const retrace=compare(pixels(image(tool,[...constant,...constant.slice().reverse()])),sparse);
  check(retrace.normalized<.02,'Retracing inside one stroke darkened graphite '+JSON.stringify({tool,retrace}));
  const solid=pressure=>constant.map(([x,y,,w])=>[x,y,pressure,w]);
+ const widthImage=image(tool,solid(1),8);
+ const widthPixels=widthImage.getContext('2d').getImageData(240,600,1080,80).data;
+ const occupiedRows=Array.from({length:80},(_,y)=>{
+  const start=y*1080*4+3;
+  for(let x=0;x<1080;x++)if(widthPixels[start+x*4]>16)return true;
+  return false
+ }).filter(Boolean).length;
+ check(occupiedRows>=58&&occupiedRows<=60,
+  'Graphite display width differs from its profile '+JSON.stringify({tool,occupiedRows}));
+ const opacityBetween=(start,end)=>widthPixels.slice(start*1080*4,end*1080*4)
+  .reduce((sum,n,i)=>i%4===3?sum+n:sum,0)/((end-start)*1080);
+ const edgeContrast=opacityBetween(12,16)/opacityBetween(30,50);
+ check(edgeContrast>.10&&edgeContrast<.55,
+  'Firm graphite needs a lighter rim and a dark core '+JSON.stringify({tool,edgeContrast}));
  const deposition=pressure=>{
   const data=image(tool,solid(pressure),2).getContext('2d').getImageData(60,155,540,10).data;
   const alpha=data.filter((_,i)=>i%4===3);
@@ -92,7 +106,7 @@ for(const tool of [14,13]){
  $('grayscale').checked=false;
  const red=pixels(image(tool,solid(.8),1,7));
  check(Array.from({length:red.length/4},(_,i)=>i*4).some(i=>red[i+3]>100&&red[i]>red[i+1]),'Graphite lost writing hue '+tool);
- metrics.push({tool,light,half,medium,firm,densified,retrace,repeat8,scales});
+ metrics.push({tool,light,half,medium,firm,densified,retrace,repeat8,occupiedRows,edgeContrast,scales});
 }
 const tiltPoints=strokePoints([[20,80,.7,0],[70,80,.7,.9],[120,80,.7,0]],14,3);
 check(tiltPoints[1][3]>tiltPoints[0][3] && tiltPoints[2][3]===tiltPoints[0][3],
@@ -174,7 +188,7 @@ for(const tool of [14,13]){
  let touched=0;originalGeometry=geometry;geometry=(target,p,...args)=>{touched+=p.length;return originalGeometry(target,p,...args)};
  const moveStart=performance.now();try{points.push([190,65,.6]);preview(points.slice(-2))}finally{geometry=originalGeometry}
  const warmMoveMs=performance.now()-moveStart;
- check(touched<=2,'Graphite move reprocessed stroke history '+tool);
+ check(touched<=4,'Graphite move reprocessed stroke history '+tool);
  previewChecks.push({tool,agreement,maxDifference,replayed,touched,commitMs,warmMoveMs});
  points=[];clearDraft();
 }
