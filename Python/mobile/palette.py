@@ -13,9 +13,10 @@ from functools import partial
 from services import appearance_palette
 from services.appearance_palette import (
     MOBILE_LIGHT as LIGHT, MOBILE_DARK as DARK, EINK, argb, DEFAULT_ACCENT, validate_accent,
-    accent_colors, set_accent, set_eink_enabled, eink_enabled,
+    set_accent, set_eink_enabled, eink_enabled,
 )
 
+accent_colors = partial(appearance_palette.accent_colors, mobile=True)
 css_variables = partial(appearance_palette.css_variables, mobile=True)
 themed_chapter = partial(appearance_palette.themed_chapter, mobile=True)
 

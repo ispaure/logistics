@@ -15,11 +15,13 @@ links when listing and rejects writes that would use a linked path. LocalCrypt
 and Push keep their preflight checks. An interactive review can still run a
 read-only comparison before execution.
 
-Android Pulls to a public FAT-family volume use one staged writer with
-preallocation disabled. Before writing, the native destination checks the
-file's reported size against current free space with a 16 MiB reserve.
-Out-of-space errors end the attempt. Comparison uses rclone's standard
-file equality checks and checker concurrency.
+Android Pulls to a public FAT-family volume stage up to ten files in parallel
+with preallocation disabled. Writers reserve the reported size of each staged
+file against shared free space with a 16 MiB margin. They can wait for an
+existing stage to finish when space is tight. Out-of-space errors end the
+attempt. Readable SD Pulls accept size matches with a modification-time
+difference of up to one second to account for rounded card timestamps.
+Comparison otherwise uses rclone's standard equality checks and concurrency.
 
 ## Completion notifications
 

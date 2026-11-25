@@ -86,7 +86,12 @@ class AppearanceTests(unittest.TestCase):
                 self.assertEqual(EINK, before[2])
         set_accent()
         self.assertEqual(LIGHT['accent'], '#3363cc')
-        self.assertEqual(DARK['accent'], '#3363cc')
+        from mobile.palette import accent_colors
+        from services.appearance_palette import DARK as DESKTOP_DARK
+        self.assertEqual(accent_colors(), ('#3363cc', '#86aaff'))
+        self.assertEqual(DARK['primary'], DARK['accent'])
+        self.assertGreaterEqual(contrast_ratio(argb(DARK['accent']), argb(DARK['surface'])), 4.5)
+        self.assertEqual(DESKTOP_DARK['accent'], '#3363cc')
         default_selection = LIGHT['notes_selection']
         set_accent(130, 70)
         self.assertNotEqual(LIGHT['notes_selection'], default_selection)

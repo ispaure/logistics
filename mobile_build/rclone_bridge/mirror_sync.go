@@ -142,11 +142,10 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	}
 	config.MaxStatsGroups = 8
 	config.Transfers = mirrorTransferConcurrency
-	guardSD := review == nil && !push && androidRemovablePath(runtime.GOOS, localPath)
-	if guardSD {
-		config.Transfers = 1
-		config.MultiThreadStreams = 0
-		config.Inplace = false
+	removablePull := !push && androidRemovablePath(runtime.GOOS, localPath)
+	guardSD := removablePull && review == nil
+	if removablePull {
+		configureRemovablePull(config, readablePull, guardSD)
 	}
 	if review != nil {
 		ctx = operations.WithLogger(ctx, review.logger(cipher))

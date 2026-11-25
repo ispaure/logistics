@@ -7,6 +7,9 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +18,9 @@ import (
 
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/accounting"
+	"github.com/rclone/rclone/fs/hash"
+	"github.com/rclone/rclone/fs/object"
+	"github.com/rclone/rclone/fs/operations"
 	rclonesync "github.com/rclone/rclone/fs/sync"
 )
 
@@ -75,6 +81,148 @@ func TestRemovablePullStopsBeforeStagingWhenSpaceIsLow(t *testing.T) {
 	files, err := os.ReadDir(dstDir)
 	if err != nil || len(files) != 2 {
 		t.Fatalf("staging left entries: %v %v", files, err)
+	}
+}
+
+type blockedRemovableWrites struct {
+	fs.Fs
+	started chan string
+	write   chan struct{}
+}
+
+func (f blockedRemovableWrites) Put(ctx context.Context, in io.Reader, src fs.ObjectInfo, opts ...fs.OpenOption) (fs.Object, error) {
+	f.started <- src.Remote()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-f.write:
+		return f.Fs.Put(ctx, in, src, opts...)
+	}
+}
+
+func TestRemovablePullStagesTenFilesConcurrentlyWithRoom(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ctx, config := fs.AddConfig(ctx)
+	config.Transfers = mirrorTransferConcurrency
+	configureRemovablePull(config, true, true)
+	srcDir, dstDir := canonicalTestDir(t), canonicalTestDir(t)
+	for i := range mirrorTransferConcurrency {
+		seedRemovableTestFile(t, srcDir, fmt.Sprintf("comic-%d.cbz", i), "comic", time.Unix(1_700_000_000, 0))
+	}
+	src, err := fs.NewFs(ctx, srcDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, err := fs.NewFs(ctx, dstDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked := blockedRemovableWrites{Fs: local, started: make(chan string, mirrorTransferConcurrency), write: make(chan struct{})}
+	dst := newRemovablePullFS(blocked)
+	dst.Features().About = func(context.Context) (*fs.Usage, error) {
+		return &fs.Usage{Free: fs.NewUsageValue(removablePullHeadroom + 50)}, nil
+	}
+	done := make(chan error, 1)
+	go func() { done <- rclonesync.Sync(ctx, dst, src, true) }()
+	for i := range mirrorTransferConcurrency {
+		select {
+		case <-blocked.started:
+		case err := <-done:
+			t.Fatalf("sync stopped after %d writers: %v", i, err)
+		case <-ctx.Done():
+			t.Fatalf("only %d writers were admitted", i)
+		}
+	}
+	close(blocked.write)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if dst.writers != 0 || dst.reserved != 0 {
+		t.Fatalf("sync left %d writers and %d reserved bytes", dst.writers, dst.reserved)
+	}
+}
+
+func TestRemovableStagesKeepReserveUntilPublishedOrRemoved(t *testing.T) {
+	ctx, finish := context.WithTimeout(context.Background(), 3*time.Second)
+	defer finish()
+	local, err := fs.NewFs(ctx, canonicalTestDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, publish := range []bool{true, false} {
+		dst := newRemovablePullFS(local)
+		dst.Features().About = func(context.Context) (*fs.Usage, error) {
+			return &fs.Usage{Free: fs.NewUsageValue(removablePullHeadroom + 12)}, nil
+		}
+		data := "8 bytes!"
+		info := object.NewStaticObjectInfo("comic.cbz.1234abcd.partial", time.Now(), int64(len(data)), true, nil, dst)
+		staged, err := dst.Put(ctx, strings.NewReader(data), info)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A retry may reopen the same partial after the source failed to close.
+		staged, err = dst.Put(ctx, strings.NewReader(data), info)
+		if err != nil || dst.writers != 1 || dst.reserved != int64(len(data)) {
+			t.Fatalf("retry did not reuse the original reserve: %v, %d writers, %d bytes", err, dst.writers, dst.reserved)
+		}
+		wait, cancel := context.WithTimeout(ctx, 30*time.Millisecond)
+		_, err = dst.reserve(wait, int64(len(data)), "")
+		cancel()
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("second writer should wait while first is staged, got %v", err)
+		}
+		if publish {
+			if _, err := dst.Features().Move(ctx, staged, "comic.cbz"); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			failed, err := dst.NewObject(ctx, staged.Remote())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := failed.Remove(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		release, err := dst.reserve(ctx, int64(len(data)), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		release()
+	}
+}
+
+type hashlessDropboxFixture struct{ fs.Fs }
+
+func (hashlessDropboxFixture) Hashes() hash.Set         { return 0 }
+func (hashlessDropboxFixture) Precision() time.Duration { return time.Second }
+
+func TestReadableRemovablePullAcceptsOnlyOneSecondOfRounding(t *testing.T) {
+	ctx, config := fs.AddConfig(context.Background())
+	root := canonicalTestDir(t)
+	stamp := time.Unix(1_700_000_000, 0)
+	seedRemovableTestFile(t, root, "comic.cbz", "comic", stamp)
+	local, err := fs.NewFs(ctx, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst, err := local.NewObject(ctx, "comic.cbz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := func(delta time.Duration, size int64) fs.ObjectInfo {
+		return object.NewStaticObjectInfo("comic.cbz", stamp.Add(delta), size, true, nil, hashlessDropboxFixture{local})
+	}
+	if operations.Equal(ctx, source(time.Second, 5), dst) {
+		t.Fatal("baseline unexpectedly skips a full-second mismatch")
+	}
+	configureRemovablePull(config, true, false)
+	if !operations.Equal(ctx, source(time.Second, 5), dst) {
+		t.Fatal("rounded timestamp still schedules a replacement")
+	}
+	if operations.Equal(ctx, source(time.Second+time.Nanosecond, 5), dst) || operations.Equal(ctx, source(time.Second, 6), dst) {
+		t.Fatal("a larger timestamp or size difference was skipped")
 	}
 }
 

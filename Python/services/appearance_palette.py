@@ -15,6 +15,7 @@ __status__ = "Production"
 
 DEFAULT_ACCENT = (221, 60)
 DEFAULT_ACCENT_COLOR = '#3363cc'
+MOBILE_DARK_ACCENT_COLOR = '#86aaff'
 FILE_ICON_BLUE = '#315ea8'
 
 LIGHT = dict(window='#f0f2f6', surface='#fafbfc', alternate='#f5f7fa',
@@ -54,7 +55,7 @@ for colors in (LIGHT, DARK):
 
 MOBILE_LIGHT = dict(LIGHT, chat_background=LIGHT['window'])
 MOBILE_DARK = dict(DARK, window='#0e1013', surface='#191c21', alternate='#22262c',
-                   chat_background='#0b0d10')
+                   chat_background='#0b0d10', accent=MOBILE_DARK_ACCENT_COLOR, primary=MOBILE_DARK_ACCENT_COLOR)
 MOBILE_DARK.update(settings_background=MOBILE_DARK['window'], settings_group=MOBILE_DARK['surface'])
 
 
@@ -74,15 +75,14 @@ def validate_accent(hue, saturation):
     return hue, saturation
 
 
-def accent_colors(hue=DEFAULT_ACCENT[0], saturation=DEFAULT_ACCENT[1]):
-    """Resolve one sRGB accent shared by light and dark appearance."""
+def accent_colors(hue=DEFAULT_ACCENT[0], saturation=DEFAULT_ACCENT[1], *, mobile=False):
+    """Resolve the accents for light and dark appearance."""
     import colorsys
     hue, saturation = validate_accent(hue, saturation)
     if (hue, saturation) == DEFAULT_ACCENT:
-        color = DEFAULT_ACCENT_COLOR
-    else:
-        rgb = colorsys.hls_to_rgb(hue / 360, .5, saturation / 100)
-        color = '#' + ''.join(f'{round(channel * 255):02x}' for channel in rgb)
+        return DEFAULT_ACCENT_COLOR, MOBILE_DARK_ACCENT_COLOR if mobile else DEFAULT_ACCENT_COLOR
+    rgb = colorsys.hls_to_rgb(hue / 360, .5, saturation / 100)
+    color = '#' + ''.join(f'{round(channel * 255):02x}' for channel in rgb)
     return color, color
 
 
@@ -100,7 +100,8 @@ def set_accent(hue=DEFAULT_ACCENT[0], saturation=DEFAULT_ACCENT[1]):
     """Change only accent roles; semantic artwork and lock colors are independent."""
     hue, saturation = validate_accent(hue, saturation)
     light, dark = accent_colors(hue, saturation)
-    for colors, color in ((LIGHT, light), (DARK, dark), (MOBILE_LIGHT, light), (MOBILE_DARK, dark)):
+    _, mobile_dark = accent_colors(hue, saturation, mobile=True)
+    for colors, color in ((LIGHT, light), (DARK, dark), (MOBILE_LIGHT, light), (MOBILE_DARK, mobile_dark)):
         colors['accent'] = color
         colors['primary'] = color
         colors['notes_selection'] = notes_selection_color(color, colors['surface'])

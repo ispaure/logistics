@@ -12,9 +12,10 @@ One transfer runs at a time. Existing local copies stay available for browsing.
 Files copied to the destination by another tool can appear as replacements
 if their modification times differ. Without a shared checksum, a timestamp
 difference can trigger a full copy even if the file contents are identical.
-A Pull to an Android FAT or exFAT card stages one file at a time and stops
-if the next file's reported size would leave less than 16 MiB free. Review
-another Pull after resolving a space error.
+A readable Pull to an Android FAT or exFAT card accepts matching file sizes
+and modification times within one second. Up to ten files can stage in
+parallel as available space permits, with a 16 MiB free-space margin.
+Review another Pull after resolving a space error.
 
 Tap the **Transfers** icon next to **Server** in Workspaces. The overview
 shows the active transfer above interrupted downloads and completed transfers.
