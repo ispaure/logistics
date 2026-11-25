@@ -12,11 +12,8 @@ import (
 	"syscall"
 
 	"github.com/rclone/rclone/fs"
-	"github.com/rclone/rclone/fs/accounting"
 	"github.com/rclone/rclone/fs/fserrors"
-	"github.com/rclone/rclone/fs/operations"
 	"github.com/rclone/rclone/lib/file"
-	"github.com/rclone/rclone/lib/readers"
 )
 
 // Android mounts public FAT and exFAT volumes under /storage/<FAT volume ID>.
@@ -96,58 +93,4 @@ func removablePullWriteError(err error) error {
 		return fserrors.FatalError(fmt.Errorf("SD card ran out of space: %w", err))
 	}
 	return err
-}
-
-// A timestamp mismatch on a provider such as SMB can force a full rewrite.
-// For same-size files without a common provider checksum, compare the streams.
-func sameRemovablePullFile(ctx context.Context, src fs.ObjectInfo, dst fs.Object) bool {
-	source, ok := src.(fs.Object)
-	if operations.Equal(ctx, src, dst) {
-		return !ok || !operations.SameObject(source, dst)
-	}
-	size := src.Size()
-	if !ok || size < 0 || size != dst.Size() || src.Fs().Hashes().Overlap(dst.Fs().Hashes()).Count() != 0 {
-		return false
-	}
-	if !removablePullContentsMatch(ctx, source, dst, size) {
-		return false
-	}
-	if !fs.GetConfig(ctx).NoUpdateModTime && ctx.Err() == nil {
-		// Matching bytes do not need to be replaced even if the SD card cannot
-		// represent the server's timestamp exactly.
-		if err := dst.SetModTime(ctx, src.ModTime(ctx)); err != nil {
-			fs.Debugf(dst, "Could not update timestamp after verifying file contents: %v", err)
-		}
-	}
-	return true
-}
-
-func removablePullContentsMatch(ctx context.Context, src, dst fs.Object, size int64) bool {
-	remote, err := operations.Open(ctx, src)
-	if err != nil {
-		return false
-	}
-	defer remote.Close()
-	local, err := operations.Open(ctx, dst)
-	if err != nil {
-		return false
-	}
-	defer local.Close()
-	counting := readers.NewCountingReader(pullNetworkReader{ctx: ctx, Reader: remote})
-	same, err := operations.CheckEqualReaders(counting, local)
-	return err == nil && same && counting.BytesRead() == uint64(size)
-}
-
-type pullNetworkReader struct {
-	ctx context.Context
-	io.Reader
-}
-
-func (r pullNetworkReader) Read(p []byte) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	n, err := r.Reader.Read(p)
-	accounting.TokenBucket.LimitBandwidth(accounting.TokenBucketSlotAccounting, n)
-	return n, err
 }

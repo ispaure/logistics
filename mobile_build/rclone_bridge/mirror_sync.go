@@ -136,8 +136,6 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 		config.Transfers = 1
 		config.MultiThreadStreams = 0
 		config.Inplace = false
-		config.Checkers = min(config.Checkers, 2)
-		ctx = operations.WithEqualFn(ctx, sameRemovablePullFile)
 	}
 	if review != nil {
 		ctx = operations.WithLogger(ctx, review.logger(cipher))

@@ -10,14 +10,11 @@ Rclone removes destination-only files after transfers succeed. Replacements
 free the old file's space as each new copy takes its place.
 One transfer runs at a time. Existing local copies stay available for browsing.
 Files copied to the destination by another tool can appear as replacements
-if their modification times differ. On SMB, a timestamp difference can
-trigger a full copy even if the file contents are identical.
-For a Pull to an Android FAT or exFAT card, Logistics reads both files if sizes
-match, dates differ and the server cannot provide a compatible checksum. If
-the bytes match, it updates the timestamp when possible. This check uses the
-network but saves a write to the card, so Pull can copy fewer files than the
-preview lists. It stages one file at a time and stops if the next file would
-leave less than 16 MiB free. Review another Pull after resolving a space error.
+if their modification times differ. Without a shared checksum, a timestamp
+difference can trigger a full copy even if the file contents are identical.
+A Pull to an Android FAT or exFAT card stages one file at a time and stops
+if the next file's reported size would leave less than 16 MiB free. Review
+another Pull after resolving a space error.
 
 Tap the **Transfers** icon next to **Server** in Workspaces. The overview
 shows the active transfer above interrupted downloads and completed transfers.

@@ -15,8 +15,6 @@ import (
 
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/accounting"
-	"github.com/rclone/rclone/fs/hash"
-	"github.com/rclone/rclone/fs/operations"
 	rclonesync "github.com/rclone/rclone/fs/sync"
 )
 
@@ -34,39 +32,6 @@ func TestAndroidRemovablePullPath(t *testing.T) {
 	} {
 		if got := androidRemovablePath(test.platform, test.path); got != test.want {
 			t.Errorf("%s %q: got %t, want %t", test.platform, test.path, got, test.want)
-		}
-	}
-}
-
-type hashlessInfo struct{ fs.Info }
-
-func (hashlessInfo) Hashes() hash.Set { return hash.NewHashSet() }
-
-type hashlessObject struct{ fs.Object }
-
-func (o hashlessObject) Fs() fs.Info { return hashlessInfo{o.Object.Fs()} }
-
-func TestRemovablePullComparesSameSizeWithDifferentTimes(t *testing.T) {
-	ctx := operations.WithEqualFn(context.Background(), sameRemovablePullFile)
-	sourceDir, destinationDir := canonicalTestDir(t), canonicalTestDir(t)
-	dstTime := time.Unix(1_700_000_000, 0)
-	srcTime := dstTime.Add(time.Hour)
-	for _, tc := range []struct {
-		name, source, destination string
-		wantTransfer              bool
-	}{
-		{"equal.cbz", "same comic", "same comic", false},
-		{"different.cbz", "new comic!", "old comic!", true},
-	} {
-		seedRemovableTestFile(t, sourceDir, tc.name, tc.source, srcTime)
-		seedRemovableTestFile(t, destinationDir, tc.name, tc.destination, dstTime)
-		src := openRemovableTestObject(t, ctx, sourceDir, tc.name)
-		dst := openRemovableTestObject(t, ctx, destinationDir, tc.name)
-		if got := operations.NeedTransfer(ctx, dst, hashlessObject{src}); got != tc.wantTransfer {
-			t.Fatalf("%s: NeedTransfer = %t, want %t", tc.name, got, tc.wantTransfer)
-		}
-		if !tc.wantTransfer && !dst.ModTime(ctx).Equal(srcTime) {
-			t.Fatal("verified equal file did not adopt the source timestamp")
 		}
 	}
 }
@@ -122,17 +87,4 @@ func seedRemovableTestFile(t *testing.T, dir, name, contents string, stamp time.
 	if err := os.Chtimes(p, stamp, stamp); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func openRemovableTestObject(t *testing.T, ctx context.Context, root, name string) fs.Object {
-	t.Helper()
-	f, err := fs.NewFs(ctx, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	o, err := f.NewObject(ctx, name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return o
 }

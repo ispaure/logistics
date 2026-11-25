@@ -12,10 +12,8 @@ Desktop **Workspaces → Cloud → Pull** follows `ui_contributions.py:_get_acti
 Android Pulls to a public FAT-family volume use one staged writer with
 preallocation disabled. Before writing, the native destination checks the
 file's reported size against current free space with a 16 MiB reserve.
-Out-of-space errors end the attempt. During execution, rclone's equality
-callback reads same-size, different-date pairs when the backends have no
-compatible checksum. Verified matches can adopt the source timestamp.
-Review stays metadata-only and can list replacements this check skips.
+Out-of-space errors end the attempt. Comparison uses rclone's standard
+file equality checks and checker concurrency.
 
 ## Completion notifications
 
