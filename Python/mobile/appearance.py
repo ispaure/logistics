@@ -236,7 +236,8 @@ def reserve_navigation(app, *, view=None):
         body = app.routes.body()
         if not body.children:
             return
-        view = body.children[0]
+        from .scroll_edges import refresh_scroll_panel
+        view = body if refresh_scroll_panel(body) else body.children[0]
     # Chat owns composer clearance; fullscreen comics hide their navigation.
     # Readers with controls still need room above a floating destination bar.
     if (view is getattr(app, 'chat_view', None) or getattr(view, '_comic_fullscreen', False)

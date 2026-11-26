@@ -67,6 +67,8 @@ class MobileRoutes(Routes):
         from .folder_navigation import FolderNavigation
         self.folders = FolderNavigation(self)
         super().__init__(*args, **kwargs)
+        for panel in self.roots.values():
+            panel._route_scroll_panel = True
 
     def uninstall(self):
         if not self._retired:
@@ -238,6 +240,7 @@ class MobileRoutes(Routes):
             owner.credential_workflow.cancel_import()
 
     def render(self, destination):
+        self.body(destination)._route_scroll_panel = True
         super().render(destination)
         self.flush_return_selection(destination)
 

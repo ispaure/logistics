@@ -13,10 +13,11 @@ from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
+import toga
 from toga.style import Pack
 from commonUtils.testing.stages import TestStage
 from mobile.appearance import reserve_navigation
-from mobile.scroll_edges import fill_bottom, sync_bottom
+from mobile.scroll_edges import fill_bottom, refresh_scroll_panel, sync_bottom
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -30,6 +31,29 @@ def insets(top=0, left=0, bottom=0, right=0):
 
 
 class ScrollEdgesTests(TestCase):
+    def test_routes_extend_nested_vertical_lists_and_release_fixed_footers(self):
+        leading = toga.ScrollContainer(horizontal=False, style=Pack(flex=1))
+        trailing = toga.ScrollContainer(horizontal=False, style=Pack(flex=1))
+        panes = toga.Box(children=[leading, trailing], style=Pack(direction='row', flex=1))
+        content = toga.Box(children=[toga.Label('Home'), panes], style=Pack(direction='column', flex=1))
+        panel = toga.Box(children=[content], style=Pack(direction='column', flex=1))
+        panel._route_scroll_panel = True
+
+        self.assertTrue(refresh_scroll_panel(panel))
+        self.assertEqual(panel._bottom_scrolls, (leading, trailing))
+        sync_bottom(panel, inset=34)
+        self.assertEqual(panel.style.margin_bottom, -34)
+
+        controls = toga.Button('Send', style=Pack(height=44))
+        content.add(controls)
+        self.assertFalse(refresh_scroll_panel(panel))
+        self.assertEqual(panel.style.margin_bottom, 0)
+        content.remove(controls)
+
+        fill_bottom(content, leading, trailing)
+        self.assertFalse(refresh_scroll_panel(panel))
+        self.assertEqual(content._bottom_scrolls, (leading, trailing))
+
     def test_ios_scrolls_reclaim_safe_and_floating_bar_space_through_rotation(self):
         native = NS(contentInset=insets(3, 4, 0, 5), verticalScrollIndicatorInsets=insets(6, 7, 0, 8))
         scroll = NS(_impl=NS(native=native))

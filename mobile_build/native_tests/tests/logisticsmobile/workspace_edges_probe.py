@@ -39,6 +39,8 @@ class WorkspaceEdgesProbe(DocumentWorkspaceProbe):
             if not self.routes.apple:
                 (Path(self.paths.cache) / 'creation-orientation').write_text(orientation)
             await rotate(self, orientation, settle=.5)
+            if self.routes.apple:
+                await self.check_tab_edges(report, evidence, orientation)
             self.show_locations()
             self.change_folder_source('rclone')
             await asyncio.sleep(.3)
@@ -86,6 +88,35 @@ class WorkspaceEdgesProbe(DocumentWorkspaceProbe):
                 assert last.getBottom() <= native.getHeight() - native.getPaddingBottom() + 1
             await capture_window(self, evidence / f'workspace-last-{orientation}.png')
         report['cases'].append('browser_viewport_bottom_and_last_row')
+
+    async def check_tab_edges(self, report, evidence, orientation):
+        from rubicon.objc import CGPoint
+
+        self.show_home()
+        home = self.hub_controller().home_sections
+        scroll = home.trailing_scroll if home.paired else home.leading_scroll
+        rows = [toga.Label(f'Home fixture {index:02}', style=Pack(height=48)) for index in range(30)]
+        scroll.content.add(*rows)
+        await asyncio.sleep(.3)
+        self.sample(report, 'home', scroll)
+        native = scroll._impl.native
+        native.setContentOffset(CGPoint(0, max(0, native.contentSize.height
+            + native.contentInset.bottom - native.bounds.size.height)), animated=False)
+        await asyncio.sleep(.15)
+        last = control_frame(self, rows[-1])
+        window = self.main_window._impl.native
+        safe_bottom = window.bounds.size.height - window.safeAreaInsets.bottom
+        bar = self.native_host.adapter.controller.tabBar
+        bounds = bar.convertRect(bar.bounds, toView=window)
+        if not self.native_host.adapter.tabs_hidden() and bounds.size.width >= bounds.size.height:
+            safe_bottom = min(safe_bottom, bounds.origin.y)
+        assert last['y'] + last['height'] <= safe_bottom + 1, (last, safe_bottom)
+        await capture_window(self, evidence / f'home-last-{orientation}.png')
+
+        self.show_settings()
+        await asyncio.sleep(.3)
+        self.sample(report, 'settings', self.settings_navigation.sidebar)
+        await capture_window(self, evidence / f'settings-{orientation}.png')
 
     def sample(self, report, name, scroll):
         frame = control_frame(self, scroll)

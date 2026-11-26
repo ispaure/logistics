@@ -257,7 +257,11 @@ Check `test_document_navigation.py`, `test_file_loading.py` and
 ## Content geometry across themes
 
 `scroll_edges.py` keeps final-row clearance inside the scrolling viewport using
-measured iOS insets or Android internal padding. Preserve native view padding
+measured iOS insets or Android internal padding. On iOS, a route whose bottom
+is occupied by vertical scrollers extends to the host edge so content can
+scroll behind a floating destination bar. The final row can scroll clear of
+the bar and Home indicator. Routes with a fixed footer and views with their
+own edge layout keep their existing clearance. Preserve native view padding
 when repainting Android backgrounds. Grouped lists keep clipped pressed states
 and retain native touch targets. Reset reused UIKit cell corner masks and keep
 separator insets bounded. Selected rows keep readable outlines and foregrounds

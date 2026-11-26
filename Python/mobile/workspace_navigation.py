@@ -578,10 +578,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             if hasattr(self.app, 'render_chat_workspace'):
                 self.app.render_chat_workspace()
             self.update_destination_bar(destination or self.app.native_host.state.destination)
-            from .appearance import reserve_navigation
-            reserve_navigation(self.app)
             if hasattr(self.app, 'home_sections'):
                 self.app.reflow_home()
+            from .appearance import reserve_navigation
+            reserve_navigation(self.app)
             from .transfer_status import refresh as refresh_sync_status
             refresh_sync_status(self.app, destination)
             dismiss = getattr(view, '_workspace_status_dismiss', None)
