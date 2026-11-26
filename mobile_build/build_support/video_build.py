@@ -28,10 +28,18 @@ def install_remux_headers(support):
     """Stage public headers for the FFmpeg 9.0 ABI already linked in VLCKit."""
     from io import BytesIO
 
-    with urlopen(FFMPEG_HEADERS_URL, timeout=45) as response:
-        archive = response.read(16 * 1024 * 1024)
-    if sha256(archive).hexdigest() != FFMPEG_HEADERS_SHA256:
-        raise ValueError('FFmpeg headers archive checksum mismatch.')
+    for url in (FFMPEG_HEADERS_URL + '?download=1', FFMPEG_HEADERS_URL):
+        try:
+            with urlopen(url, timeout=45) as response:
+                archive = response.read(16 * 1024 * 1024)
+        except OSError as error:
+            failure = error
+        else:
+            if sha256(archive).hexdigest() == FFMPEG_HEADERS_SHA256:
+                break
+            failure = ValueError('FFmpeg headers archive checksum mismatch.')
+    else:
+        raise ValueError('Could not download the verified FFmpeg headers archive.') from failure
     destination = Path(support) / 'VideoFFmpeg'
     with tarfile.open(fileobj=BytesIO(archive), mode='r:xz') as package:
         for member in package:
