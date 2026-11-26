@@ -52,7 +52,8 @@ NATIVE_DIAGNOSTICS = ('pdf-edge-left.png', 'pdf-edge-right.png', 'logistics-nati
 
 SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
     for orientation in ('portrait', 'landscape-left')
-    for destination in ('files-rclone', 'files-Network-shares', 'files-Local'))
+    for destination in ('files-rclone', 'files-Network-shares', 'files-Local', 'progress')) + (
+        'sync-landscape-right-progress.png',)
 
 
 def diagnostics(entry_point):

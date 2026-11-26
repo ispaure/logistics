@@ -364,6 +364,11 @@ the title centers in the part of the measured strip left by the action
 bubbles. Related actions share a glass group, with space between groups.
 The native bar also handles actions when the strip is too narrow.
 
+A pushed Workspaces detail keeps the Workspaces heading above the sidebar and
+uses its own title. On a partially folded Duo, Transfer progress shares the file
+browser's pane allocation around the active fold. Transfer cards fit the
+mounted route's usable width as the fold, rotation and side rail change.
+
 `reader_top_band` can project the existing storage title and all native actions
 beside a tall edge reservation if measured space and touch targets fit. Keep
 full-width reading below the cluster. Fall back to the native bar for missing,

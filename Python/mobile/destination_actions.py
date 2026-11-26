@@ -268,13 +268,11 @@ def sync_native_host(app, view, destination, *, preparing_return=False):
     reserve_bar_clearance(outer)
     screens = app.routes.screens[destination]
     if not preparing_return and screens:
-        frame = getattr(view, '_workspace_frame', None)
         if destination == 'files':
             from .reader_lifecycle import document_stack
             if document_stack(screens):
                 detach_workspace_heading(app)
-            elif (getattr(app.adaptive, 'file_columns', None) is not None
-                    and (hasattr(view, '_folder_screen') or getattr(frame, 'folder_detail', False))):
+            elif getattr(app.adaptive, 'file_columns', None) is not None:
                 root = app.routes.roots['files'].children[0]
                 project_apple_heading(app, root, destination, adapter.content_controller(destination),
                                       folder_sidebar=True)

@@ -592,18 +592,17 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 transfer.queue_send()
             status = getattr(view, '_workspace_status_label', None)
             native = transfer.native_fallback if transfer is not None else None
-            if status is not None or native is not None:
+            if status is not None:
                 target = destination or self.app.native_host.state.destination
                 width = self.content_width(target, margin=0)
                 columns = getattr(self, 'file_columns', None)
                 if target == 'files' and columns is not None:
                     width = float(columns.navigation.view.bounds.size.width) or width
-                if status is not None:
-                    from commonUtils.ui.native.forms import fit_text
-                    detail_width = frame.main.style.width if frame is not None else None
-                    fit_text(status, (detail_width if isinstance(detail_width, (int, float)) else width) - 32)
-                if native is not None:
-                    native.reflow(width)
+                from commonUtils.ui.native.forms import fit_text
+                detail_width = frame.main.style.width if frame is not None else None
+                fit_text(status, (detail_width if isinstance(detail_width, (int, float)) else width) - 32)
+            if native is not None:
+                native.reflow_surface()
             from .browser_ui import sync_browser_population
             sync_browser_population(self.app, body)
         finally:

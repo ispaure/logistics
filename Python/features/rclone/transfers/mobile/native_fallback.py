@@ -122,6 +122,15 @@ class NativeTransferFallback(toga.Box):
         return control
 
     def reflow_surface(self, frame=None):
+        if self.surface is None or not self.surface.visible():
+            return
+        if type(self._impl).__module__.startswith('toga_iOS.'):
+            # A route inside the native Workspaces columns is narrower than
+            # the destination. The container also accounts for the side rail.
+            container = self._impl.container
+            if container is not None and container.width > 0:
+                self.reflow(container.width)
+                return
         host = self.surface.host
         destination = host.native_host.state.destination
         width = (frame.content_width(destination, margin=0) if frame else

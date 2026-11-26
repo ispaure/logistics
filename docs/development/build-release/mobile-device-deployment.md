@@ -30,6 +30,23 @@ Follow [pairing and commands](mobile-launchers.md#build-and-deploy-to-a-paired-i
 
 Check a usable window after launch and confirm saved files by relative paths and sizes or exact byte hashes. For file sharing check both plist keys and use House Arrest `VendDocuments` with a disposable file. Verify Finder interaction separately. Preserve the installed app and its data.
 
+## Capture the unfolded iPhone Duo screen
+
+Keep the Duo unlocked and awake on the screen being checked. CoreDevice defaults
+to the primary display, which can be the inactive outer panel while the Duo is
+unfolded. If a screenshot is black or shows the wrong screen, list the displays,
+check that the active display's backlight is on, and copy its `uniqueId`:
+
+```sh
+xcrun devicectl device info displays --device "$DEVICE"
+xcrun devicectl device capture screenshot --device "$DEVICE" \
+  --display-unique-id "$DISPLAY_ID" --destination "$SCREENSHOT"
+```
+
+Use an absolute `SCREENSHOT` path ending in `.png` under the run's ignored
+`tmp/test-results/<run-id>/` directory. Open the PNG to verify it shows the
+intended view and orientation. Capture uses the app already running on the Duo.
+
 ## Diagnose startup after installation
 
 Check unified logs for Python exceptions and stale requirements. From the root:
