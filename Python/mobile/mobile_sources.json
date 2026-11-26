@@ -187,6 +187,7 @@
     "settings/playlists.py",
     "settings/text.py",
     "settings/workspaces.py",
+    "settings/rclone.py",
     "settings/accent.py",
     "settings/audio.py",
     "settings/categories.py",
