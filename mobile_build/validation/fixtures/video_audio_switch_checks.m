@@ -8,9 +8,27 @@
 @implementation LGVideoNonseekablePlayer
 - (BOOL)isSeekable { return NO; }
 @end
+@interface LGVideoTestAudioPort : NSObject
+@property(nonatomic, copy) NSString *portType;
+@end
+@implementation LGVideoTestAudioPort
+@end
+@interface LGVideoAudioRouteController : LGVideoController
+@property(nonatomic, strong) LGVideoTestAudioPort *testPort;
+@end
+@implementation LGVideoAudioRouteController
+- (NSArray<AVAudioSessionPortDescription *> *)audioOutputPorts {
+    return (id)@[self.testPort];
+}
+- (void)simulateAudioOutput:(NSString *)portType {
+    self.testPort.portType = portType;
+    [self audioRouteChanged:[NSNotification notificationWithName:AVAudioSessionRouteChangeNotification
+        object:nil userInfo:@{AVAudioSessionRouteChangeReasonKey: @(AVAudioSessionRouteChangeReasonNewDeviceAvailable)}]];
+}
+@end
 @interface LGVideoAudioSwitchChecks : UIResponder <UIApplicationDelegate, UIWindowSceneDelegate>
 @property(nonatomic, strong) UIWindow *window;
-@property(nonatomic, strong) LGVideoController *video;
+@property(nonatomic, strong) LGVideoAudioRouteController *video;
 @property(nonatomic, strong) NSTimer *timer;
 @property(nonatomic, strong) NSMutableArray *samples;
 @property(nonatomic, strong) NSMutableArray *measurements;
@@ -33,7 +51,10 @@
     self.samples = [NSMutableArray array];
     self.measurements = [NSMutableArray array];
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
-    self.video = [LGVideoController new];
+    self.video = [LGVideoAudioRouteController new];
+    self.video.testPort = [LGVideoTestAudioPort new];
+    self.video.testPort.portType = AVAudioSessionPortBuiltInSpeaker;
+    self.stage = -3;
     NSString *remote = NSBundle.mainBundle.infoDictionary[@"QAURL"];
     self.video.videoURL = remote.length ? remote :
         [[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"] absoluteString];
@@ -46,16 +67,19 @@
     self.began = NSProcessInfo.processInfo.systemUptime;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 2), dispatch_get_main_queue(), ^{
         [self.video startByUser];
+        if (!self.video.speakerMixRequested) {
+            [self finish:@"The speaker mix was not requested before playback"]; return;
+        }
         self.timer = [NSTimer scheduledTimerWithTimeInterval:.05 target:self selector:@selector(sample:) userInfo:nil repeats:YES];
     });
 }
 - (void)sample:(NSTimer *)timer {
-    LGVideoController *v = self.video;
+    LGVideoAudioRouteController *v = self.video;
     NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
     VLCMediaStats stats = v.player.media.statistics;
     [self.samples addObject:@{@"stage": @(self.stage), @"time": @(now-self.began),
         @"clock": @([v positionMilliseconds]), @"nativeClock": @([v nativeTimeMilliseconds]),
-        @"audio": @(stats.playedAudioBuffers), @"frames": @(stats.displayedPictures),
+        @"audio": @(stats.playedAudioBuffers), @"frames": @(stats.displayedPictures), @"mix": @(v.player.audioMixMode),
         @"renderedClock": @(v.lastRenderedClock), @"buffering": @(v.buffering),
         @"decodedAudio": @(stats.decodedAudio), @"pending": @(v.audioSwitchTrack.length > 0),
         @"buffered": @(v.audioSwitchBuffered), @"sawBuffering": @(v.audioSwitchSawBuffering),
@@ -63,7 +87,25 @@
     if (now-self.began > 40) { [self finish:@"Audio-switch probe timed out"]; return; }
     NSArray *tracks = v.player.audioTracks;
     if (tracks.count < 2) return;
-    if (self.stage == 0 && stats.playedAudioBuffers > 10 && v.player.time.value.longLongValue > 2000) {
+    if (self.stage == -3 && stats.playedAudioBuffers > 10 && stats.displayedPictures > 0) {
+        if (v.player.audioMixMode != VLCAudioMixModeStereo) {
+            [self finish:@"Multichannel output did not use the speaker mix"]; return;
+        }
+        [v simulateAudioOutput:AVAudioSessionPortBluetoothA2DP];
+        self.audio = stats.playedAudioBuffers; self.switched = now; self.stage = -2;
+    } else if (self.stage == -2 && now-self.switched > .75) {
+        if (v.speakerMixRequested || v.player.audioMixMode != VLCAudioMixModeUnset || !v.playRequested) {
+            [self finish:@"Bluetooth retained the speaker mix or paused playback"]; return;
+        }
+        if (stats.playedAudioBuffers <= self.audio) return;
+        [v simulateAudioOutput:AVAudioSessionPortBuiltInSpeaker];
+        self.audio = stats.playedAudioBuffers; self.switched = now; self.stage = -1;
+    } else if (self.stage == -1 && now-self.switched > .75) {
+        if (v.player.audioMixMode != VLCAudioMixModeStereo || !v.playRequested) {
+            [self finish:@"Speaker did not restore stereo"]; return;
+        }
+        if (stats.playedAudioBuffers > self.audio) self.stage = 0;
+    } else if (self.stage == 0 && stats.playedAudioBuffers > 10 && v.player.time.value.longLongValue > 2000) {
         VLCMediaPlayer *live = v.player;
         v.player = [LGVideoNonseekablePlayer new];
         BOOL accepted = [v switchAudioTrack:tracks[1]];

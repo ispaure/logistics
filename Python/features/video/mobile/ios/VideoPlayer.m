@@ -211,6 +211,9 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic) int64_t observedClock, lastRenderedClock;
 @property(nonatomic) uint64_t observedFrames, observedAudio;
 @property(nonatomic) NSTimeInterval lastPlaybackProgress, lastFrameProgress, lastAudioProgress;
+@property(nonatomic) BOOL speakerMixRequested;
+@property(nonatomic) BOOL traceAudioOutput;
+@property(nonatomic) NSTimeInterval nextAudioOutputTrace;
 @property(nonatomic, strong) NSLayoutConstraint *bufferCenterX, *bufferCenterY;
 @property(nonatomic, strong) UILabel *timeLabel;
 @property(nonatomic, strong) NSLayoutConstraint *controlsLeading, *controlsTrailing, *controlsTop, *controlsBottom;
@@ -397,6 +400,7 @@ typedef struct {
 - (void)configureDecoder {
     // Keep 10-bit frames and their color attachments in Apple's native renderer.
     // Retain automatic fallback for formats the sample-buffer output cannot use.
+    self.traceAudioOutput = [NSProcessInfo.processInfo.environment[@"LOGISTICS_VIDEO_AUDIO_TRACE"] boolValue];
     self.player = [[VLCMediaPlayer alloc] initWithOptions:@[@"--quiet", @"--no-video-title-show", @"--stats",
         @"--vout=samplebufferdisplay,any"]];
     self.subtitlePiPEnabled = NO;
@@ -1016,6 +1020,7 @@ typedef struct {
         self.lastAudioTrackCount = self.lastTextTrackCount = 0;
         self.player.media = [self playbackMedia];
     }
+    [self updateSpeakerAudioMix];
     self.transportFailure = nil;
     self.message.text = @"";
     self.message.hidden = YES;
@@ -1093,6 +1098,21 @@ typedef struct {
     if (statsReset) self.lastFrameProgress = now; // New input resets VLC counters.
     self.observedFrames = frames;
     self.observedClock = clock;
+    if (self.traceAudioOutput && self.playRequested && !self.casting && now >= self.nextAudioOutputTrace) {
+        self.nextAudioOutputTrace = now + .9; // Sample once a second on the half-second playback timer.
+        NSArray<VLCMediaPlayerTrack *> *tracks = self.player.audioTracks;
+        NSUInteger selected = [tracks indexOfObjectPassingTest:^BOOL(VLCMediaPlayerTrack *track, NSUInteger index, BOOL *stop) {
+            return track.isSelected;
+        }];
+        unsigned channels = selected == NSNotFound ? 0 : tracks[selected].audio.channelsNumber;
+        AVAudioSession *session = AVAudioSession.sharedInstance;
+        NSLog(@"[VideoPlayback] audio clock=%lld seek=%lld track=%lu channels=%u route=%@ outputChannels=%ld mix=%u muted=%d interrupted=%d decoded=%llu played=%llu lost=%llu frames=%llu waiting=%d",
+              clock, self.startMilliseconds, selected == NSNotFound ? 0ul : (unsigned long)selected + 1, channels,
+              session.currentRoute.outputs.firstObject.portType ?: @"", (long)session.outputNumberOfChannels,
+              self.player.audioMixMode, self.player.audio.muted, self.interrupted, (unsigned long long)statistics.decodedAudio,
+              (unsigned long long)statistics.playedAudioBuffers, (unsigned long long)statistics.lostAudioBuffers,
+              (unsigned long long)frames, self.networkWaiting);
+    }
     // When VLC does not expose picture stats, fall back to clock progress and
     // transport starvation rather than leaving the spinner stuck forever.
     BOOL missingFrames = frames == 0 && self.observedFrames == 0;
@@ -1135,6 +1155,20 @@ typedef struct {
     [self traceAirPlay:self.interrupted ? @"interruption-began" : @"interruption-ended"];
     [self pause]; // Ignore ShouldResume, including after an OS-initiated pause.
 }
+- (NSArray<AVAudioSessionPortDescription *> *)audioOutputPorts {
+    return AVAudioSession.sharedInstance.currentRoute.outputs;
+}
+- (void)updateSpeakerAudioMix {
+    if (self.retired || !self.player) return;
+    NSArray<AVAudioSessionPortDescription *> *outputs = [self audioOutputPorts];
+    // Headphones can report two channels while iOS spatializes multichannel audio.
+    BOOL speaker = !self.casting && ![self hasAirPlay] && outputs.count == 1 &&
+        [outputs.firstObject.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker];
+    if (speaker == self.speakerMixRequested) return;
+    libvlc_audio_output_mixmode_t mix = speaker ? libvlc_AudioMixMode_Stereo : libvlc_AudioMixMode_Unset;
+    if (libvlc_audio_set_mixmode([self.player libVLCMediaPlayer], mix) == 0)
+        self.speakerMixRequested = speaker;
+}
 - (void)audioRouteChanged:(NSNotification *)notification {
     NSUInteger reason = [notification.userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
     AVAudioSessionRouteDescription *previous = notification.userInfo[AVAudioSessionRouteChangePreviousRouteKey];
@@ -1157,6 +1191,7 @@ typedef struct {
         if (!self.retired && ((reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable && !lostDisplay) ||
             reason == AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory ||
             (self.restricted && [self hasExternalAudio]))) [self pause];
+        [self updateSpeakerAudioMix];
     });
 }
 - (void)callObserver:(CXCallObserver *)observer callChanged:(CXCall *)call {
@@ -1515,6 +1550,7 @@ typedef struct {
         }
         if (state == VLCMediaPlayerStatePlaying) {
             self.hasPlayed = YES;
+            [self updateSpeakerAudioMix];
             [self applyPlaybackOptions];
             if (self.manualResumeRequired || ![self canPlay:NO]) { [self pause]; return; }
             self.player.audio.muted = self.resumeMuted;

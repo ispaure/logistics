@@ -101,9 +101,19 @@ On iOS, the timeline and saved checkpoint stay at the requested position
 while a switch is pending. If VLC leaves audio deselected and picture playback
 advances after preroll, Logistics pauses there and offers another track.
 
+On iOS, local VLC playback uses its stereo mix when the built-in speaker is
+the sole output. External routes use VLC's automatic mix, including Bluetooth
+headphones that report two output channels. Route changes update the mix while
+retaining the selected track and existing pause policy.
+
+For physical iOS diagnostics, launch with `LOGISTICS_VIDEO_AUDIO_TRACE=1`.
+The playback log samples the active track, output route, mix, audio counters,
+and picture progression once per second. Compare these timestamps with
+audible output on the device.
+
 `video_chrome_tools --audio-switch` builds a two-language AAC fixture and checks
 the production iOS controller on an owned disposable simulator: visible wait,
-native audio output, paused selection/resume, rapid replacement and stale
+native audio output, simulated route changes, paused selection/resume, rapid replacement and stale
 callbacks, nonseekable refusal, timeout and retirement. The receipt records the
 selection timestamp alongside audio buffers, presented pictures and clock
 samples. These counters measure native delivery. Check speaker audibility on

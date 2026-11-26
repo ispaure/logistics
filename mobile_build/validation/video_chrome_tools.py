@@ -98,7 +98,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
             if audio_switch:
                 audio = ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
                          '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000',
-                         '-map', '0:v', '-map', '1:a', '-map', '2:a', '-c:a', 'aac',
+                         '-map', '0:v', '-map', '1:a', '-map', '2:a', '-c:a', 'aac', '-ac:a:0', '6',
                          '-metadata:s:a:0', 'language=eng', '-metadata:s:a:1', 'language=fra']
             subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
                             'testsrc2=size=128x72:rate=12:duration=3' if audio_tail else
