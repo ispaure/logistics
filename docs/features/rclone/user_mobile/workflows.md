@@ -105,9 +105,12 @@ mechanism and require room for the remaining bytes. A changed source or partial
 needs inspection before recovery.
 
 A selected folder can also resume to ordinary on-device storage when all its
-files support verified ranges. The app retains completed files in staging and
-publishes the complete folder together. A leftover `.download-…` staging folder
-from a one-shot download has no resume checkpoint.
+files support verified ranges. Up to ten files can copy in parallel. If a
+download stops, Logistics keeps the verified progress of each file in staging.
+To copy one file at a time and keep resume available, turn off **Parallel folder
+downloads** in **Settings → rclone**. The setting applies when you start or
+resume a download. The complete folder becomes visible after verification. A leftover
+`.download-…` staging folder from a one-shot download has no resume checkpoint.
 
 A crypt source can resume into ordinary storage or into its own LocalCrypt
 destination. A destination that needs a fresh encryption stream, or a server

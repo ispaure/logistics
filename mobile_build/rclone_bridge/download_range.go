@@ -13,7 +13,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
+	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/hash"
 	"golang.org/x/sys/unix"
 )
@@ -22,6 +24,14 @@ const downloadChunk = 4 * 1024 * 1024
 
 var downloadRangeUnavailable = errors.New("the source cannot supply a verified byte range")
 
+var downloadConnections sync.Mutex
+
+func downloadRemote(ctx context.Context, name string) (fs.Fs, error) {
+	downloadConnections.Lock()
+	defer downloadConnections.Unlock()
+	return remote(ctx, name)
+}
+
 // A resumable plaintext object needs a provider-supplied content hash. Crypt
 // supplies a fresh file nonce on every rewrite and authenticates each block.
 func downloadRange(ctx context.Context, request bridgeRequest, read bool) (any, error) {
@@ -29,7 +39,7 @@ func downloadRange(ctx context.Context, request bridgeRequest, read bool) (any, 
 }
 
 func readDownload(ctx context.Context, request bridgeRequest, read, streaming bool) (any, error) {
-	reader, size, stamp, err := remoteDocument(ctx, request.Remote, request.Path, request.Identity)
+	reader, size, stamp, err := resolveRemoteDocument(ctx, request.Remote, request.Path, request.Identity, downloadRemote)
 	if err != nil {
 		return nil, err
 	}
@@ -145,13 +155,19 @@ func streamDownload(ctx context.Context, reader remoteReaderAt, header []byte, o
 	if err != nil {
 		return 0, errors.New("the download pipe is unavailable")
 	}
-	output := os.NewFile(uintptr(duplicate), "download pipe")
-	defer output.Close()
-	info, err := output.Stat()
-	if err != nil || info.Mode()&os.ModeNamedPipe == 0 {
+	var info unix.Stat_t
+	if err := unix.Fstat(duplicate, &info); err != nil || info.Mode&unix.S_IFMT != unix.S_IFIFO {
+		unix.Close(duplicate)
 		return 0, errors.New("a private download pipe is required")
 	}
-	// A reader that stops consuming data cannot hold the native transfer lock.
+	// Register the pipe with Go's poller so cancellation can interrupt a
+	// write even when the host is no longer draining the pipe.
+	if err := unix.SetNonblock(duplicate, true); err != nil {
+		unix.Close(duplicate)
+		return 0, errors.New("the download pipe is unavailable")
+	}
+	output := os.NewFile(uintptr(duplicate), "download pipe")
+	defer output.Close()
 	stop := context.AfterFunc(ctx, func() { output.Close() })
 	defer stop()
 	start, length := offset, count

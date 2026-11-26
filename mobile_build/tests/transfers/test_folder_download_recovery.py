@@ -15,6 +15,7 @@ import os
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Barrier, Event
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
@@ -23,6 +24,7 @@ from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.testing.stages import TestStage
 from features.rclone.mobile.download_recovery import available_jobs, queue_command
 from features.rclone.mobile.folder_recovery import FolderQueue, run_folder_download
+from features.rclone.mobile.remote_downloads import RemoteDownload
 from features.rclone.transfers.download_recovery import CHUNK, DownloadQueue, RestartRequired
 
 TEST_STAGE = TestStage.REGRESSION
@@ -125,14 +127,28 @@ class FolderDownloadRecoveryTests(unittest.TestCase):
     def new_queue(self):
         return DownloadQueue(self.records, ['fixture'], self.source.check, TestCipher())
 
-    def download(self, key=None):
+    def download(self, key=None, progress=None):
         return run_folder_download(self.records, self.source, 'fixture', self.destination, 'Saved Folder',
-                                   lambda: False, lambda **values: self.progress.append(values), None, key)
+                                   lambda: False, progress or (lambda **values: self.progress.append(values)), None, key)
 
     def interrupt(self):
         self.source.interrupt = ('fixture/large/data.bin', CHUNK)
-        with self.assertRaisesRegex(OSError, 'interrupted'):
-            self.download()
+        early_done = Event()
+        request = self.source.request
+
+        def ordered_interrupt(action, *, path, **values):
+            if action != 'download_stat' and path == self.source.interrupt[0]:
+                self.assertTrue(early_done.wait(5))
+            return request(action, path=path, **values)
+
+        def watch(**values):
+            if values['files'] == 1:
+                early_done.set()
+            self.progress.append(values)
+
+        with patch.object(self.source.client, 'request', side_effect=ordered_interrupt):
+            with self.assertRaisesRegex(OSError, 'interrupted'):
+                self.download(progress=watch)
         self.source.interrupt = None
         job, = self.queue.jobs()
         self.assertEqual(job['offset'], len(self.source.files['fixture/early.txt']) + CHUNK)
@@ -142,6 +158,10 @@ class FolderDownloadRecoveryTests(unittest.TestCase):
 
     def test_resumes_partial_member_and_preserves_already_downloaded_members(self):
         job = self.interrupt()
+        # Model an interrupted download written by the previous serial build.
+        legacy = dict(job, schema=1, child=job['members'][str(job['done'])])
+        del legacy['members']
+        self.queue.save(legacy)
         self.source = Source(self.source.files.copy())
         self.assertTrue(self.download(job['id']))
         self.assertEqual(self.source.reads, [('fixture/large/data.bin', CHUNK)])
@@ -155,12 +175,69 @@ class FolderDownloadRecoveryTests(unittest.TestCase):
     def test_one_stream_per_member_keeps_four_mib_checkpoints_on_disconnect(self):
         self.source = StreamingSource(self.source.files)
         job = self.interrupt()
-        self.assertEqual(self.source.reads, [('fixture/early.txt', 0), ('fixture/large/data.bin', 0)])
+        self.assertCountEqual(self.source.reads, [('fixture/early.txt', 0), ('fixture/large/data.bin', 0)])
         self.source = StreamingSource(self.source.files)
         self.assertTrue(self.download(job['id']))
         self.assertEqual(self.source.reads, [('fixture/large/data.bin', CHUNK)])
         result = self.destination.root / 'Saved Folder' / 'large' / 'data.bin'
         self.assertEqual(result.read_bytes(), self.source.files['fixture/large/data.bin'])
+        self.assertFalse(self.queue.jobs())
+
+    def test_ten_members_overlap_and_resume_two_partial_files_and_out_of_order_completions(self):
+        names = [f'fixture/{index:02}.bin' for index in range(12)]
+        payload = b'x' * CHUNK + b'tail'
+        self.source = Source({name: payload if index < 2 else name.encode()
+                              for index, name in enumerate(names)})
+        self.source.list = lambda path, **kw: [dict(path=name, directory=False) for name in names]
+        barrier = Barrier(10, timeout=5)
+        checkpointed = Event()
+        cancelled = Event()
+        request = self.source.request
+
+        def interrupt(action, *, path, **values):
+            if action == 'download_range':
+                if values['offset'] == 0 and path in names[:10]:
+                    barrier.wait()
+                elif path == names[0]:
+                    self.assertTrue(checkpointed.wait(5))
+                    raise OSError('Simulated disconnect')
+                elif path == names[1]:
+                    self.assertTrue(cancelled.wait(5))
+                    raise OSError('Cancelled peer stream')
+            return request(action, path=path, **values)
+
+        def watch(**values):
+            self.progress.append(values)
+            if values['files'] == 10 and all(row['bytes'] == CHUNK for row in values.get('active_files', ())):
+                checkpointed.set()
+
+        self.source.client.cancel = cancelled.set
+        with patch.object(self.source.client, 'request', side_effect=interrupt):
+            with self.assertRaisesRegex(OSError, 'Simulated disconnect'):
+                self.download(progress=watch)
+        self.assertEqual(max(event.get('active', 0) for event in self.progress), 10)
+        job, = self.queue.jobs()
+        self.assertEqual(job['done'], 0)
+        self.assertEqual(len(job['members']), 12)
+        self.assertEqual([job['members'][str(index)]['offset'] for index in range(2)], [CHUNK, CHUNK])
+        self.source.reads.clear()
+        self.progress.clear()
+
+        async def run_mirror_work(work, operation, **kwargs):
+            result = await asyncio.to_thread(work, self.source.client, lambda: False,
+                                             lambda **values: self.progress.append(values))
+            return result.status == 'complete'
+
+        app = SimpleNamespace(private_root=self.records, run_mirror_work=run_mirror_work,
+                              transfer_options=lambda: None, preferences=SimpleNamespace(
+                                  values={'rclone_parallel_folder_downloads': 'false'}))
+        request = RemoteDownload(self.source, 'fixture', True)
+        self.assertTrue(asyncio.run(request.complete(app, self.destination, 'Saved Folder', resume_key=job['id'])))
+        self.assertEqual(max(event.get('active', 0) for event in self.progress), 1)
+        self.assertEqual(self.source.reads, [(names[0], CHUNK), (names[1], CHUNK)])
+        final = self.destination.root / 'Saved Folder'
+        for name, data in self.source.files.items():
+            self.assertEqual((final / name.split('/')[-1]).read_bytes(), data)
         self.assertFalse(self.queue.jobs())
 
     def test_complete_folder_checkpoint_reuses_saved_bytes_after_failed_publish(self):

@@ -10,6 +10,7 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import argparse
+import asyncio
 from contextlib import ExitStack
 from hashlib import file_digest, sha1, sha256
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -20,7 +21,7 @@ import re
 import shutil
 import ssl
 import subprocess
-from threading import Thread
+from threading import Event, Thread
 from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.parse import quote, unquote, urlsplit
@@ -116,18 +117,25 @@ class Server(BaseHTTPRequestHandler):
     def send_body(self, start, stop, source, tag):
         if start == stop:
             return
-        if source is None:
-            for block in blocks(tag, start, stop - start):
-                self.wfile.write(block)
-        else:
-            with source.open('rb') as stream:
-                stream.seek(start)
-                remaining = stop - start
-                while remaining:
-                    block = stream.read(min(MIB, remaining))
+        response = [start, 0, Event()]
+        self.server.counts.append(response)
+        try:
+            with ExitStack() as stack:
+                if source is None:
+                    chunks = blocks(tag, start, stop - start)
+                else:
+                    stream = stack.enter_context(source.open('rb'))
+                    stream.seek(start)
+                    chunks = (stream.read(min(MIB, stop - offset)) for offset in range(start, stop, MIB))
+                for block in chunks:
                     self.wfile.write(block)
-                    remaining -= len(block)
-        self.server.counts.append((start, stop - start))
+                    response[1] += len(block)
+        except OSError:
+            # Killing a streaming client closes an unfinished HTTP response.
+            # Keep the bytes sent before the disconnect for the probe report.
+            pass
+        finally:
+            response[2].set()
 
 
 def worker(workspace, mode, stop):
@@ -176,13 +184,22 @@ def worker(workspace, mode, stop):
                 host.cloud_client = client
                 host.show_locations()
                 host.show_transfers()
+
+                def controls_in(widget):
+                    yield widget
+                    for child in getattr(widget, 'children', ()):
+                        yield from controls_in(child)
+
                 async def resume():
                     surface = host.transfer_controller().transfer_view
-                    for prefix in ('Interrupted downloads', 'Resume '):
-                        buttons = surface.native_fallback.buttons.children
-                        button = next(b for b in buttons if b.text.startswith(prefix))
-                        controls.append(button.text)
-                        await button.on_press()
+                    async with asyncio.timeout(5):
+                        while not surface.model.get('downloads'):
+                            await asyncio.sleep(.01)
+                    widgets = list(controls_in(surface.native_fallback.history))
+                    assert any(getattr(widget, 'text', None) == 'Interrupted downloads' for widget in widgets)
+                    button = next(widget for widget in widgets if getattr(widget, 'text', None) == 'Resume')
+                    controls.extend(('Interrupted downloads', button.text))
+                    await button.on_press()
                     assert host.transfer_complete, host.transfer_message
                 host.loop.run_until_complete(resume())
         elif mode == 'native-unsupported':
@@ -364,7 +381,7 @@ def exercise(root, size, mode):
         stops = [0, -1] if mode.endswith('unsupported') else list(dict.fromkeys([first, second, 0]))
         receipt = dict(mode=mode, size=size, expected_sha256=expected.hexdigest(), processes=[])
         for stop in stops:
-            server.counts.clear()
+            server.counts = []
             python = ROOT/('mobile_build/.venv/bin/python' if native else '.venv/bin/python')
             child = subprocess.run([python, __file__, '--worker', str(root), '--mode', mode, '--stop', str(stop)],
                 env=dict(os.environ, COMMONUTILS_STORAGE_ROOT=str(root/'commonutils'),
@@ -374,9 +391,12 @@ def exercise(root, size, mode):
                 capture_output=True, text=True)
             if child.returncode != (73 if stop > 0 else 0):
                 raise RuntimeError(child.stderr[-2000:] + child.stdout[-500:])
-            count = sum(n for _, n in server.counts)
+            responses = list(server.counts)
+            for _, _, ended in responses:
+                assert ended.wait(5), 'The fixture response stayed open after the worker exited.'
+            count = sum(n for _, n, _ in responses)
             step = dict(exit=child.returncode, stop=stop, fetched=count,
-                        ranges=len(server.counts), first_payload_range=next((pos for pos,n in server.counts if n > 32), None))
+                        ranges=len(responses), first_payload_range=next((pos for pos, n, _ in responses if n > 32), None))
             receipt['processes'].append(step)
             if stop > 0:
                 job, = (root/'App'/'DownloadQueue').glob('*/*.job')
@@ -394,10 +414,18 @@ def exercise(root, size, mode):
             if not mode.endswith('unsupported'):
                 previous = receipt['processes'][-2]['stop'] if len(receipt['processes']) > 1 else 0
                 end = stop or size
-                if webdav:
+                if native and stop > 0:
+                    # An open native stream sends ahead of the durable checkpoint.
+                    # An interrupted TLS write can also omit one partially sent block.
+                    encrypted = mode in ('native-crypt', 'native-local')
+                    payload_start = 32 + previous + previous // 65536 * 16 if encrypted else previous
+                    assert step['first_payload_range'] == payload_start, step
+                    wire_overhead = (((size-previous+65535)//65536)*16 if encrypted else 0) + 32*len(responses)
+                    assert end-previous-MIB <= count <= size-previous+wire_overhead, step
+                elif webdav:
                     # One authenticated 16-byte tag per 64 KiB block plus bounded
                     # header reads during range/version validation.
-                    overhead = ((end-previous+65535)//65536)*16 + 32*(len(server.counts)+1)
+                    overhead = ((end-previous+65535)//65536)*16 + 32*(len(responses)+1)
                     assert end-previous <= count <= end-previous+overhead, step
                 else:
                     assert count == end-previous, step

@@ -297,10 +297,12 @@ def rebind_checkpoint(queue, recovery, job, destination):
         check_checkpoint(job, current)
         if target.name != old.name or not matches_parent(target, current):
             raise ValueError('The download destination changed.')
-        if current.get('child') is not None:
+        if current.get('members'):
             old_stage = recovery.staged(old, current)
-            member = Path(current['child']['target']).relative_to(old_stage)
-            current['child']['target'] = str(recovery.staged(target, current) / member)
+            new_stage = recovery.staged(target, current)
+            for child in current['members'].values():
+                member = Path(child['target']).relative_to(old_stage)
+                child['target'] = str(new_stage / member)
         current['selection']['root'] = str(destination.root)
         current['target'] = str(target)
         recovery.save(current)

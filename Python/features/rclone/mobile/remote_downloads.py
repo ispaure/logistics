@@ -32,6 +32,8 @@ class RemoteDownload:
 
     async def complete(self, app, destination, target, *, resume_key=None):
         options = app.transfer_options()
+        preferences = getattr(getattr(app, 'preferences', None), 'values', {})
+        parallel = preferences.get('rclone_parallel_folder_downloads', 'true') == 'true'
         from features.rclone.transfers.download_recovery import RestartRequired
         from_zero = False
         reason = None
@@ -40,7 +42,8 @@ class RemoteDownload:
             nonlocal reason
             try:
                 return self.execute(client, destination, target, cancelled, progress, options=options,
-                                    root=app.private_root, resume_key=resume_key, from_zero=from_zero, approved=approved)
+                                    root=app.private_root, resume_key=resume_key, from_zero=from_zero,
+                                    approved=approved, parallel=parallel)
             except RestartRequired as error:
                 reason = error
                 raise
@@ -59,7 +62,7 @@ class RemoteDownload:
         return result
 
     def execute(self, client, destination, target, cancelled, progress, *, options=None,
-                root=None, resume_key=None, from_zero=False, approved=None):
+                root=None, resume_key=None, from_zero=False, approved=None, parallel=True):
         target = resource_path(target)
         if not target or getattr(destination, 'remote_storage', False):
             raise ValueError('Choose a local destination folder and item name.')
@@ -76,7 +79,7 @@ class RemoteDownload:
                 if self.directory and not from_zero:
                     from .folder_recovery import run_folder_download
                     recovered = run_folder_download(root, source, self.path, destination, target, cancelled,
-                                                    progress, options, resume_key)
+                                                    progress, options, resume_key, parallel=parallel)
                 else:
                     from .download_recovery import run_download
                     recovered = not self.directory and run_download(

@@ -48,16 +48,18 @@ import (
 const packageLimit = 1024 * 1024
 const downloadLimit = 32 * 1024 * 1024
 
-var serial sync.Mutex
+var serial sync.RWMutex
 var cancellation sync.Mutex
 var active context.CancelFunc
+var activeDownloads = map[*operationBackends]context.CancelFunc{}
 var admitted = map[string]bool{}
 var clients = map[string]fs.Fs{}
 var staleFilesystemCache bool
 
 // A backend owns the context retained by OAuth and other background workers.
 // Requests temporarily connect cancellation to it, but normal completion does
-// not end its lifetime. Only the serial operation owner mutates clients.
+// not end its lifetime. Download readers serialize cache resolution with each
+// other while holding shared admission against all other network operations.
 type cachedClient struct {
 	fs.Fs
 	ctx  context.Context
@@ -152,6 +154,9 @@ func cancel() {
 	if active != nil {
 		active()
 	}
+	for _, stop := range activeDownloads {
+		stop()
+	}
 }
 
 func operationTimeout(action string) time.Duration {
@@ -174,12 +179,20 @@ func operation(action string) (context.Context, func()) {
 	backends := &operationBackends{}
 	ctx = context.WithValue(ctx, operationBackendsKey{}, backends)
 	cancellation.Lock()
-	active = stop
+	if downloadRead(action) {
+		activeDownloads[backends] = stop
+	} else {
+		active = stop
+	}
 	cancellation.Unlock()
 	return ctx, func() {
 		cancellation.Lock()
 		defer cancellation.Unlock()
-		active = nil
+		if downloadRead(action) {
+			delete(activeDownloads, backends)
+		} else {
+			active = nil
+		}
 		backends.finish()
 		stop()
 	}

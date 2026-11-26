@@ -44,9 +44,10 @@ class ConnectionSettingsTests(unittest.TestCase):
     def test_settings_routes_and_collapsed_controls_keep_their_values(self):
         app = self.app
         app.show_settings()
-        workspace = app.settings_navigation.sections['Workspaces']
+        sections = app.settings_navigation.sections
         buttons = {getattr(w, '_settings_source_text', w.text): w
-                   for w in self.descendants(workspace) if isinstance(w, toga.Button)}
+                   for section in ('Workspaces', 'rclone')
+                   for w in self.descendants(sections[section]) if isinstance(w, toga.Button)}
         buttons['rclone connections…'].on_press()
         self.assertEqual(app.routes.screens['settings'][-1][0], 'connections')
         self.assertNotIn(app.cloud_password, set(self.descendants(app.cloud_connections_view.content)))

@@ -9,11 +9,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/bits"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rclone/rclone/fs"
 )
@@ -22,6 +26,92 @@ type fixedDownloadRange struct {
 	fs.Object
 	start int64
 	data  []byte
+}
+
+func TestCryptDownloadStreamsOverlapAndCancelTogether(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	if _, err := importPackage(cryptPackage(t, "Cloud:parallel-downloads"), ""); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(context.Background(), mirrorLogicalKey{}, true)
+	info, err := mirrorInfo(ctx, "Secret", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := info["identity"].(string)
+	root := canonicalTestDir(t)
+	payload := bytes.Repeat([]byte("authenticated fixture"), downloadChunk/8)
+	small := []byte("short independent download")
+	for name, data := range map[string][]byte{"first": payload, "second": small, "third": payload} {
+		if err := os.WriteFile(filepath.Join(root, name), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := mirrorSync(ctx, "Secret", "", identity, root, strings.Repeat("f", 32), true); err != nil {
+		t.Fatal(err)
+	}
+
+	start := func(name string) (*os.File, <-chan string) {
+		request := bridgeRequest{Remote: "Secret", Identity: identity, Path: name}
+		input, _ := json.Marshal(request)
+		var stat struct {
+			OK     bool
+			Result struct{ Version string }
+		}
+		if reply := dispatch("download_stat", string(input)); json.Unmarshal([]byte(reply), &stat) != nil || !stat.OK {
+			t.Fatal(reply)
+		}
+		reader, writer, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { reader.Close() })
+		if err := reader.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		request.Expected, request.FD = stat.Result.Version, int(writer.Fd())
+		input, _ = json.Marshal(request)
+		result := make(chan string, 1)
+		go func() {
+			reply := dispatch("download_stream", string(input))
+			writer.Close()
+			result <- reply
+		}()
+		return reader, result
+	}
+	first, firstResult := start("first")
+	timeout := time.AfterFunc(10*time.Second, cancel)
+	defer timeout.Stop()
+	if _, err := io.ReadFull(first, make([]byte, 1)); err != nil {
+		t.Fatal(err)
+	}
+	reader, secondResult := start("second")
+	if data, err := io.ReadAll(reader); err != nil || !bytes.Equal(data, small) {
+		t.Fatal("second transfer could not finish while the first pipe was full", err)
+	}
+	if reply := <-secondResult; !strings.Contains(reply, `"ok":true`) {
+		t.Fatal(reply)
+	}
+	third, thirdResult := start("third")
+	if _, err := io.ReadFull(third, make([]byte, 1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, finish, acquired := tryCredentialLoad(); acquired {
+		finish()
+		t.Fatal("credential replacement entered during a download")
+	}
+	cancel()
+	for _, result := range []<-chan string{firstResult, thirdResult} {
+		select {
+		case reply := <-result:
+			if !strings.Contains(reply, `"ok":false`) {
+				t.Fatal(reply)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("a download stayed open after cancellation")
+		}
+	}
 }
 
 func (r fixedDownloadRange) Open(_ context.Context, options ...fs.OpenOption) (io.ReadCloser, error) {

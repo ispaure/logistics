@@ -30,7 +30,6 @@ def workspaces(app):
             add_transfer_notification_setting(app, box)
         from .reader_history import migration_controls
         migration_controls(app, box)
-        box.add(page_button('rclone connections…', on_press=app.show_cloud_connections, style=Pack(height=48)))
         box.add(page_button('SMB shares…', on_press=app.show_smb_connection, style=Pack(height=48)))
     return box
 

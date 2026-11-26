@@ -95,6 +95,14 @@ checksum. Crypt reads bind to the file header and authenticate each complete
 the worker persists those original ciphertext bytes, including the header
 once. A transfer that needs fresh encryption offers the existing full copy.
 
+Resumable mobile folder downloads use up to ten concurrent member writers with
+one shared bandwidth limit. The sealed folder journal records each active
+member's checkpoint and any out-of-order completions. A completed contiguous
+prefix is folded into its checksum, keeping journal size bounded. Serial
+checkpoints from older builds resume with the same verified bytes. The native
+bridge admits concurrent download readers while retaining exclusive admission
+for credential changes and managed syncs. Stop cancels all active download reads.
+
 The recovery regression tests cover changed sources and partials, disk space,
 writer contention, stage creation, explicit restart approval, repeated interruption
 and both sides of publication. The

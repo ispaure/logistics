@@ -20,6 +20,10 @@ var remoteFileNotFound = errors.New("the remote file was not found")
 
 // Resolve one logical remote file without materializing a plaintext local copy.
 func remoteDocument(ctx context.Context, name, p, identity string) (remoteReaderAt, int64, string, error) {
+	return resolveRemoteDocument(ctx, name, p, identity, remote)
+}
+
+func resolveRemoteDocument(ctx context.Context, name, p, identity string, connect func(context.Context, string) (fs.Fs, error)) (remoteReaderAt, int64, string, error) {
 	var empty remoteReaderAt
 	if err := ctx.Err(); err != nil {
 		return empty, 0, "", err
@@ -38,7 +42,7 @@ func remoteDocument(ctx context.Context, name, p, identity string) (remoteReader
 		}
 		objectPath = path.Join(root, cipher.EncryptFileName(p))
 	}
-	backend, err := remote(ctx, backing)
+	backend, err := connect(ctx, backing)
 	if err != nil {
 		return empty, 0, "", err
 	}

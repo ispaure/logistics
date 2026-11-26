@@ -86,7 +86,7 @@ class SettingsUITests(unittest.TestCase):
         with patch('features.images.mobile.burst_camera.available', return_value=True):
             sections = settings_sections(app)
             self.assertEqual(list(sections), ['App', 'Appearance', 'Features', 'Read aloud',
-                'Workspaces', 'Privacy & Security', 'Reset', 'Help', 'About'])
+                'Workspaces', 'rclone', 'Privacy & Security', 'Reset', 'Help', 'About'])
             # Notes Library still reads text even if the standalone editor is off.
             app.preferences.save(disabled_features=json.dumps([
                 'text_editor', 'books', 'comics', 'pdf', 'lm']))
@@ -113,6 +113,21 @@ class SettingsUITests(unittest.TestCase):
         self.assertEqual(Preferences(app.preferences.path.parent).values['native_video_airplay'], 'true')
         app.preferences.save(disabled_features='["video"]')
         self.assertNotIn('Video', settings_sections(host))
+
+    def test_parallel_folder_downloads_defaults_on_and_can_be_disabled(self):
+        from mobile.preferences import Preferences
+        from mobile.settings.categories import settings_sections
+
+        app = self.make_app()
+        page = settings_sections(app)['rclone']()
+        row = next(child for child in page.children if getattr(child, '_settings_switch_row', False))
+        switch = row.children[-1]
+        self.assertTrue(switch.value)
+        switch.value = False
+        switch.on_change(switch)
+        self.assertEqual(Preferences(app.preferences.path.parent).values['rclone_parallel_folder_downloads'], 'false')
+        app.preferences.save(disabled_features='["rclone"]')
+        self.assertNotIn('rclone', settings_sections(app))
 
     def test_read_aloud_loads_automatically_and_refreshes_when_reopened(self):
         app = self.make_app()
@@ -423,8 +438,9 @@ class SettingsUITests(unittest.TestCase):
             },
             'Workspaces': {
                 'Migrate protected reader history…': False,
-                'rclone connections…': True, 'SMB shares…': True,
+                'SMB shares…': True,
             },
+            'rclone': {'rclone connections…': True},
             'Reset': {
                 'Clear all saved positions…': False, 'Clear all recent files…': False,
                 'Erase all app data…': True,
@@ -438,6 +454,7 @@ class SettingsUITests(unittest.TestCase):
                     self.assertEqual(bool(getattr(actual[label], '_settings_disclosure', False)), opens_page)
         self.assertNotIn('Migrate protected reader history…', buttons('App'))
         self.assertNotIn('Trusted Wi-Fi networks…', buttons('Workspaces'))
+        self.assertNotIn('rclone connections…', buttons('Workspaces'))
         self.assertIn(app.show_legacy_choice, list(descendants(sections['Workspaces'])))
         self.assertIn(app.session_speech_choice, list(descendants(sections['Privacy & Security'])))
         self.assertNotIn(app.session_speech_choice, list(descendants(sections['Read aloud'])))

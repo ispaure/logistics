@@ -132,6 +132,9 @@ class SettingsCategories:
         from .workspaces import workspaces
         return workspaces(self.app)
 
+    def rclone(self):
+        from .rclone import rclone
+        return rclone(self.app)
 
     def reset(self):
         app = self.app
@@ -191,6 +194,7 @@ CATEGORIES = (
     Category('Video', 'video', icon='play', required_features=('video',), ios_only=True),
     Category('LM Chat', 'chat', icon='chat', required_features=('lm',)),
     Category('Workspaces', 'workspaces', icon='folder'),
+    Category('rclone', 'rclone', icon='cloud', required_features=('rclone',)),
     Category('Privacy & Security', 'privacy', icon='storage_crypt'),
     Category('Reset', 'reset'),
     Category('Help', 'help', icon='help'),

@@ -14,6 +14,10 @@ import (
 // its cancellation handle. They do not create remote filesystem clients.
 var credentialScope sync.RWMutex
 
+func downloadRead(action string) bool {
+	return action == "download_stat" || action == "download_range" || action == "download_stream"
+}
+
 func localCryptRead(action string) bool {
 	switch action {
 	case "crypt_sizes":
@@ -32,6 +36,12 @@ func scopedOperation(action string) (context.Context, func()) {
 		credentialScope.RLock()
 		ctx, stop := context.WithTimeout(context.Background(), operationTimeout(action))
 		return ctx, func() { stop(); credentialScope.RUnlock() }
+	}
+	if downloadRead(action) {
+		serial.RLock()
+		credentialScope.RLock()
+		ctx, stop := operation(action)
+		return ctx, func() { stop(); credentialScope.RUnlock(); serial.RUnlock() }
 	}
 	serial.Lock()
 	switch action {

@@ -2,7 +2,7 @@
 
 ## Remote files and credential ZIPs
 
-1. Open **Settings → Workspaces → rclone connections… → Import credential ZIP…**
+1. Open **Settings → rclone → rclone connections… → Import credential ZIP…**
    and select **Choose credential ZIP…**. An unencrypted ZIP continues directly.
    For an encrypted ZIP, enter its password and tap **Unlock**. A failed password
    keeps the ZIP selected for retry.
